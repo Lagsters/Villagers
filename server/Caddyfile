@@ -1,0 +1,10 @@
+# Caddy: automatyczny certyfikat TLS (Let's Encrypt) i przekazywanie ruchu (w tym WebSocket)
+# do serwera sygnalizacyjnego. install.sh podstawia wartosci __...__.
+{
+	email __EMAIL__
+}
+
+__DOMAIN__ {
+	encode gzip
+	reverse_proxy 127.0.0.1:__PORT__
+}

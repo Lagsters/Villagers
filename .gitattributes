@@ -1,0 +1,4 @@
+# Wszystkie pliki tekstowe z koncami linii LF (skrypty bash na serwerze nie toleruja CRLF).
+* text=auto eol=lf
+*.glb binary
+*.png binary

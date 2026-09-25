@@ -11,7 +11,7 @@
 - [x] M7 Sieć
 - [x] M8 Grafika
 - [x] M9 Wydajność i dopracowanie
-- [ ] M10 Wydanie
+- [x] M10 Wydanie
 
 ## Dziennik
 ### M0
