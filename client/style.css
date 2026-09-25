@@ -1,4 +1,59 @@
-html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #1d2a1f; color: #f2ead3; font-family: system-ui, sans-serif; }
+:root {
+  --bg: #1d2a1f;
+  --panel: rgba(28, 32, 24, 0.9);
+  --panel-border: rgba(214, 190, 140, 0.35);
+  --text: #f2ead3;
+  --muted: #b9ae92;
+  --accent: #e2b857;
+  --accent-2: #8fbf5a;
+  --danger: #d0503c;
+  --btn: rgba(255, 245, 220, 0.08);
+  --btn-hover: rgba(255, 245, 220, 0.18);
+}
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 14px; }
 #app { position: fixed; inset: 0; }
 #view { width: 100%; height: 100%; display: block; touch-action: none; }
-.hud-info { position: absolute; left: 8px; bottom: 8px; background: rgba(20,24,18,.8); padding: 6px 10px; border-radius: 6px; font-size: 13px; pointer-events: none; }
+button { font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--panel-border); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button:hover { background: var(--btn-hover); }
+button.active { background: var(--accent); color: #1d1a10; border-color: var(--accent); }
+button.danger { border-color: rgba(208, 80, 60, 0.6); color: #ffb8a8; }
+button.danger:hover { background: rgba(208, 80, 60, 0.25); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+.hud { position: absolute; inset: 0; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+.topbar { position: absolute; top: 0; left: 0; right: 0; display: flex; gap: 8px; align-items: center; padding: 6px 8px; background: linear-gradient(var(--panel), rgba(28, 32, 24, 0.75)); border-bottom: 1px solid var(--panel-border); flex-wrap: wrap; }
+.topbar .time { font-variant-numeric: tabular-nums; min-width: 44px; color: var(--accent); font-weight: 600; }
+.topbar .speeds { display: flex; gap: 2px; }
+.topbar .speed { padding: 3px 7px; }
+.topbar .res { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 6px; flex: 1; }
+.res-item { display: inline-flex; gap: 4px; align-items: baseline; font-size: 13px; }
+.res-item .res-label { color: var(--muted); }
+.res-item b { font-variant-numeric: tabular-nums; }
+.icon-btn { padding: 3px 9px; font-size: 16px; }
+
+.panel { position: absolute; right: 8px; top: 52px; width: 290px; max-height: calc(100% - 70px); overflow-y: auto; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+.panel.hidden { display: none; }
+.panel h3 { margin: 0 24px 4px 0; font-size: 16px; color: var(--accent); }
+.panel h4 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.panel p { margin: 4px 0; }
+.panel .sub, .panel .hint { color: var(--muted); font-size: 13px; }
+.panel > button { margin: 4px 4px 0 0; }
+.panel .close { position: absolute; right: 8px; top: 6px; padding: 0 8px; border: none; background: none; font-size: 20px; }
+.build-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.build-btn { display: flex; flex-direction: column; align-items: flex-start; padding: 5px 7px; text-align: left; }
+.build-btn .bname { font-size: 13px; }
+.build-btn .bcost { font-size: 11px; color: var(--muted); }
+.build-btn .bicon { width: 28px; height: 28px; }
+.inv-list { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 13px; }
+
+.toasts { position: absolute; left: 50%; transform: translateX(-50%); top: 56px; display: flex; flex-direction: column; gap: 4px; align-items: center; pointer-events: none; }
+.toast { background: var(--panel); border: 1px solid var(--panel-border); padding: 6px 12px; border-radius: 8px; transition: opacity 0.6s; }
+.toast.warn { border-color: rgba(226, 184, 87, 0.8); }
+.toast.bad { border-color: var(--danger); }
+.toast.fade { opacity: 0; }
+
+@media (max-width: 700px) {
+  .topbar .res-label { display: none; }
+  .panel { left: 8px; right: 8px; width: auto; top: auto; bottom: 8px; max-height: 45%; }
+}

@@ -1,52 +1,34 @@
 /**
- * Stan gry: prosty, serializowalny obiekt. Encje trzymamy w tablicach indeksowanych id
- * (null = wolny slot), iteracja zawsze w kolejnosci id.
+ * Tworzenie nowej gry: mapa z kodu, zamki graczy z poczatkowym inwentarzem, terytorium.
  */
-import { MAP_SIZES, MAX_PLAYERS } from './defs.ts';
-import { generateMap, normalizeMapCode, type MapData } from './mapgen.ts';
+import { B, G, MAP_SIZES, MAX_PLAYERS, S } from './defs.ts';
+import { finishBuilding, placeBuilding } from './construction.ts';
+import { generateMap, normalizeMapCode } from './mapgen.ts';
 import { seedRng } from './rng.ts';
+import { defaultSettings } from './settings.ts';
+import type { GameConfig, GameState, PlayerState } from './types.ts';
 import { SIM_VERSION } from './version.ts';
+import { recomputeTerritory } from './world.ts';
 
-export interface PlayerConfig {
-  name: string;
-  color: number;
-  /** 0 = czlowiek, 1 = bot latwy, 2 = bot trudny (informacyjnie; boty dzialaja poza symulacja) */
-  ai: number;
-}
-
-export interface GameConfig {
-  mapCode: string;
-  mapSize: number;
-  players: PlayerConfig[];
-  seed: number;
-}
-
-export interface PlayerState {
-  id: number;
-  name: string;
-  color: number;
-  ai: number;
-  start: number;
-  alive: boolean;
-}
-
-export interface GameState {
-  version: number;
-  tick: number;
-  rng: number;
-  config: GameConfig;
-  map: MapData;
-  players: PlayerState[];
-  /** -1 = gra trwa, >=0 zwyciezca, -2 = remis */
-  winner: number;
-}
+export type { GameConfig, GameState, PlayerState } from './types.ts';
 
 export function validateConfig(cfg: GameConfig): GameConfig {
   const size = (MAP_SIZES as readonly number[]).includes(cfg.mapSize) ? cfg.mapSize : 96;
-  const players = cfg.players.slice(0, MAX_PLAYERS);
+  const players = cfg.players.slice(0, MAX_PLAYERS).map((p) => ({ name: String(p.name).slice(0, 20), color: p.color | 0, ai: p.ai | 0 }));
   if (players.length === 0) throw new Error('Brak graczy');
   return { mapCode: normalizeMapCode(cfg.mapCode), mapSize: size, players, seed: cfg.seed >>> 0 };
 }
+
+/** Poczatkowy inwentarz zamku. */
+export const START_GOODS: ReadonlyArray<[number, number]> = [
+  [G.PLANK, 40], [G.STONE, 30], [G.LUMBER, 10], [G.FISH, 8], [G.BREAD, 6], [G.MEAT, 6], [G.WHEAT, 4],
+  [G.PIG, 2], [G.COAL, 12], [G.IRON_ORE, 8], [G.STEEL, 6], [G.GOLD, 2], [G.BOAT, 2],
+  [G.SHOVEL, 3], [G.HAMMER, 6], [G.ROD, 2], [G.CLEAVER, 1], [G.SCYTHE, 2], [G.AXE, 3], [G.SAW, 2],
+  [G.PICK, 3], [G.PINCER, 1], [G.SWORD, 3], [G.SHIELD, 3],
+];
+export const START_SERFS = 30;
+export const START_KNIGHTS: readonly number[] = [4, 2, 1, 0, 0];
+export const START_DONKEYS = 3;
 
 export function createGame(input: GameConfig): GameState {
   const cfg = validateConfig(input);
@@ -58,14 +40,50 @@ export function createGame(input: GameConfig): GameState {
     ai: p.ai,
     start: starts[i],
     alive: true,
+    castle: -1,
+    settings: defaultSettings(),
+    serfTimer: 250 + i,
+    donkeyTimer: 900 + i,
+    totalSerfs: 0,
+    netVersion: 0,
+    stats: { samples: [], produced: new Array(26).fill(0) },
+    morale: 50,
+    territory: 0,
+    lastAttacked: -1,
   }));
-  return {
+  const s: GameState = {
     version: SIM_VERSION,
     tick: 0,
     rng: seedRng(cfg.seed ^ 0x2545f491).rng,
     config: cfg,
     map,
     players,
+    flags: [],
+    roads: [],
+    buildings: [],
+    serfs: [],
+    freeFlags: [],
+    freeRoads: [],
+    freeBuildings: [],
+    freeSerfs: [],
+    sweep: 0,
     winner: -1,
+    _events: [],
   };
+  for (const pl of players) {
+    const id = placeBuilding(s, pl.id, pl.start, B.CASTLE, true);
+    if (id < 0) throw new Error(`Nie mozna postawic zamku gracza ${pl.id}`);
+    const castle = s.buildings[id]!;
+    if (!castle.inv) finishBuilding(s, castle);
+    const inv = castle.inv!;
+    for (const [g, n] of START_GOODS) inv.goods[g] = n;
+    inv.serfs[S.GENERIC] = START_SERFS;
+    inv.serfs[S.DONKEY] = START_DONKEYS;
+    for (let l = 0; l < 5; l++) inv.knights[l] = START_KNIGHTS[l];
+    pl.castle = id;
+    pl.totalSerfs = START_SERFS + START_KNIGHTS.reduce((a, b) => a + b, 0);
+    recomputeTerritory(s, pl.start, 9);
+  }
+  s._events = [];
+  return s;
 }

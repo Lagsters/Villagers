@@ -103,3 +103,89 @@ export function setModel(name: string, g: THREE.BufferGeometry): void {
 
 export const MODEL_COLORS = C;
 export { colored, at, merge };
+
+// ---------- Budynki, flagi, osadnicy, towary (zastepniki do czasu modeli z Blendera) ----------
+
+function house(w: number, d: number, h: number, roof: RGB, wall: RGB = C.wall, roofH = 0.35): THREE.BufferGeometry[] {
+  const r = new THREE.ConeGeometry(Math.max(w, d) * 0.78, roofH, 4);
+  r.rotateY(Math.PI / 4);
+  return [
+    colored(at(new THREE.BoxGeometry(w, h, d), 0, h / 2, 0), wall),
+    colored(at(r, 0, h + roofH / 2, 0), roof),
+  ];
+}
+
+const ROOFS: RGB[] = [
+  [0.64, 0.25, 0.18], [0.45, 0.3, 0.2], [0.3, 0.45, 0.25], [0.55, 0.5, 0.3], [0.35, 0.35, 0.5],
+];
+
+function smallBuilding(kind: number): THREE.BufferGeometry {
+  const roof = ROOFS[kind % ROOFS.length];
+  return merge(house(0.55, 0.5, 0.38, roof));
+}
+
+registerBuilder('building_castle', () => merge([
+  colored(at(new THREE.BoxGeometry(1.3, 0.7, 1.1), -0.2, 0.35, -0.2), [0.78, 0.74, 0.68]),
+  ...[[-0.8, -0.7], [0.4, -0.7], [-0.8, 0.3], [0.4, 0.3]].flatMap(([x, z]) => [
+    colored(at(new THREE.CylinderGeometry(0.2, 0.22, 1.1, 6), x, 0.55, z), [0.72, 0.68, 0.62]),
+    colored(at(new THREE.ConeGeometry(0.26, 0.4, 6), x, 1.3, z), [0.35, 0.35, 0.55]),
+  ]),
+  colored(at(new THREE.BoxGeometry(0.5, 0.9, 0.5), -0.2, 0.9, -0.2), [0.8, 0.76, 0.7]),
+]));
+registerBuilder('building_warehouse', () => merge([
+  ...house(1.2, 0.9, 0.55, [0.45, 0.32, 0.2]).map((g) => g.translate(-0.25, 0, -0.25)),
+]));
+registerBuilder('building_large', () => merge(house(1.1, 0.9, 0.45, [0.64, 0.4, 0.18]).map((g) => g.translate(-0.25, 0, -0.25))));
+registerBuilder('building_mine', () => merge([
+  colored(at(new THREE.BoxGeometry(0.55, 0.3, 0.45), 0, 0.15, 0), [0.45, 0.38, 0.3]),
+  colored(at(new THREE.BoxGeometry(0.3, 0.22, 0.05), 0, 0.11, 0.23), C.dark),
+  colored(at(new THREE.BoxGeometry(0.6, 0.06, 0.5), 0, 0.33, 0), C.wood),
+]));
+registerBuilder('building_guardhut', () => merge([
+  colored(at(new THREE.CylinderGeometry(0.25, 0.3, 0.6, 6), 0, 0.3, 0), [0.7, 0.66, 0.6]),
+  colored(at(new THREE.ConeGeometry(0.34, 0.35, 6), 0, 0.78, 0), [0.4, 0.3, 0.2]),
+]));
+registerBuilder('building_tower', () => merge([
+  colored(at(new THREE.CylinderGeometry(0.28, 0.34, 1.1, 6), 0, 0.55, 0), [0.72, 0.68, 0.62]),
+  colored(at(new THREE.ConeGeometry(0.38, 0.45, 6), 0, 1.33, 0), [0.35, 0.35, 0.55]),
+]));
+registerBuilder('building_fortress', () => merge([
+  colored(at(new THREE.BoxGeometry(1.1, 0.8, 0.9), -0.25, 0.4, -0.25), [0.72, 0.68, 0.62]),
+  colored(at(new THREE.CylinderGeometry(0.3, 0.34, 1.4, 6), -0.25, 0.7, -0.25), [0.76, 0.72, 0.66]),
+  colored(at(new THREE.ConeGeometry(0.4, 0.5, 6), -0.25, 1.65, -0.25), [0.35, 0.35, 0.55]),
+]));
+for (let k = 2; k <= 21; k++) {
+  const kind = k;
+  registerBuilder(`building_${kind}`, () => smallBuilding(kind));
+}
+registerBuilder('site', () => merge([
+  colored(at(new THREE.BoxGeometry(0.6, 0.04, 0.55), 0, 0.02, 0), [0.62, 0.5, 0.35]),
+  ...[[-0.25, -0.22], [0.25, -0.22], [-0.25, 0.22], [0.25, 0.22]].map(([x, z]) =>
+    colored(at(new THREE.BoxGeometry(0.04, 0.45, 0.04), x, 0.22, z), C.wood)),
+]));
+registerBuilder('flag', () => merge([
+  colored(at(new THREE.CylinderGeometry(0.015, 0.02, 0.55, 4), 0, 0.27, 0), C.wood),
+]));
+registerBuilder('flag_cloth', () => merge([
+  colored(at(new THREE.BoxGeometry(0.2, 0.13, 0.01), 0.1, 0.46, 0), [1, 1, 1]),
+]));
+registerBuilder('serf_body', () => merge([
+  colored(at(new THREE.CylinderGeometry(0.06, 0.08, 0.2, 5), 0, 0.2, 0), [1, 1, 1]),
+  colored(at(new THREE.BoxGeometry(0.05, 0.12, 0.05), -0.035, 0.06, 0), [0.35, 0.28, 0.22]),
+  colored(at(new THREE.BoxGeometry(0.05, 0.12, 0.05), 0.035, 0.06, 0), [0.35, 0.28, 0.22]),
+]));
+registerBuilder('serf_head', () => merge([
+  colored(at(new THREE.IcosahedronGeometry(0.055, 0), 0, 0.36, 0), C.skin),
+]));
+registerBuilder('knight_head', () => merge([
+  colored(at(new THREE.IcosahedronGeometry(0.06, 0), 0, 0.36, 0), [0.7, 0.72, 0.75]),
+  colored(at(new THREE.ConeGeometry(0.06, 0.08, 5), 0, 0.43, 0), [0.7, 0.72, 0.75]),
+]));
+registerBuilder('good', () => merge([colored(new THREE.BoxGeometry(0.1, 0.08, 0.1), [1, 1, 1])]));
+registerBuilder('fire', () => merge([
+  colored(at(new THREE.ConeGeometry(0.2, 0.5, 5), 0, 0.5, 0), [1, 0.5, 0.1]),
+  colored(at(new THREE.ConeGeometry(0.12, 0.35, 5), 0.1, 0.7, 0.05), [1, 0.85, 0.2]),
+]));
+registerBuilder('border', () => merge([
+  colored(at(new THREE.CylinderGeometry(0.025, 0.035, 0.22, 4), 0, 0.11, 0), [1, 1, 1]),
+]));

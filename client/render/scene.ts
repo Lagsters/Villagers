@@ -8,6 +8,10 @@ import { CameraController } from './camera.ts';
 import { H_SCALE, ROW_H, nearestIdx, vx, vz } from './coords.ts';
 import { MapObjectsRenderer } from './mapObjects.ts';
 import { TerrainRenderer } from './terrain.ts';
+import { RoadsRenderer } from './roads.ts';
+import { EntitiesRenderer } from './entities.ts';
+import { OverlayRenderer } from './overlay.ts';
+import type { GameEvent, GameState } from '../../sim/types.ts';
 import { DEEP_WATER } from './palette.ts';
 
 export interface GraphicsOptions {
@@ -23,6 +27,9 @@ export class SceneRenderer {
   readonly modelMaterial: THREE.MeshLambertMaterial;
   terrain!: TerrainRenderer;
   objects!: MapObjectsRenderer;
+  roads = new RoadsRenderer();
+  entities!: EntitiesRenderer;
+  overlay = new OverlayRenderer();
   map!: MapData;
   private cursor: THREE.Mesh;
   private raycaster = new THREE.Raycaster();
@@ -69,6 +76,10 @@ export class SceneRenderer {
     this.scene.add(this.terrain.group);
     this.objects = new MapObjectsRenderer(map, this.modelMaterial);
     this.scene.add(this.objects.group);
+    this.scene.add(this.roads.mesh);
+    this.entities = new EntitiesRenderer(this.modelMaterial);
+    this.scene.add(this.entities.group);
+    this.scene.add(this.overlay.group);
     // Ocean wokol mapy (tuz pod poziomem wody terenu).
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(map.w * 6, map.h * 6), new THREE.MeshLambertMaterial({ color: new THREE.Color(...DEEP_WATER) }));
     sea.rotation.x = -Math.PI / 2;
@@ -130,10 +141,32 @@ export class SceneRenderer {
     this.cam.lookAt(vx(x, y), vz(y));
   }
 
-  render(dt: number): boolean {
+  /** Po tickach symulacji: zmiany obiektow mapy, drog, wysokosci terenu. */
+  syncState(s: GameState, events: GameEvent[]): void {
+    for (const e of events) {
+      if (e.type === 'height') {
+        this.terrain.markDirty(e.pos);
+        this.objects.markHeight(e.pos);
+        this.roads.invalidate();
+      }
+    }
+    this.objects.sync();
+    this.roads.sync(s);
+  }
+
+  /** Pole mapy pod srodkiem widoku. */
+  centerIdx(): number {
+    return nearestIdx(this.map, this.cam.target.x, this.cam.target.z);
+  }
+
+  render(dt: number, s?: GameState, alpha = 0, me = 0): boolean {
     const moved = this.cam.update(dt);
     this.terrain.update();
     this.objects.update(this.cam.camera, moved);
+    if (s) {
+      this.entities.update(s, alpha, dt);
+      this.overlay.updateSites(s, me, this.centerIdx(), Math.ceil(14 / this.cam.zoom));
+    }
     this.renderer.render(this.scene, this.cam.camera);
     return moved;
   }
