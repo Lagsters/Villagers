@@ -6,11 +6,17 @@ import { updateAnimals } from './animals.ts';
 import { sweepMap } from './mapsweep.ts';
 import { updateProduction, updateWorkerOut } from './production.ts';
 import { hooks } from './step.ts';
+import { registerCommand } from './commands.ts';
+import { commandGeologist, updateGeologist } from './geologist.ts';
+import { statsTick } from './stats.ts';
 
 // Modul ES wykonuje sie raz, wiec rejestracja nastepuje dokladnie jeden raz.
 hooks.preTick.push(sweepMap, updateAnimals);
 hooks.serf.push((s, serf) => updateWorkerOut(s, serf));
+hooks.serf.push(updateGeologist);
 hooks.building.push(updateProduction);
+registerCommand('geologist', commandGeologist);
+hooks.postTick.push(statsTick);
 
 export { createGame } from './state.ts';
 export { step, hooks } from './step.ts';

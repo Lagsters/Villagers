@@ -5,6 +5,8 @@ import { SceneRenderer } from './render/scene.ts';
 import { InputController } from './input.ts';
 import { GameSession, LocalDriver } from './game/session.ts';
 import { Hud } from './ui/hud.ts';
+import { openSettings } from './ui/settingsPanel.ts';
+import { openStats } from './ui/statsPanel.ts';
 import { canBuild, canPlaceFlag, neighbor } from '../sim/world.ts';
 import { findRoadPath } from '../sim/roads.ts';
 import { spiral } from '../sim/grid.ts';
@@ -37,7 +39,7 @@ const hud = new Hud(app, session, {
   lookAt: (i) => view.lookAtIdx(i),
   toggleSites: (on) => { view.overlay.enabledSites = on; },
   openMenu: () => {},
-  openPanel: () => {},
+  openPanel: (name) => (name === 'settings' ? openSettings(app, session) : openStats(app, session)),
 });
 
 const input = new InputController(canvas, view.cam, {

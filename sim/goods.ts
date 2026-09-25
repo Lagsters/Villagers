@@ -7,6 +7,8 @@ import { UNREACHABLE, routeTo } from './routing.ts';
 import { DIR_INTO, FLAG_SLOTS, STAGE, type Building, type Flag, type GameState } from './types.ts';
 
 export const INPUT_CAP = 4;
+/** Maksymalna premia za oczekiwanie przy wyborze odbiorcy (mniej niz roznica 4 w wadze). */
+const WAIT_BONUS_CAP = 240;
 
 /** Indeks slotu wejscia budynku dla towaru albo -1. Kopalnie: slot 0 = dowolne jedzenie. */
 export function inputSlot(b: Building, g: number): number {
@@ -118,13 +120,18 @@ export function chooseDestination(s: GameState, p: number, flagId: number, g: nu
       if (w <= 0) continue;
       const d = routeTo(s, p, b.flag, false).dist[flagId];
       if (d >= UNREACHABLE) continue;
-      const score = w * 64 - d;
+      // Premia za czas od ostatniej dostawy: przy rownych wagach odbiorcy dostaja na zmiane.
+      const wait = Math.min(WAIT_BONUS_CAP, (s.tick - b.served) >> 1);
+      const score = w * 64 - d + wait;
       if (score > bestScore) {
         bestScore = score;
         best = b.id;
       }
     }
-    if (best >= 0) return best;
+    if (best >= 0) {
+      s.buildings[best]!.served = s.tick;
+      return best;
+    }
   }
   return nearestInventory(s, p, flagId, false);
 }

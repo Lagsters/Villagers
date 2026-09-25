@@ -5,7 +5,7 @@
 - [x] M1 Mapa
 - [x] M2 Drogi i tragarze
 - [x] M3 Budowa i pierwsze łańcuchy
-- [ ] M4 Pełna gospodarka
+- [x] M4 Pełna gospodarka
 - [ ] M5 Terytorium i wojsko
 - [ ] M6 AI
 - [ ] M7 Sieć
@@ -49,8 +49,17 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 - Zwierzęta dla myśliwego. Rendering zwierząt.
 - E2E: budowa drwala i drogi przez prawdziwe kliknięcia w UI (Chromium + Firefox).
 
+### M4
+- Wszystkie budynki gospodarcze z testami: kopalnie (jedzenie + złoże, wyczerpanie), huty, narzędziownia
+  (priorytety + braki), zbrojownia (miecz + tarcza → rycerze), farma → młyn → piekarnia,
+  chlewnia → rzeźnia, rybak, myśliwy, stocznia.
+- Geolog (komenda, badanie 8 pól, znaki złóż). Statystyki (próbki co 300 ticków).
+- Sprawiedliwy rozdział towarów (premia za czas oczekiwania).
+- UI: ustawienia gospodarki (rozdział, narzędzia, kolejność transportu, obsada), statystyki (wykres
+  porównawczy z legendą, etykietami i tabelą; tabela towarów).
+
 ## Dalej
-M4: testy pełnej gospodarki (kopalnie, huty, narzędzia, jedzenie), geolog, UI ustawień i statystyk.
+M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.
 
 ## Znane problemy
 Brak.

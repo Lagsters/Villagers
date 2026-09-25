@@ -1,5 +1,5 @@
 import { B, PLAYER_COLORS } from '../../sim/defs.ts';
-import { DIR_SE, spiral } from '../../sim/grid.ts';
+import { DIR_SE, hexDist, spiral } from '../../sim/grid.ts';
 import { createGame } from '../../sim/state.ts';
 import { step } from '../../sim/step.ts';
 import type { Command } from '../../sim/commands.ts';
@@ -60,12 +60,25 @@ export function buildConnected(s: GameState, p: number, kind: number, minDist = 
   if (pos < 0) return { pos, ok: false };
   step(s, [{ type: 'build', player: p, pos, kind }]);
   const flagPos = neighbor(s.map, pos, DIR_SE);
+  return { pos, ok: connectFlag(s, p, flagPos) };
+}
+
+/** Laczy flage z najblizsza flaga sieci (majaca juz droge albo flaga zamku). */
+export function connectFlag(s: GameState, p: number, flagPos: number): boolean {
   const castle = s.buildings[s.players[p].castle]!;
-  const castleFlagPos = s.flags[castle.flag]!.pos;
-  const dirs = findRoadPath(s, p, flagPos, castleFlagPos);
-  if (!dirs) return { pos, ok: false };
-  step(s, [{ type: 'road', player: p, pos: flagPos, dirs }]);
-  return { pos, ok: s.map.roads[flagPos] !== 0 };
+  const w = s.map.w;
+  const fx = flagPos % w, fy = (flagPos / w) | 0;
+  const targets = s.flags
+    .filter((f) => f && f.owner === p && f.pos !== flagPos && (f.id === castle.flag || f.roads.some((r) => r >= 0)))
+    .map((f) => f!.pos)
+    .sort((a, b) => hexDist(fx, fy, a % w, (a / w) | 0) - hexDist(fx, fy, b % w, (b / w) | 0) || a - b);
+  for (const t of targets.slice(0, 8)) {
+    const dirs = findRoadPath(s, p, flagPos, t);
+    if (!dirs) continue;
+    step(s, [{ type: 'road', player: p, pos: flagPos, dirs }]);
+    if (s.map.roads[flagPos] !== 0) return true;
+  }
+  return false;
 }
 
 export { B };
