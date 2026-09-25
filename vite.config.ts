@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 
 // Build dziala z podkatalogu GitHub Pages: base = /<nazwa-repozytorium>/.
 // Nadpisz przez zmienna srodowiskowa BASE (np. BASE=/ dla wlasnej domeny).
-const base = process.env.BASE ?? '/osadnicy-doliny/';
+const base = process.env.BASE ?? '/Villagers/';
 
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? base : '/',

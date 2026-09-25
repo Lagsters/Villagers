@@ -15,6 +15,6 @@ Każdy wpis: data, decyzja, uzasadnienie.
   Wszystkie wymagane przez specyfikację lub niezbędne do typowania.
 - **ESLint pilnuje determinizmu:** w `sim/` zakazane są `Math.random`, `Math.sin/cos/sqrt`, `Date.now`,
   `performance.now`, `window`, `document`.
-- **`base` Vite** ustawiany zmienną `BASE` (domyślnie `/osadnicy-doliny/`); CI ustawia go na nazwę repozytorium.
-- **Brak zdalnego repozytorium:** projekt powstaje lokalnie; utworzenie repozytorium na GitHubie
-  i włączenie Pages opisuje `docs/DEPLOY.md` (to krok właściciela, bo publikuje kod).
+- **`base` Vite** ustawiany zmienną `BASE` (domyślnie `/Villagers/`); CI ustawia go na nazwę repozytorium.
+- **Repozytorium:** właściciel wskazał `github.com/Lagsters/Villagers`. Pages publikuje pod `/Villagers/`,
+  stąd domyślny `base`. Kod jest wypychany na `main` po każdym etapie; CI buduje i publikuje.
