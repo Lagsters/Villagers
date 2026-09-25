@@ -185,6 +185,17 @@ export class EntitiesRenderer {
         rot = Math.atan2(b.x - a.x, b.z - a.z);
         a.lerp(b, t);
         bob = Math.abs(Math.sin(t * Math.PI * 2)) * 0.03;
+      } else if (serf.anim === 2) {
+        // Pojedynek: zwrot do przeciwnika, wymachy i podskoki.
+        const opp = serf.sub >= 0 ? s.serfs[serf.sub] : null;
+        if (opp) {
+          this.wp(s, opp.pos, b);
+          rot = Math.atan2(b.x - a.x, b.z - a.z);
+          // Odsuniecie od siebie, gdy stoja na tym samym polu.
+          if (opp.pos === serf.pos) a.x += serf.home === serf.target ? 0.12 : -0.12;
+        }
+        rot += Math.sin(this.time * 11 + serf.id) * 0.5;
+        bob = Math.abs(Math.sin(this.time * 9 + serf.id)) * 0.06;
       } else if (serf.anim === 1) {
         bob = Math.abs(Math.sin(this.time * 8 + serf.id)) * 0.04;
         rot = serf.id;

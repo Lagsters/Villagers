@@ -90,3 +90,5 @@ select { font: inherit; color: var(--text); background: #262b20; border: 1px sol
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 13px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.end-screen { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--accent); border-radius: 14px; padding: 24px 40px; text-align: center; z-index: 30; }
+.end-screen h1 { margin: 0 0 8px; color: var(--accent); }

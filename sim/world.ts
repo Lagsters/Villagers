@@ -154,7 +154,7 @@ const MAX_TERRITORY_RADIUS = 9;
  * Przelicza wlasciciela pol w promieniu `r` od `center`. Zwraca liste pol, ktore zmienily
  * wlasciciela (pary [idx, staryWlasciciel]).
  */
-export function recomputeTerritory(s: GameState, center: number, r: number): number[] {
+export function recomputeTerritory(s: GameState, center: number, r: number, force: Building | null = null): number[] {
   const map = s.map;
   const w = map.w;
   const cx = center % w;
@@ -185,7 +185,20 @@ export function recomputeTerritory(s: GameState, center: number, r: number): num
         best = b.owner;
       }
     }
-    const nw = keep ? cur : best + 1;
+    let nw = keep ? cur : best + 1;
+    if (force && keep && cur !== force.owner + 1) {
+      // Przejety budynek zabiera pola, do ktorych jest nie dalej niz budynki obecnego wlasciciela.
+      const df = hexDist(vx, vy, force.pos % w, (force.pos / w) | 0);
+      if (df <= territoryRadius(force.kind)) {
+        let dCur = 1 << 30;
+        for (const b of infl) {
+          if (b.owner + 1 !== cur) continue;
+          const d = hexDist(vx, vy, b.pos % w, (b.pos / w) | 0);
+          if (d <= territoryRadius(b.kind) && d < dCur) dCur = d;
+        }
+        if (df <= dCur) nw = force.owner + 1;
+      }
+    }
     if (nw !== cur) {
       map.owner[v] = nw;
       changed.push(v, cur);

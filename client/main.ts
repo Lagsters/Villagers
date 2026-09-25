@@ -48,6 +48,20 @@ const input = new InputController(canvas, view.cam, {
   onKey: (e) => hud.onKey(e),
 }, () => view.height);
 
+let endShown = false;
+function showEnd(winner: number) {
+  const s = session.state;
+  const box = document.createElement('div');
+  box.className = 'end-screen';
+  const won = winner === session.localPlayer;
+  box.innerHTML = `<h1>${won ? 'Zwycięstwo!' : 'Koniec gry'}</h1><p>${winner >= 0 ? `Wygrywa: ${s.players[winner].name}` : 'Remis'}</p>`;
+  const b = document.createElement('button');
+  b.textContent = 'Oglądaj dalej';
+  b.onclick = () => box.remove();
+  box.appendChild(b);
+  app.appendChild(box);
+}
+
 let last = performance.now();
 let lastFrame = 0;
 let lastHud = 0;
@@ -61,7 +75,15 @@ function frame(now: number) {
   input.update(dtMs / 1000);
   const t0 = session.state.tick;
   session.update(dtMs);
-  if (session.state.tick !== t0) view.syncState(session.state, session.takeEvents());
+  if (session.state.tick !== t0) {
+    const ev = session.takeEvents();
+    view.syncState(session.state, ev);
+    hud.onEvents(ev);
+    if (session.state.winner !== -1 && !endShown) {
+      endShown = true;
+      showEnd(session.state.winner);
+    }
+  }
   view.render(dtMs / 1000, session.state, session.alpha, session.localPlayer);
   if (now - lastHud > 250) {
     lastHud = now;

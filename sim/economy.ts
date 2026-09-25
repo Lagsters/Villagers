@@ -3,7 +3,8 @@
  * zamowienia towarow, osly na zatloczonych drogach, narodziny osadnikow, szkolenie rycerzy.
  * Przebieg dla gracza p odbywa sie co ECON_PERIOD tickow (fazy graczy sa przesuniete).
  */
-import { BUILDINGS, FIRST_TOOL, G, S, SERF_TOOLS, isInventory, isMilitary } from './defs.ts';
+import { B, BUILDINGS, FIRST_TOOL, G, S, SERF_TOOLS, isInventory, isMilitary } from './defs.ts';
+import { ZONE, desiredKnights } from './military.ts';
 import { DIR_NW, DIR_SE, opposite } from './grid.ts';
 import { addTransit, demand, distWeight, flagGoodsCount, putGood } from './goods.ts';
 import { UNREACHABLE, flagDist, routeTo, walkRoute } from './routing.ts';
@@ -38,6 +39,11 @@ function pickInventoryForSerf(s: GameState, ctx: PassCtx, p: number, type: numbe
   for (const b of ctx.invs) {
     if ((ctx.serfsOut.get(b.id) ?? 0) >= PER_INV_SERFS) continue;
     if (!canProvideSerf(b.inv!, type)) continue;
+    if (type === S.KNIGHT && b.kind === B.CASTLE) {
+      // Rezerwa rycerzy w zamku.
+      const total = b.inv!.knights.reduce((a, c) => a + c, 0);
+      if (total <= s.players[p].settings.castleKnights) continue;
+    }
     const d = flagDist(s, p, b.flag, targetFlag, true);
     if (d < bestD) {
       bestD = d;
@@ -64,7 +70,7 @@ function noteSerfOut(ctx: PassCtx, b: Building): void {
 }
 
 /** Wysyla osadnika z magazynu do budynku. Zwraca id osadnika albo -1. */
-function dispatchSerfToBuilding(s: GameState, ctx: PassCtx, b: Building, type: number): number {
+function dispatchSerfToBuilding(s: GameState, ctx: PassCtx, b: Building, type: number, weakest = false): number {
   const inv = pickInventoryForSerf(s, ctx, b.owner, type, b.flag);
   if (!inv) {
     noteMissingTools(s, ctx, b.owner, type);
@@ -72,7 +78,7 @@ function dispatchSerfToBuilding(s: GameState, ctx: PassCtx, b: Building, type: n
   }
   const route = walkRoute(s, b.owner, inv.flag, b.flag);
   if (!route) return -1;
-  const serf = takeSerfFromInventory(s, inv, type);
+  const serf = takeSerfFromInventory(s, inv, type, weakest);
   if (!serf) return -1;
   noteSerfOut(ctx, inv);
   serf.path = [DIR_SE, ...route, DIR_NW];
@@ -142,8 +148,18 @@ function serfRequests(s: GameState, ctx: PassCtx, p: number): void {
       if (road.load >= DONKEY_LOAD && road.donkey < 0) road.donkey = dispatchCarrier(s, ctx, road, S.DONKEY);
     }
   }
+  // Rycerze w drodze do budynkow (liczone raz na przebieg).
+  const coming = new Map<number, number>();
+  for (const sf of s.serfs) {
+    if (sf && sf.owner === p && sf.type === S.KNIGHT && sf.state === SS.TO_BUILDING) coming.set(sf.target, (coming.get(sf.target) ?? 0) + 1);
+  }
   for (const b of s.buildings) {
     if (!b || b.owner !== p) continue;
+    if (b.stage === STAGE.DONE && isMilitary(b.kind)) {
+      const want = desiredKnights(s, b);
+      if (b.knights.length + (coming.get(b.id) ?? 0) < want) dispatchSerfToBuilding(s, ctx, b, S.KNIGHT, b.phase !== ZONE.ENEMY);
+      continue;
+    }
     if (b.stage === STAGE.LEVEL && b.digger < 0) b.digger = dispatchSerfToBuilding(s, ctx, b, S.DIGGER);
     else if ((b.stage === STAGE.BUILD || b.stage === STAGE.LEVEL) && b.builder < 0) b.builder = dispatchSerfToBuilding(s, ctx, b, S.BUILDER);
     else if (b.stage === STAGE.DONE && b.worker < 0 && BUILDINGS[b.kind].worker >= 0) {

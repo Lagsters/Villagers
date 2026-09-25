@@ -5,12 +5,14 @@
 import { BUILDINGS, B, G, GOOD_NAMES_PL, O, S, SERF_NAMES_PL, SIZE, isMilitary } from '../../sim/defs.ts';
 import { DIR_SE } from '../../sim/grid.ts';
 import { findRoadPath, roadAt } from '../../sim/roads.ts';
-import { STAGE, type Building, type GameState } from '../../sim/types.ts';
+import { STAGE, type Building, type GameEvent, type GameState } from '../../sim/types.ts';
+import { attackersAvailable } from '../../sim/military.ts';
 import { canBuild, canPlaceFlag, neighbor } from '../../sim/world.ts';
 import type { GameSession } from '../game/session.ts';
 import { el, button, clear } from './dom.ts';
 
 const TERRAIN_PL = ['Woda', 'Trawa', 'Pustynia', 'Góry', 'Śnieg'];
+const RES_PL = ['nic', 'węgiel', 'żelazo', 'złoto', 'kamień', 'ryby'];
 const STAGE_PL = ['Wyrównywanie terenu', 'W budowie', 'Gotowy', 'Płonie'];
 
 export interface HudCallbacks {
@@ -456,8 +458,77 @@ export class Hud {
     }
   }
 
-  /** Panel ataku - uzupelniany w module wojska. */
-  attackUi: (b: Building) => void = () => {};
+  /** Panel ataku na wrogi budynek wojskowy lub zamek. */
+  private attackUi(b: Building): void {
+    const s = this.state;
+    if (b.stage !== STAGE.DONE) return;
+    const def = BUILDINGS[b.kind];
+    if (b.inv) {
+      const kn = b.inv.knights.reduce((a, c) => a + c, 0);
+      this.panel.appendChild(el('p', '', `Obrońców w zamku: ${kn}`));
+    } else {
+      this.panel.appendChild(el('p', '', `Rycerze: ${b.knights.length}/${def.knights}`));
+    }
+    const avail = attackersAvailable(s, this.me, b);
+    if (avail <= 0) {
+      this.panel.appendChild(el('p', 'sub', 'Brak rycerzy w zasięgu ataku (budynki wojskowe w promieniu 14, każdy zostawia jednego).'));
+      return;
+    }
+    const row = el('label', 'slider-row');
+    row.appendChild(el('span', 'slider-label', 'Liczba rycerzy'));
+    const input = el('input');
+    input.type = 'range';
+    input.min = '1';
+    input.max = String(avail);
+    input.value = String(avail);
+    const val = el('span', 'slider-val', input.value);
+    input.addEventListener('input', () => { val.textContent = input.value; });
+    row.appendChild(input);
+    row.appendChild(val);
+    this.panel.appendChild(row);
+    this.panel.appendChild(button('Atakuj', () => {
+      this.session.submit({ type: 'attack', player: this.me, pos: b.pos, count: Number(input.value) });
+      this.toast(`Wysłano ${input.value} rycerzy do ataku`);
+      this.select(-1);
+    }, 'Rycerze pójdą pod flagę budynku i stoczą pojedynki', 'danger'));
+  }
+
+  /** Komunikaty o zdarzeniach gry. */
+  onEvents(events: GameEvent[]): void {
+    const s = this.state;
+    const me = this.me;
+    for (const e of events) {
+      const name = BUILDINGS[e.a ?? 0]?.name ?? '';
+      switch (e.type) {
+        case 'attack':
+          if (e.player === me) this.toast('Wróg atakuje twój budynek!', 'bad');
+          break;
+        case 'captured':
+          if (e.player === me) this.toast('Zdobyliśmy wrogi budynek!');
+          else if (e.a === me) this.toast('Wróg przejął nasz budynek!', 'bad');
+          break;
+        case 'castleLost':
+          if (e.player === me) this.toast('Nasz zamek upadł!', 'bad');
+          else if (e.a === me) this.toast(`Zamek gracza ${s.players[e.player].name} zdobyty!`);
+          break;
+        case 'eliminated':
+          this.toast(e.player === me ? 'Przegrana - twoja osada upadła.' : `${s.players[e.player].name} odpada z gry.`, e.player === me ? 'bad' : '');
+          break;
+        case 'built':
+          if (e.player === me && e.a !== undefined && e.a !== B.CASTLE) this.toast(`Gotowe: ${name}`);
+          break;
+        case 'exhausted':
+          if (e.player === me) this.toast(`${name}: złoże wyczerpane`, 'warn');
+          break;
+        case 'found':
+          if (e.player === me) this.toast(`Geolog znalazł: ${RES_PL[e.a ?? 0]}`);
+          break;
+        case 'burned':
+          if (e.player === me) this.toast(`Spłonął budynek: ${name}`, 'bad');
+          break;
+      }
+    }
+  }
 
   private show(): void {
     this.panel.classList.remove('hidden');

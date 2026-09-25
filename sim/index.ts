@@ -9,6 +9,7 @@ import { hooks } from './step.ts';
 import { registerCommand } from './commands.ts';
 import { commandGeologist, updateGeologist } from './geologist.ts';
 import { statsTick } from './stats.ts';
+import { commandAttack, knightArrive, militaryTick, surrender, updateKnight } from './military.ts';
 
 // Modul ES wykonuje sie raz, wiec rejestracja nastepuje dokladnie jeden raz.
 hooks.preTick.push(sweepMap, updateAnimals);
@@ -16,7 +17,11 @@ hooks.serf.push((s, serf) => updateWorkerOut(s, serf));
 hooks.serf.push(updateGeologist);
 hooks.building.push(updateProduction);
 registerCommand('geologist', commandGeologist);
-hooks.postTick.push(statsTick);
+hooks.serf.push(updateKnight);
+hooks.arrive.push(knightArrive);
+registerCommand('attack', commandAttack);
+registerCommand('surrender', surrender);
+hooks.postTick.push(militaryTick, statsTick);
 
 export { createGame } from './state.ts';
 export { step, hooks } from './step.ts';
