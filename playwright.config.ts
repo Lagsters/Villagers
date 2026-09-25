@@ -21,7 +21,9 @@ export default defineConfig({
         ...devices['Desktop Firefox'],
         viewport: { width: 1280, height: 720 },
         deviceScaleFactor: 1,
-        // Headless Firefox na serwerze CI bez GPU domyslnie wylacza WebGL - wlaczamy programowe.
+        // Headless Firefox na linuksowym CI nie ma WebGL; tam uruchamiamy go z oknem pod xvfb
+        // (programowe OpenGL Mesa), lokalnie bez okna.
+        headless: !process.env.CI,
         launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false, 'webgl.enable-webgl2': true } },
       },
     },
