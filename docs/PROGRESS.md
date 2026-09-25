@@ -10,7 +10,7 @@
 - [x] M6 AI
 - [x] M7 Sieć
 - [x] M8 Grafika
-- [ ] M9 Wydajność i dopracowanie
+- [x] M9 Wydajność i dopracowanie
 - [ ] M10 Wydanie
 
 ## Dziennik
@@ -62,4 +62,4 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.
 
 ## Znane problemy
-- Najdłuższy tick przy 8 graczach na mapie 128 ~16 ms (cel < 10 ms) - optymalizacja w M9.
+- Test lobby WebRTC tylko w Chromium (ograniczenie Playwright-Firefox na http://localhost).

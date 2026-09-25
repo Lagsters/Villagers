@@ -7,6 +7,8 @@ import { step } from '../../sim/step.ts';
 import { findRoadPath } from '../../sim/roads.ts';
 import { hexDist, spiral } from '../../sim/grid.ts';
 import { Sound } from '../audio.ts';
+import { Minimap } from '../ui/minimap.ts';
+import { Tutorial } from '../ui/tutorial.ts';
 import type { GameState } from '../../sim/types.ts';
 import { canBuild, canPlaceFlag, neighbor } from '../../sim/world.ts';
 import { InputController } from '../input.ts';
@@ -36,6 +38,8 @@ export class GameView {
   private onResize: () => void;
   private overlay: HTMLElement | null = null;
   readonly sound: Sound;
+  private minimap: Minimap;
+  private tutorial: Tutorial | null = null;
   /** Liczniki do testow wydajnosci. */
   perf = { frames: 0, frameMs: 0, tickMs: 0, ticks: 0, maxTickMs: 0 };
 
@@ -62,6 +66,8 @@ export class GameView {
       openPanel: (name) => (name === 'settings' ? openSettings(app, this.session) : openStats(app, this.session)),
     });
     this.hud.setSpeedEnabled(!opts.network);
+    this.minimap = new Minimap(this.hud.root, this.view, () => this.session.state);
+    if (!opts.network) this.tutorial = new Tutorial(this.hud.root);
     this.input = new InputController(this.canvas, this.view.cam, {
       onTap: (x, y, b) => {
         this.sound.click();
@@ -126,9 +132,11 @@ export class GameView {
         this.perf.tickMs += this.session.lastTickMs;
         if (this.session.lastTickMs > this.perf.maxTickMs) this.perf.maxTickMs = this.session.lastTickMs;
       }
+      this.minimap.update(now);
       if (now - lastHud > 250) {
         lastHud = now;
         this.hud.update();
+        this.tutorial?.update(this.session.state, this.session.localPlayer);
       }
     };
     this.raf = requestAnimationFrame(frame);
