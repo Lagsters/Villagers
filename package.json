@@ -17,6 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:perf": "playwright test tests/perf --project=chromium",
+    "bots": "node ai/harness.ts 20 64 2,1 108000",
     "server": "node server/signal.ts",
     "art": "node art/build.ts"
   },

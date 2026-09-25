@@ -129,3 +129,7 @@ Drogi wodne z łodziami zostają (część pierwsza).
 - Bot: budowa w kolejności zastępczej (twierdza → wieża → wartownia → barak), sprawdzanie obsady
   (narzędzia, kopacz, budowniczy) przed budową, rezerwy desek i kamienia, łączenie odciętych magazynów,
   2 kopalnie węgla na kopalnię żelaza i smolarnia przy niedoborze węgla, tryb dobijania przy przewadze.
+- **Test wydajności w CI jest informacyjny dla FPS i skoków ticku.** Runner GitHub Actions (2 współdzielone
+  vCPU, bez GPU, rasteryzacja programowa na tych samych rdzeniach) dał 18,7 FPS i skok ticku 13,6 ms, podczas
+  gdy lokalnie przy CPU ×4 test daje 45 FPS i 3,7 ms. W CI twardo sprawdzane są pamięć, liczba wywołań
+  rysowania i średni tick; pełne kryteria uruchamia `npm run test:perf` na zwykłym komputerze.
