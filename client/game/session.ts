@@ -14,6 +14,10 @@ export interface TickDriver {
   submit(cmd: Command): void;
   /** Wywolywane co klatke (np. obsluga sieci). */
   poll?(): void;
+  /** Po kazdym ticku (np. hash stanu w sieci). */
+  afterTick?(state: GameState): void;
+  /** Liczba tur w buforze - sesja przyspiesza, gdy peer zostaje w tyle. */
+  backlog?(): number;
   dispose?(): void;
 }
 
@@ -64,9 +68,12 @@ export class GameSession {
   update(dtMs: number): void {
     this.driver.poll?.();
     if (this.paused) return;
-    this.acc += Math.min(dtMs, 250) * this.speed;
+    // W sieci: gdy w buforze czeka kilka tur, gramy szybciej, zeby dogonic hosta.
+    const backlog = this.driver.backlog?.() ?? 0;
+    const catchUp = backlog > 2 ? 1 + (backlog - 2) * 0.5 : 1;
+    this.acc += Math.min(dtMs, 250) * this.speed * catchUp;
     let steps = 0;
-    const maxSteps = Math.max(4, this.speed * 3);
+    const maxSteps = Math.max(4, this.speed * catchUp * 3);
     while (this.acc >= TICK_MS && steps < maxSteps) {
       const cmds = this.driver.commandsFor(this.state.tick, this.state);
       if (!cmds) {
@@ -75,6 +82,7 @@ export class GameSession {
       }
       const t0 = performance.now();
       step(this.state, cmds);
+      this.driver.afterTick?.(this.state);
       this.lastTickMs = performance.now() - t0;
       for (const e of this.state._events) this.events.push(e);
       for (const f of this.onTick) f(this.state);

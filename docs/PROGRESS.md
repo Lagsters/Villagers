@@ -8,7 +8,7 @@
 - [x] M4 Pełna gospodarka
 - [ ] M5 Terytorium i wojsko
 - [x] M6 AI
-- [ ] M7 Sieć
+- [x] M7 Sieć
 - [ ] M8 Grafika
 - [ ] M9 Wydajność i dopracowanie
 - [ ] M10 Wydanie
@@ -62,4 +62,4 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.
 
 ## Znane problemy
-Brak.
+- Najdłuższy tick przy 8 graczach na mapie 128 ~16 ms (cel < 10 ms) - optymalizacja w M9.

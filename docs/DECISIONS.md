@@ -74,3 +74,19 @@ Drogi wodne z łodziami zostają (część pierwsza).
   Faktycznie partie trwają 36-101 min.
 - **Zakleszczenie gospodarki** w teście = okno 6000 ticków bez produkcji, choć ≥ 3 obsadzone budynki wytwarzające
   towar mają komplet wejść. Upadek osady pod naporem wroga (brak surowców) nie jest zakleszczeniem.
+
+## 2026-09-25 — M7 (sieć)
+
+- **Lockstep z przekaźnikiem u hosta**: klienci nie numerują tur - host przypisuje komendy do najbliższej
+  zamykanej tury (co 200 ms) i nadpisuje w nich numer gracza (nikt nie wyda komendy za kogoś innego).
+  Host nie wyprzedza najwolniejszego klienta o więcej niż 12 tur; klient z zaległościami przyspiesza.
+  Opóźnienie komendy = RTT do hosta + do 1 tury.
+- **Boty w grze sieciowej liczy tylko host**; ich komendy idą przez lockstep jak komendy ludzi.
+  Rozłączony gracz dostaje bota (poziom trudny).
+- **Test e2e lobby tylko w Chromium.** W Playwright-Firefox RTCPeerConnection nie zbiera kandydatów ICE
+  na stronie z `http://localhost` (na `about:blank` działa) - to ograniczenie środowiska testowego,
+  nie gry. Połączenie sieciowe dodatkowo sprawdzono ręcznie w przeglądarce wbudowanej (Chromium):
+  lobby, start, bot hosta, brak desynchronizacji, komunikat po utracie gospodarza. Pozostałe testy e2e
+  działają w Chromium i Firefoksie.
+- **W CI Firefox działa z oknem pod xvfb** (headless Firefox na Linuksie nie ma WebGL).
+- Diagnostyka połączeń: `localStorage.debugNet = '1'` włącza logi `[rtc]` w konsoli.

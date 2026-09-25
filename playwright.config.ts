@@ -24,11 +24,27 @@ export default defineConfig({
         // Headless Firefox na linuksowym CI nie ma WebGL; tam uruchamiamy go z oknem pod xvfb
         // (programowe OpenGL Mesa), lokalnie bez okna.
         headless: !process.env.CI,
-        launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false, 'webgl.enable-webgl2': true } },
+        launchOptions: {
+          firefoxUserPrefs: {
+            'webgl.force-enabled': true,
+            'webgl.disabled': false,
+            'webgl.enable-webgl2': true,
+            // WebRTC miedzy kartami na tej samej maszynie: bez maskowania adresow (mDNS) i z loopbackiem.
+            'media.peerconnection.ice.obfuscate_host_addresses': false,
+            'media.peerconnection.ice.loopback': true,
+          },
+        },
       },
     },
   ],
   webServer: [
+    {
+      // Lokalny serwer sygnalizacyjny dla testu lobby (klient na localhost laczy sie z ws://localhost:8787).
+      command: 'node server/signal.ts',
+      port: 8787,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
     {
       command: `npx vite build --base=/ && npx vite preview --port ${PORT} --strictPort`,
       port: PORT,
