@@ -23,6 +23,7 @@ function modelForBuilding(kind: number): string {
     case B.GUARDHUT: return 'building_guardhut';
     case B.TOWER: return 'building_tower';
     case B.FORTRESS: return 'building_fortress';
+    case B.GUARDHOUSE: return 'building_guardhut';
   }
   if (isMine(kind)) return 'building_mine';
   if (BUILDINGS[kind].size === SIZE.LARGE) return 'building_large';
@@ -131,7 +132,7 @@ export class EntitiesRenderer {
         const flicker = 0.85 + Math.sin(this.time * 17 + b.id) * 0.15;
         this.fire.push(p.x + ox, p.y, p.z + oz, this.time * 2, flicker * (0.6 + k * 0.6));
       } else {
-        this.site.push(p.x + ox, p.y, p.z + oz, 0, def.size === SIZE.LARGE ? 1.6 : 1);
+        this.site.push(p.x + ox, p.y, p.z + oz, 0, def.size === SIZE.LARGE ? 1.6 : def.size === SIZE.MEDIUM ? 1.25 : 1);
         const total = def.planks + def.stones;
         const done = total > 0 ? (b.planksUsed + b.stonesUsed) / total : 0;
         if (done > 0) this.buildingLayer(model).push(p.x + ox, p.y, p.z + oz, 0, 1, Math.max(0.05, done));

@@ -2,7 +2,7 @@
  * Osadnicy jako encje na mapie: tworzenie przy magazynie, ruch po polach, marsz po drogach,
  * powrot do magazynu. Logika zawodow jest w transport.ts, construction.ts, production.ts, military.ts.
  */
-import { O, S, SERF_TOOLS, T } from './defs.ts';
+import { G, O, S, SERF_TOOLS, T } from './defs.ts';
 import { DIR_NW, DIR_SE, hexDist } from './grid.ts';
 import { findPath } from './pathfind.ts';
 import { walkRoute } from './routing.ts';
@@ -136,7 +136,7 @@ export function enterInventory(s: GameState, serf: Serf, b: Building): void {
   const inv = b.inv!;
   if (serf.type === S.KNIGHT) inv.knights[Math.max(0, Math.min(4, serf.level))]++;
   else if (serf.type === S.TRANSPORTER) inv.serfs[S.GENERIC]++;
-  else if (serf.type === S.SAILOR) { inv.serfs[S.GENERIC]++; inv.goods[8]++; }
+  else if (serf.type === S.SAILOR) { inv.serfs[S.GENERIC]++; inv.goods[G.BOAT]++; }
   else inv.serfs[serf.type]++;
   if (serf.carry >= 0) {
     inv.goods[serf.carry]++;

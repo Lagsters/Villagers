@@ -13,6 +13,10 @@ function dist(s: GameState, a: number, b: number): number {
   return hexDist(a % w, (a / w) | 0, b % w, (b / w) | 0);
 }
 
+function castleOfCat(s: GameState) {
+  return s.buildings[s.players[0].castle]!;
+}
+
 /** Wolne miejsce pod budynek: trawa bez obiektow w promieniu 2. */
 function clearSpot(s: GameState, near: number, minD: number, maxD: number, avoid: number[] = []): number {
   const m = s.map;
@@ -83,6 +87,35 @@ describe('M5: budynki wojskowe i terytorium', () => {
   });
 });
 
+describe('M5: katapulta', () => {
+  it('katapulta zabija rycerzy we wrogim budynku w zasiegu', () => {
+    const s = newGame(2, 64, 'CATA');
+    const c0 = s.buildings[s.players[0].castle]!;
+    const c1 = s.buildings[s.players[1].castle]!;
+    const w = s.map.w;
+    const mid = (((c0.pos / w) | 0) + ((c1.pos / w) | 0) >> 1) * w + ((c0.pos % w) + (c1.pos % w) >> 1);
+    const a = clearSpot(s, mid, 3, 12, [c0.pos, c1.pos]);
+    const d = clearSpot(s, a, 6, 9, [c0.pos, c1.pos, a]);
+    const did = spawnMilitary(s, 1, d, B.TOWER, [0, 0, 0, 0, 0, 0]);
+    // Bez posilkow z zamku mierzymy sama katapulte.
+    c1.inv!.knights = [0, 0, 0, 0, 0];
+    c1.inv!.goods[G.SWORD] = 0;
+    for (const j of spiral(s.map.w, s.map.h, a % w, (a / w) | 0, 1)) s.map.owner[j] = 1;
+    const cid = placeBuilding(s, 0, a, B.CATAPULT, true);
+    const cat = s.buildings[cid]!;
+    const worker = createSerf(s, 0, S.CATAPULTER, a);
+    worker.state = SS.INSIDE;
+    worker.home = cid;
+    cat.worker = worker.id;
+    cat.workerInside = true;
+    cat.stock[0] = 4;
+    castleOfCat(s).inv!.goods[G.STONE] = 40;
+    run(s, 6000);
+    expect(s.buildings[did]!.knights.length).toBeLessThan(6);
+    expect(s.buildings[did]!.knights.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('M5: walka', () => {
   function duelSetup(code: string, attackerLevels: number[], defenderLevels: number[]) {
     const s = newGame(2, 64, code);
@@ -139,6 +172,5 @@ describe('M5: walka', () => {
     expect(s.winner).toBe(0);
     expect(s.players[1].alive).toBe(false);
     expect(s.map.owner.some((o) => o === 2)).toBe(false);
-    expect(G.GOLD).toBe(14);
   });
 });

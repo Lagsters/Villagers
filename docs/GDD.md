@@ -55,7 +55,7 @@ Wszystkie liczby w tym dokumencie są źródłem prawdy dla `sim/`. Czas podaję
   Jeśli tam czeka towar w przeciwną stronę, od razu go zabiera.
 - **Kolejka na fladze**: maks. 8 towarów. Gdy flaga docelowa jest pełna, tragarz czeka z towarem.
 - **Osioł**: gdy na drodze przez 300 ticków średnio ≥ 3 towary czekają na jej końcach, drogę dostaje
-  osioł (drugi przenoszący, działa jak tragarz). Osły rodzą się w zamku: +1 co 900 ticków, maks. 20 w zapasie.
+  osioł (drugi przenoszący, działa jak tragarz). Osły pochodzą z hodowli osłów.
 - **Kolejność transportu**: tragarz wybiera towar o najwyższym priorytecie transportu (ustawienie gracza),
   przy remisie najstarszy.
 - **Prędkość marszu**: krawędź płaska = 8 ticków; pod górę +2 ticki za każdy poziom różnicy wysokości,
@@ -119,43 +119,60 @@ Wszystkie liczby w tym dokumencie są źródłem prawdy dla `sim/`. Czas podaję
 
 ## 6. Budynki i łańcuchy produkcji
 
-| Budynek | Rozmiar | Koszt | Wejście → Wyjście | Czas cyklu | Uwagi |
-|---|---|---|---|---|---|
-| Zamek | duży | — | magazyn, rodzi osadników i osły | — | promień terytorium 9 |
-| Magazyn | duży | 4D 4K | magazyn | — | |
-| Drwal | mały | 2D | drzewo → pień | 80 + marsz | drzewa w promieniu 6 |
-| Leśnik | mały | 2D | sadzi drzewa | 120 + marsz | promień 5 |
-| Tartak | mały | 2D 1K | pień → deska | 80 | |
-| Kamieniarz | mały | 2D | skała → kamień | 80 + marsz | promień 7 |
-| Rybak | mały | 2D | ryby → ryba | 100 + marsz | brzeg w promieniu 7 |
-| Myśliwy | mały | 2D | zwierzę → mięso | 60 + pogoń | promień 8 |
-| Farma | duży | 3D 1K | sieje/zbiera → zboże | 80 + marsz | pola w promieniu 3, rosną 2000 |
-| Młyn | mały | 3D 1K | zboże → mąka | 60 | |
-| Piekarnia | mały | 2D 2K | mąka → chleb | 80 | |
-| Chlewnia | duży | 3D 2K | zboże → świnia | 120 | |
-| Rzeźnia | mały | 2D 1K | świnia → mięso | 60 | |
-| Kopalnia węgla | mały | 4D | jedzenie → węgiel | 100 | złoże w promieniu 2 |
-| Kopalnia żelaza | mały | 4D | jedzenie → ruda żelaza | 100 | |
-| Kopalnia złota | mały | 4D | jedzenie → ruda złota | 100 | |
-| Kopalnia kamienia | mały | 4D | jedzenie → kamień ×2 | 100 | |
-| Huta żelaza | mały | 2D 2K | ruda żelaza + węgiel → stal | 100 | |
-| Huta złota | mały | 2D 2K | ruda złota + węgiel → sztabka złota | 100 | |
-| Narzędziownia | mały | 3D 1K | deska + stal → narzędzie | 120 | wg priorytetów narzędzi |
-| Zbrojownia | mały | 2D 2K | stal + węgiel → miecz + tarcza | 140 | |
-| Stocznia | mały | 3D | deska → łódź | 150 | |
-| Strażnica | mały | 1D 1K | — | — | 2 rycerzy, promień 5 |
-| Wieża | mały | 2D 3K | — | — | 4 rycerzy, promień 7 |
-| Twierdza | duży | 4D 6K | — | — | 8 rycerzy, promień 9 |
+Zestaw budynków i łańcuchów odpowiada głębokością drugiej części serii (woda, piwo, monety, hodowla osłów,
+smolarnia, katapulta, rozmiar „dom”), przy zachowaniu rdzenia z części pierwszej (drogi, flagi, tragarze,
+rycerze z 5 poziomami). Źródło porównawcze: settlers2.net (lista budynków) i opis gry z 1993 r.
 
+**Rozmiary:** chata (1 pole, różnica wysokości ≤ 4, może stać obok innych), dom (1 pole, różnica ≤ 3,
+bez sąsiednich budynków i obcych flag), duży (4 pola: P, W, NW, NE; wyrównywanie terenu), kopalnia (góry).
+
+| Budynek | Rozmiar | Koszt | Pracownik (narzędzie) | Wejście → Wyjście | Cykl | Uwagi |
+|---|---|---|---|---|---|---|
+| Zamek | duży | — | — | magazyn, rodzi osadników | — | promień 9 |
+| Magazyn | dom | 4D 3K | — | magazyn | — | |
+| Drwal | chata | 2D | drwal (siekiera) | drzewo → pień | 80 | promień 6 |
+| Leśnik | chata | 2D | leśnik (łopata) | sadzi drzewa | 120 | promień 5 |
+| Kamieniarz | chata | 2D | kamieniarz (kilof) | skała → kamień | 80 | promień 7 |
+| Rybak | chata | 2D | rybak (wędka) | ryby → ryba | 100 | promień 7 |
+| Myśliwy | chata | 2D | myśliwy (łuk) | zwierzę → mięso | 60 | promień 9 |
+| Studnia | chata | 2D | studniarz | → woda | 50 | |
+| Tartak | dom | 2D 2K | tracz (piła) | pień → deska | 80 | |
+| Młyn | dom | 2D 2K | młynarz | zboże → mąka | 60 | |
+| Piekarnia | dom | 2D 2K | piekarz (wałek) | mąka + woda → chleb | 80 | |
+| Rzeźnia | dom | 2D 2K | rzeźnik (tasak) | świnia → mięso | 60 | |
+| Browar | dom | 2D 2K | piwowar | zboże + woda → piwo | 90 | piwo do rekrutacji |
+| Huta żelaza | dom | 2D 2K | hutnik (tygiel) | ruda żelaza + węgiel → żelazo | 100 | |
+| Mennica | dom | 2D 2K | mincerz (tygiel) | ruda złota + węgiel → moneta | 100 | monety: awanse i morale |
+| Kuźnia narzędzi | dom | 2D 2K | kowal (obcęgi) | deska + żelazo → narzędzie | 120 | wg priorytetów |
+| Zbrojownia | dom | 2D 2K | płatnerz (młotek) | żelazo + węgiel → miecz + tarcza | 140 | |
+| Stocznia | dom | 2D 3K | szkutnik (młotek) | deska → łódź | 150 | łodzie dla dróg wodnych |
+| Katapulta | dom | 4D 3K | katapulciarz | kamień → strzał | 300 | zasięg 10, trafienie 40% |
+| Farma | duży | 3D 3K | rolnik (kosa) | sieje/zbiera → zboże | 80 | pola w promieniu 3 |
+| Chlewnia | duży | 3D 3K | hodowca | zboże + woda → świnia | 120 | |
+| Hodowla osłów | duży | 3D 3K | hodowca osłów | zboże + woda → osioł | 200 | osły na zatłoczone drogi |
+| Smolarnia | duży | 3D 3K | smolarz (łopata) | pień + zboże → węgiel | 150 | gdy brak kopalni węgla |
+| Kopalnie: węgla, żelaza, złota, granitu | kopalnia | 4D | górnik (kilof) | jedzenie → surowiec | 100 | złoże w promieniu 2; granit ×2 |
+| Barak | chata | 2D | — | — | — | 2 rycerzy, promień 5, 1 moneta |
+| Wartownia | chata | 2D 3K | — | — | — | 3 rycerzy, promień 6, 2 monety |
+| Wieża strażnicza | dom | 3D 4K | — | — | — | 6 rycerzy, promień 7, 3 monety |
+| Twierdza | duży | 4D 7K | — | — | — | 9 rycerzy, promień 9, 4 monety |
+
+- **Rekrutacja rycerza:** wolny osadnik + miecz + tarcza + piwo (w magazynie, powyżej rezerwy).
+- **Narzędzia (12):** łopata, młotek, wędka, tasak, kosa, siekiera, piła, kilof, obcęgi, łuk, tygiel, wałek.
+- **Osły** rodzą się tylko w hodowli osłów (zamek zaczyna z 3).
 - Budynek produkcyjny ma bufor wejściowy 4 sztuki na każdy surowiec. Pracuje, gdy ma komplet wejść.
-- Kopalnia: każdy cykl zużywa 1 jedzenie (ryba, chleb albo mięso — którekolwiek jest) i 1 jednostkę złoża
-  z pola w promieniu 2 (pierwsze niepuste w stałej kolejności). Brak złoża → cykl bez wyrobu,
-  po 5 pustych cyklach kopalnia zgłasza „wyczerpana”.
+- Kopalnia: każdy cykl zużywa 1 jedzenie (ryba, chleb albo mięso) i 1 jednostkę złoża z pola w promieniu 2
+  (pierwsze niepuste w stałej kolejności). Brak złoża → cykl bez wyrobu, po 5 pustych cyklach komunikat
+  „wyczerpana”.
 - Drzewo: sadzonka rośnie 4 etapy po 700 ticków, potem jest dorosłe. Ścięte zostawia pień na 300 ticków.
 - Skała: 6 jednostek kamienia, znika po wyczerpaniu.
 - Pole zboża: 4 etapy po 500 ticków, dojrzałe czeka 3000 ticków na żniwa, potem obumiera.
 - Ryby: każde pole wody 0–10 jednostek, +1 co 3000 ticków do 10.
-- Zwierzęta: stada na trawie; nowe zwierzę co 1500 ticków w losowym lesie, maks. 1 na 150 pól mapy.
+- Zwierzęta: wędrują przy lasach; nowe co 1500 ticków, maks. 1 na 150 pól mapy.
+- **Katapulta:** co 300 ticków, mając kamień, strzela w najbliższy wrogi budynek wojskowy w promieniu 10
+  z co najmniej 2 rycerzami; trafienie (40%) zabija losowego rycerza.
+- Bezczynny specjalista w magazynie może zostać przekwalifikowany (oddaje narzędzia), gdy brakuje narzędzia
+  dla innego zawodu.
 
 ## 7. Geolog
 
@@ -169,7 +186,8 @@ złoża (lub „pusto”). Znak znika po 6000 ticków. Działa tylko w górach (
 - **Rozdział desek**: budowa / stocznia / narzędziownia (0–8).
 - **Rozdział stali**: narzędziownia / zbrojownia (0–8).
 - **Rozdział węgla**: huta żelaza / huta złota / zbrojownia (0–8).
-- **Rozdział zboża**: młyn / chlewnia (0–8).
+- **Rozdział zboża**: młyn / chlewnia / browar / hodowla osłów / smolarnia (0–8).
+- **Rozdział wody**: piekarnia / chlewnia / browar / hodowla osłów (0–8).
 - **Priorytety narzędzi**: 9 wag 0–8. Narzędziownia robi narzędzie o największym `waga × (1 + braki)`,
   gdzie braki = liczba osadników czekających na to narzędzie.
 - **Obsada budynków wojskowych**: minimalna liczba rycerzy w budynkach wewnątrz kraju / przy granicy /
@@ -190,11 +208,12 @@ Waga 0 oznacza „nie dostarczaj”.
 
 ## 10. Wojsko
 
-- Rycerz ma poziom 0–4. Rycerz powstaje w magazynie z wolnego osadnika + miecz + tarcza (poziom 0).
-- **Szkolenie**: budynek wojskowy przechowuje do 2 sztabek złota (twierdza 4). Co 600 ticków, jeśli
-  budynek ma złoto, jeden jego najsłabszy rycerz poniżej poziomu 4 awansuje. Rycerze w zamku szkolą się
-  tak samo, jeśli zamek ma złoto (co 900 ticków).
-- **Morale gracza** = `50 + min(50, 4 × złoto)` [%], gdzie złoto = sztabki w magazynach i budynkach wojskowych.
+- Rycerz ma poziom 0–4 (nowy ma poziom 0).
+- **Szkolenie**: budynek wojskowy przechowuje monety (barak 1, wartownia 2, wieża 3, twierdza 4). Co 600
+  ticków, jeśli budynek ma monetę, jeden jego najsłabszy rycerz poniżej poziomu 4 awansuje. Rycerze w zamku
+  szkolą się tak samo, jeśli zamek ma monety (co 900 ticków).
+- **Morale gracza** = `50 + min(50, 4 × monety)` [%] (monety w magazynach i budynkach wojskowych).
+- Rycerz powstaje z wolnego osadnika + miecz + tarcza + piwo.
 - **Atak**: gracz wybiera wrogi budynek wojskowy lub zamek w odległości ≤ 14 od któregoś własnego
   budynku wojskowego. Dostępni są rycerze z własnych budynków wojskowych w promieniu 14 od celu
   (każdy budynek zostawia co najmniej 1). Rycerze idą (poza drogami) pod flagę celu.

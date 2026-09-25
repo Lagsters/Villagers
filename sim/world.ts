@@ -110,19 +110,21 @@ export function canBuild(s: GameState, p: number, pos: number, kind: number): bo
   }
   // Wszyscy sasiedzi glownego pola: wlasni, bez flag (poza nasza SE) i budynkow.
   const h0 = map.height[pos];
-  const maxDiff = def.size === SIZE.LARGE ? 3 : 4;
+  // Chata: roznica wysokosci 4, sasiedzi dowolni. Dom: 3, bez sasiednich budynkow i obcych flag.
+  const strict = def.size === SIZE.LARGE || def.size === SIZE.MEDIUM;
+  const maxDiff = strict ? 3 : 4;
   for (let d = 0; d < 6; d++) {
     const j = t[pos * 6 + d];
     if (j < 0 || !ownedBy(map, j, p)) return false;
     if (Math.abs(map.height[j] - h0) > maxDiff) return false;
     const o = map.obj[j];
     if (d !== DIR_SE && (o === O.BUILDING || o === O.BUILDING_PART) && !cells.includes(j)) {
-      // Sasiednie budynki blokuja tylko duze budynki (male moga stac obok siebie jak w oryginale).
-      if (def.size === SIZE.LARGE) return false;
+      // Sasiednie budynki blokuja domy i duze budynki (chaty moga stac obok siebie).
+      if (strict) return false;
     }
     if (d !== DIR_SE && o === O.FLAG && !cells.includes(j)) {
-      // Flaga obok (inna niz nasza) nie przeszkadza malym, blokuje czesci duzych.
-      if (def.size === SIZE.LARGE) return false;
+      // Flaga obok (inna niz nasza) nie przeszkadza chatom.
+      if (strict) return false;
     }
   }
   if (map.obj[flagPos] === O.FLAG) {

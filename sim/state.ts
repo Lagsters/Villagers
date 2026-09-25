@@ -1,7 +1,7 @@
 /**
  * Tworzenie nowej gry: mapa z kodu, zamki graczy z poczatkowym inwentarzem, terytorium.
  */
-import { B, G, MAP_SIZES, MAX_PLAYERS, S } from './defs.ts';
+import { B, G, GOODS_COUNT, MAP_SIZES, MAX_PLAYERS, S } from './defs.ts';
 import { finishBuilding, placeBuilding } from './construction.ts';
 import { generateMap, normalizeMapCode } from './mapgen.ts';
 import { seedRng } from './rng.ts';
@@ -23,9 +23,9 @@ export function validateConfig(cfg: GameConfig): GameConfig {
 /** Poczatkowy inwentarz zamku. */
 export const START_GOODS: ReadonlyArray<[number, number]> = [
   [G.PLANK, 40], [G.STONE, 30], [G.LUMBER, 10], [G.FISH, 8], [G.BREAD, 6], [G.MEAT, 6], [G.WHEAT, 4],
-  [G.PIG, 2], [G.COAL, 12], [G.IRON_ORE, 8], [G.STEEL, 6], [G.GOLD, 2], [G.BOAT, 2],
-  [G.SHOVEL, 3], [G.HAMMER, 6], [G.ROD, 2], [G.CLEAVER, 1], [G.SCYTHE, 2], [G.AXE, 3], [G.SAW, 2],
-  [G.PICK, 3], [G.PINCER, 1], [G.SWORD, 3], [G.SHIELD, 3],
+  [G.WATER, 4], [G.BEER, 6], [G.PIG, 2], [G.COAL, 12], [G.IRON_ORE, 8], [G.STEEL, 6], [G.GOLD, 2], [G.BOAT, 2],
+  [G.SHOVEL, 4], [G.HAMMER, 7], [G.ROD, 2], [G.CLEAVER, 1], [G.SCYTHE, 2], [G.AXE, 3], [G.SAW, 2],
+  [G.PICK, 3], [G.PINCER, 1], [G.BOW, 1], [G.CRUCIBLE, 2], [G.ROLLING_PIN, 1], [G.SWORD, 3], [G.SHIELD, 3],
 ];
 export const START_SERFS = 30;
 export const START_KNIGHTS: readonly number[] = [4, 2, 1, 0, 0];
@@ -47,7 +47,7 @@ export function createGame(input: GameConfig): GameState {
     donkeyTimer: 900 + i,
     totalSerfs: 0,
     netVersion: 0,
-    stats: { samples: [], produced: new Array(26).fill(0) },
+    stats: { samples: [], produced: new Array(GOODS_COUNT).fill(0) },
     morale: 50,
     territory: 0,
     lastAttacked: -1,

@@ -3,19 +3,19 @@
  * zamowienia towarow, osly na zatloczonych drogach, narodziny osadnikow, szkolenie rycerzy.
  * Przebieg dla gracza p odbywa sie co ECON_PERIOD tickow (fazy graczy sa przesuniete).
  */
-import { B, BUILDINGS, FIRST_TOOL, G, S, SERF_TOOLS, isInventory, isMilitary } from './defs.ts';
+import { B, BUILDINGS, FIRST_TOOL, G, O, S, SERF_TOOLS, isMilitary } from './defs.ts';
 import { ZONE, desiredKnights } from './military.ts';
-import { DIR_NW, DIR_SE, opposite } from './grid.ts';
+import { DIR_NW, DIR_SE, hexDist, opposite } from './grid.ts';
+import { findPath } from './pathfind.ts';
+import { isFreeWalkable } from './world.ts';
 import { addTransit, demand, distWeight, flagGoodsCount, putGood } from './goods.ts';
 import { UNREACHABLE, flagDist, routeTo, walkRoute } from './routing.ts';
 import { SS, canProvideSerf, takeSerfFromInventory } from './serfs.ts';
-import { FLAG_SLOTS, STAGE, type Building, type GameState, type Road } from './types.ts';
+import { FLAG_SLOTS, STAGE, type Building, type GameState, type Inventory, type Road } from './types.ts';
 
 export const ECON_PERIOD = 5;
 export const SERF_BIRTH_TICKS = 250;
-export const MAX_SERFS = 200;
-export const DONKEY_BIRTH_TICKS = 900;
-export const MAX_DONKEYS = 20;
+export const MAX_SERFS = 300;
 const DONKEY_LOAD = 60;
 const PER_INV_GOODS = 2;
 const PER_INV_SERFS = 2;
@@ -69,14 +69,37 @@ function noteSerfOut(ctx: PassCtx, b: Building): void {
   ctx.serfsOut.set(b.id, (ctx.serfsOut.get(b.id) ?? 0) + 1);
 }
 
+/** Najblizszy po prostej magazyn z wolnym rycerzem (dla budynkow odcietych od drog). */
+function nearestKnightInventory(s: GameState, ctx: PassCtx, p: number, pos: number): Building | null {
+  let best: Building | null = null;
+  let bd = 1 << 30;
+  const w = s.map.w;
+  for (const b of ctx.invs) {
+    if ((ctx.serfsOut.get(b.id) ?? 0) >= PER_INV_SERFS || !canProvideSerf(b.inv!, S.KNIGHT)) continue;
+    if (b.kind === B.CASTLE && b.inv!.knights.reduce((a, c) => a + c, 0) <= s.players[p].settings.castleKnights) continue;
+    const d = hexDist(b.pos % w, (b.pos / w) | 0, pos % w, (pos / w) | 0);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+
 /** Wysyla osadnika z magazynu do budynku. Zwraca id osadnika albo -1. */
 function dispatchSerfToBuilding(s: GameState, ctx: PassCtx, b: Building, type: number, weakest = false): number {
-  const inv = pickInventoryForSerf(s, ctx, b.owner, type, b.flag);
+  let inv = pickInventoryForSerf(s, ctx, b.owner, type, b.flag);
+  let route = inv ? walkRoute(s, b.owner, inv.flag, b.flag) : null;
+  if (!route && type === S.KNIGHT) {
+    // Rycerze ida do budynku wojskowego na przelaj, gdy nie ma drogi (np. przejety budynek).
+    inv = nearestKnightInventory(s, ctx, b.owner, b.pos);
+    if (inv) {
+      const fp = s.flags[b.flag]!.pos;
+      const ifp = s.flags[inv.flag]!.pos;
+      route = findPath(s.map, ifp, fp, (i) => isFreeWalkable(s.map, i) || s.map.obj[i] === O.FLAG, 8000);
+    }
+  }
   if (!inv) {
     noteMissingTools(s, ctx, b.owner, type);
     return -1;
   }
-  const route = walkRoute(s, b.owner, inv.flag, b.flag);
   if (!route) return -1;
   const serf = takeSerfFromInventory(s, inv, type, weakest);
   if (!serf) return -1;
@@ -178,7 +201,7 @@ interface Req {
 function goodsRequests(s: GameState, ctx: PassCtx, p: number): void {
   const reqs: Req[] = [];
   for (const b of s.buildings) {
-    if (!b || b.owner !== p || isInventory(b.kind) || b.stage === STAGE.BURN) continue;
+    if (!b || b.owner !== p || b.inv || b.stage === STAGE.BURN) continue;
     if (b.stage === STAGE.LEVEL || b.stage === STAGE.BUILD) {
       for (const g of [G.PLANK, G.STONE]) if (demand(b, g) > 0) reqs.push({ b, g, w: distWeight(s, b, g) });
       continue;
@@ -189,7 +212,7 @@ function goodsRequests(s: GameState, ctx: PassCtx, p: number): void {
       if (b.knights.length > 0 && demand(b, G.GOLD) > 0) reqs.push({ b, g: G.GOLD, w: 8 });
       continue;
     }
-    if (b.worker < 0) continue;
+    if (b.worker < 0 || b.paused) continue;
     if (b.kind >= 13 && b.kind <= 16) {
       if (demand(b, G.FISH) > 0) reqs.push({ b, g: -2, w: distWeight(s, b, G.FISH) });
       continue;
@@ -235,14 +258,31 @@ function goodsRequests(s: GameState, ctx: PassCtx, p: number): void {
   }
 }
 
-/** Magazyn zamienia wolnego osadnika z mieczem i tarcza w rycerza (powyzej rezerwy). */
+/** Bezczynny specjalista z nadmiarem (zostaje co najmniej jeden) oddaje narzedzia i staje sie wolny. */
+function retrainSpare(inv: Inventory): boolean {
+  for (let t = 0; t < inv.serfs.length; t++) {
+    if (t === S.GENERIC || t === S.TRANSPORTER || t === S.KNIGHT || t === S.DONKEY || t === S.SAILOR) continue;
+    if (inv.serfs[t] > 1) {
+      inv.serfs[t]--;
+      inv.serfs[S.GENERIC]++;
+      for (const g of SERF_TOOLS[t]) inv.goods[g]++;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Magazyn zamienia wolnego osadnika z mieczem, tarcza i piwem w rycerza (powyzej rezerwy). */
 function trainKnights(s: GameState, p: number, invs: Building[]): void {
   const reserve = s.players[p].settings.serfReserve;
   for (const b of invs) {
     const inv = b.inv!;
-    while (inv.goods[G.SWORD] > 0 && inv.goods[G.SHIELD] > 0 && inv.serfs[S.GENERIC] > reserve) {
+    while (inv.goods[G.SWORD] > 0 && inv.goods[G.SHIELD] > 0 && inv.goods[G.BEER] > 0) {
+      // Brak wolnych osadnikow: przekwalifikuj bezczynnego specjaliste (jeden z kazdego zawodu zostaje).
+      if (inv.serfs[S.GENERIC] <= reserve && !retrainSpare(inv)) break;
       inv.goods[G.SWORD]--;
       inv.goods[G.SHIELD]--;
+      inv.goods[G.BEER]--;
       inv.serfs[S.GENERIC]--;
       inv.knights[0]++;
     }
@@ -261,7 +301,7 @@ export function economyPass(s: GameState, p: number): void {
   trainKnights(s, p, invs);
 }
 
-/** Narodziny osadnikow i oslow w zamku (co tick). */
+/** Narodziny osadnikow w zamku (co tick). Osly rodza sie w hodowli osłów. */
 export function birthTick(s: GameState, p: number): void {
   const pl = s.players[p];
   if (!pl.alive) return;
@@ -273,10 +313,6 @@ export function birthTick(s: GameState, p: number): void {
       castle.inv.serfs[S.GENERIC]++;
       pl.totalSerfs++;
     }
-  }
-  if (--pl.donkeyTimer <= 0) {
-    pl.donkeyTimer = DONKEY_BIRTH_TICKS;
-    if (castle.inv.serfs[S.DONKEY] < MAX_DONKEYS) castle.inv.serfs[S.DONKEY]++;
   }
 }
 

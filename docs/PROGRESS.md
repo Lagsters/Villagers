@@ -7,7 +7,7 @@
 - [x] M3 Budowa i pierwsze łańcuchy
 - [x] M4 Pełna gospodarka
 - [ ] M5 Terytorium i wojsko
-- [ ] M6 AI
+- [x] M6 AI
 - [ ] M7 Sieć
 - [ ] M8 Grafika
 - [ ] M9 Wydajność i dopracowanie

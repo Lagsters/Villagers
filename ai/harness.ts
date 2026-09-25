@@ -3,7 +3,7 @@
  *   node ai/harness.ts [liczba_partii] [rozmiar_mapy] [poziomy np. 2,1]
  */
 import '../sim/index.ts';
-import { PLAYER_COLORS } from '../sim/defs.ts';
+import { B, BUILDINGS, NO_GOOD, PLAYER_COLORS } from '../sim/defs.ts';
 import { createGame } from '../sim/state.ts';
 import { step } from '../sim/step.ts';
 import { summarize } from '../sim/stats.ts';
@@ -52,7 +52,16 @@ export function runBotGame(code: string, size: number, levels: number[], maxTick
       for (let p = 0; p < levels.length; p++) {
         if (!s.players[p].alive) continue;
         const prod = producedTotal(s, p);
-        if (prod === lastProd[p]) stalls.push(`gracz ${p} bez produkcji w oknie do ticku ${s.tick}`);
+        // Zakleszczenie = brak produkcji, choc co najmniej 3 obsadzone budynki wytwarzajace towar
+        // maja komplet wejsc (albo wejsc nie potrzebuja).
+        let working = 0;
+        for (const b of s.buildings) {
+          if (!b || b.owner !== p || b.stage !== 2 || !b.workerInside || b.paused) continue;
+          const def = BUILDINGS[b.kind];
+          if (def.output === NO_GOOD && b.kind !== B.TOOLMAKER) continue;
+          if (b.stock.every((x) => x > 0)) working++;
+        }
+        if (prod === lastProd[p] && working >= 3) stalls.push(`gracz ${p} bez produkcji w oknie do ticku ${s.tick}`);
         lastProd[p] = prod;
       }
     }
@@ -78,7 +87,7 @@ if (process.argv[1]?.endsWith('harness.ts')) {
   const size = Number(process.argv[3] ?? 64);
   const levels = (process.argv[4] ?? '2,1').split(',').map(Number);
   for (let i = 0; i < n; i++) {
-    const r = runBotGame(`BOT${i}`, size, levels, 72000, i + 1);
+    const r = runBotGame(`BOT${i}`, size, levels, Number(process.argv[5] ?? 72000), i + 1);
     console.log(JSON.stringify(r));
   }
 }

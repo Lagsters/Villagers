@@ -74,6 +74,8 @@ export class Bot {
     this.fixDisconnected(s, cmds);
     this.demolishExhausted(s, cmds);
     this.demolishIdleGatherers(s, cmds);
+    this.demolishStuckSites(s, cmds);
+    this.demolishRedundantMilitary(s, cmds);
     this.adjustSettings(s, cmds);
     if (this.tryAttack(s, cmds)) return cmds;
     this.build(s, cmds);
@@ -170,11 +172,11 @@ export class Bot {
   /**
    * Droga z sieci do pola flagi `flagPos` omijajaca pola budynku. Zwraca komende albo null.
    */
-  private roadTo(s: GameState, flagPos: number, avoid: number[]): Command | null {
-    for (const from of this.networkFlags(s, flagPos).slice(0, 6)) {
+  private roadTo(s: GameState, flagPos: number, avoid: number[], maxLen = 16, tries = 6): Command | null {
+    for (const from of this.networkFlags(s, flagPos).slice(0, tries)) {
       if (from === flagPos) return null;
       const dirs = findRoadPath(s, this.player, from, flagPos);
-      if (!dirs || dirs.length > 16) continue;
+      if (!dirs || dirs.length > maxLen) continue;
       let c = from;
       let bad = false;
       for (const d of dirs) {
@@ -234,6 +236,54 @@ export class Bot {
 
   // ---------- Naprawy ----------
 
+  private siteSeen = new Map<number, number>();
+
+  /**
+   * Budynek wojskowy w glebi kraju, ktorego caly zasieg pokrywaja inne wlasne budynki wojskowe
+   * (albo zamek) - rozbiorka nie traci zadnego pola, a zwalnia rycerzy na front.
+   */
+  private demolishRedundantMilitary(s: GameState, cmds: Command[]): void {
+    if (s.tick % 900 >= this.period || s.tick < 18000) return;
+    const m = s.map;
+    const mil = this.mine(s).filter((b) => b.stage === STAGE.DONE && (isMilitary(b.kind) || b.kind === B.CASTLE));
+    for (const b of mil) {
+      if (b.kind === B.CASTLE || b.phase !== 0) continue; // tylko strefa "wnetrze"
+      const r = BUILDINGS[b.kind].radius;
+      let covered = true;
+      for (const i of spiral(m.w, m.h, b.pos % m.w, (b.pos / m.w) | 0, r)) {
+        let ok = false;
+        for (const o of mil) {
+          if (o === b || (isMilitary(o.kind) && o.knights.length === 0)) continue;
+          if (this.dist(s, i, o.pos) <= BUILDINGS[o.kind].radius) { ok = true; break; }
+        }
+        if (!ok) { covered = false; break; }
+      }
+      if (covered) {
+        cmds.push({ type: 'demolish', player: this.player, pos: b.pos });
+        return;
+      }
+    }
+  }
+
+  /** Plac budowy bez postepu przez dlugi czas przy braku materialu - rozbiorka. */
+  private demolishStuckSites(s: GameState, cmds: Command[]): void {
+    if (s.tick % 600 >= this.period) return;
+    for (const b of this.mine(s)) {
+      if (b.stage === STAGE.DONE) { this.siteSeen.delete(b.id); continue; }
+      const key = b.id * 100000 + b.pos;
+      const first = this.siteSeen.get(key);
+      if (first === undefined) { this.siteSeen.set(key, s.tick); continue; }
+      const def = BUILDINGS[b.kind];
+      const lacking = (def.stones > b.stonesUsed + b.stones + b.stonesTransit && this.stock(s, G.STONE) === 0) ||
+        (def.planks > b.planksUsed + b.planks + b.planksTransit && this.stock(s, G.PLANK) === 0);
+      if (s.tick - first > 6000 && lacking) {
+        cmds.push({ type: 'demolish', player: this.player, pos: b.pos });
+        this.siteSeen.delete(key);
+        return;
+      }
+    }
+  }
+
   /** Wyczerpane kopalnie rozbieramy (zwalniaja gornika i miejsce). */
   private demolishExhausted(s: GameState, cmds: Command[]): boolean {
     for (const b of this.mine(s)) {
@@ -247,20 +297,23 @@ export class Bot {
 
   /** Budynki odciete od magazynow: podlacz albo rozbierz (place budowy). */
   private fixDisconnected(s: GameState, cmds: Command[]): void {
-    if (this.rand(3) !== 0) return;
+    let fixed = 0;
     for (const b of this.mine(s)) {
-      if (b.inv) continue;
+      if (b.inv || fixed >= 2) continue;
       if (this.reachable(s, b.flag)) continue;
       const f = s.flags[b.flag];
       if (!f) continue;
-      const road = this.roadTo(s, f.pos, buildingCells(s.map, b.pos, BUILDINGS[b.kind].size));
+      // Budynki wojskowe (czesto przejete) lacze agresywniej - bez drogi nie dojda do nich rycerze.
+      const mil = isMilitary(b.kind) && b.stage === STAGE.DONE;
+      const road = this.roadTo(s, f.pos, buildingCells(s.map, b.pos, BUILDINGS[b.kind].size), mil ? 28 : 16, mil ? 14 : 6);
       if (road) {
         cmds.push(road);
         this.roadFlags(s, road, cmds);
-      } else if (b.stage !== STAGE.DONE || !isMilitary(b.kind)) {
+        fixed++;
+      } else if (!mil) {
         cmds.push({ type: 'demolish', player: this.player, pos: b.pos });
+        fixed++;
       }
-      return;
     }
   }
 
@@ -284,6 +337,18 @@ export class Bot {
   // ---------- Ustawienia w trakcie gry ----------
 
   private adjustSettings(s: GameState, cmds: Command[]): void {
+    // Wstrzymanie produkcji przy duzym zapasie (studnie, kamieniolomy, kopalnie granitu).
+    if (s.tick % 300 < this.period) {
+      const caps: [number, number, number][] = [[B.WELL, G.WATER, 30], [B.STONEMINE, G.STONE, 60], [B.CHARBURNER, G.COAL, 40]];
+      for (const [kind, g, cap] of caps) {
+        const st = this.stock(s, g);
+        for (const b of this.mine(s)) {
+          if (b.kind !== kind || b.stage !== STAGE.DONE) continue;
+          const want = st > cap;
+          if (b.paused !== want && (want || st < cap / 3)) cmds.push({ type: 'pause', player: this.player, pos: b.pos, on: want });
+        }
+      }
+    }
     // Gdy brak desek - wstrzymaj dostawy desek dla stoczni.
     if (s.tick % 1000 < this.period) {
       const planks = this.stock(s, G.PLANK);
@@ -328,7 +393,9 @@ export class Bot {
       if (power < defPower * factor + 1) continue;
       // Troche zapasu dla trudnego bota.
       if (hard) send = Math.min(avail, send + 1);
-      const score = power / (defPower + 1) + (t.kind === B.CASTLE ? 3 : 0);
+      const ec = s.buildings[s.players[t.owner].castle];
+      const depth = ec ? Math.max(0, 40 - this.dist(s, t.pos, ec.pos)) / 20 : 0;
+      const score = power / (defPower + 1) + depth + (t.kind === B.CASTLE ? 5 : 0);
       if (score > bestScore) {
         bestScore = score;
         best = t;
@@ -366,11 +433,14 @@ export class Bot {
     const minutes = Math.floor(s.tick / 600);
     const woodcutters = cnt(B.WOODCUTTER);
     const needs: Need[] = [];
+    const hasCoalRes = this.owned.some((i) => m.res[i] === RES.COAL && m.terrain[i] === T.MOUNTAIN);
+    const waterUsers = cnt(B.BAKERY) + cnt(B.PIGFARM) + cnt(B.BREWERY) + cnt(B.DONKEYBREEDER);
     // Kolejnosc = priorytet.
     needs.push({ kind: B.WOODCUTTER, want: 1, score: trees, min: 4 });
     needs.push({ kind: B.SAWMILL, want: 1, score: central });
     needs.push({ kind: B.STONECUTTER, want: 1, score: stonesNear, min: 6 });
     needs.push({ kind: B.WOODCUTTER, want: hard ? 3 : 2, score: trees, min: 4 });
+    needs.push({ kind: B.SAWMILL, want: Math.max(1, Math.ceil(woodcutters / 2)), score: central });
     needs.push({ kind: B.FORESTER, want: Math.max(1, woodcutters - (hard ? 0 : 1)), score: (p) => plantable(p, 5) + (this.near(s, p, 6, (i) => m.obj[i] === O.BUILDING && s.buildings[m.objId[i]]?.kind === B.WOODCUTTER) > 0 ? 20 : 0), min: 8 });
     const militaryWanted = this.militaryWanted(s, bs);
     if (militaryWanted) needs.push(militaryWanted);
@@ -383,8 +453,10 @@ export class Bot {
       needs.push({ kind: B.COALMINE, want: 1, score: res(RES.COAL), min: 8 });
       needs.push({ kind: B.IRONMINE, want: 1, score: res(RES.IRON), min: 8 });
       needs.push({ kind: B.FARM, want: 1, score: (p) => plantable(p, 3), min: 8 });
+      needs.push({ kind: B.WELL, want: Math.max(1, waterUsers), score: central });
       needs.push({ kind: B.MILL, want: cnt(B.FARM) > 0 ? 1 : 0, score: central });
       needs.push({ kind: B.BAKERY, want: cnt(B.MILL) > 0 ? 1 : 0, score: central });
+      needs.push({ kind: B.BREWERY, want: cnt(B.FARM) > 0 ? 1 : 0, score: central });
       needs.push({ kind: B.STEELWORKS, want: cnt(B.IRONMINE) > 0 || this.stock(s, G.IRON_ORE) > 0 ? 1 : 0, score: central });
       needs.push({ kind: B.WEAPONSMITH, want: hard || minutes >= 10 ? 1 : 0, score: central });
       needs.push({ kind: B.STONECUTTER, want: 2, score: stonesNear, min: 9 });
@@ -397,8 +469,9 @@ export class Bot {
       needs.push({ kind: B.PIGFARM, want: 1, score: central });
       needs.push({ kind: B.BUTCHER, want: cnt(B.PIGFARM) > 0 ? 1 : 0, score: central });
       needs.push({ kind: B.COALMINE, want: 2, score: res(RES.COAL), min: 8 });
+      needs.push({ kind: B.CHARBURNER, want: !hasCoalRes && cnt(B.FARM) > 1 ? 1 : 0, score: central });
       needs.push({ kind: B.GOLDMINE, want: hard ? 1 : 0, score: res(RES.GOLD), min: 6 });
-      needs.push({ kind: B.GOLDSMELTER, want: cnt(B.GOLDMINE) > 0 ? 1 : 0, score: central });
+      needs.push({ kind: B.MINT, want: cnt(B.GOLDMINE) > 0 ? 1 : 0, score: central });
       needs.push({ kind: B.FISHER, want: 2, score: fish, min: 4 });
       needs.push({ kind: B.WOODCUTTER, want: hard ? 4 : 3, score: trees, min: 4 });
     }
@@ -407,14 +480,41 @@ export class Bot {
       needs.push({ kind: B.IRONMINE, want: 2, score: res(RES.IRON), min: 8 });
       needs.push({ kind: B.WEAPONSMITH, want: hard ? 2 : 1, score: central });
       needs.push({ kind: B.STEELWORKS, want: hard ? 2 : 1, score: central });
+      needs.push({ kind: B.BREWERY, want: hard ? 2 : 1, score: central });
+      needs.push({ kind: B.DONKEYBREEDER, want: hard && cnt(B.FARM) >= 3 ? 1 : 0, score: central });
+      needs.push({ kind: B.FARM, want: hard ? 4 : 2, score: (p) => plantable(p, 3), min: 8 });
     }
+    if (minutes >= 18 && hard) {
+      this.refreshEnemyCells(s);
+      if (this.enemyCells.length > 0) {
+        needs.push({ kind: B.CATAPULT, want: 2, score: (p) => 40 - this.distToEnemy(s, p), min: 32 });
+      }
+    }
+    // Budzet kamienia: przy malym zapasie tylko budynki kluczowe dla drewna, piwa i broni.
+    const ESSENTIAL: number[] = [B.SAWMILL, B.BREWERY, B.STEELWORKS, B.WEAPONSMITH, B.STONEMINE, B.STONECUTTER];
+    const stoneReserve = hard ? 8 : 4;
     for (const need of needs) {
       if (cnt(need.kind) >= need.want) continue;
       const def = BUILDINGS[need.kind];
       if (planks < def.planks + 1 && need.kind !== B.SAWMILL && need.kind !== B.WOODCUTTER) continue;
       if (stones < def.stones) continue;
+      if (def.stones > 0 && stones - def.stones < stoneReserve && !ESSENTIAL.includes(need.kind) && !isMilitary(need.kind)) continue;
       if (this.tryBuild(s, need, cmds)) return;
     }
+  }
+
+  /** Pozycja najblizszego zywego zamku wroga albo -1. */
+  private nearestEnemyCastlePos(s: GameState, from: number): number {
+    let best = -1;
+    let bd = 1 << 20;
+    for (const pl of s.players) {
+      if (pl.id === this.player || !pl.alive) continue;
+      const c = s.buildings[pl.castle];
+      if (!c || c.stage !== STAGE.DONE) continue;
+      const d = this.dist(s, from, c.pos);
+      if (d < bd) { bd = d; best = c.pos; }
+    }
+    return best;
   }
 
   /** Najblizsze pole wroga od pola `pos` (po prostej) albo -1; liczone rzadko, wynik w pamieci. */
@@ -460,24 +560,41 @@ export class Bot {
     let knights = 0;
     for (const b of bs) if (b.inv) knights += b.inv.knights.reduce((a, c) => a + c, 0);
     const reserve = s.players[this.player].settings.castleKnights;
-    if (knights <= reserve) return null;
+    const stoneStock = this.stock(s, G.STONE);
+    const stoneSource = bs.some((b) => b.stage === STAGE.DONE && (b.kind === B.STONEMINE || (b.kind === B.STONECUTTER && this.near(s, b.pos, 7, (i) => isStone(m.obj[i])) > 0)));
+    // Brak kamienia i zrodla: ekspansja po skaly moze uzyc ostatniego rycerza z zamku.
+    const stoneEmergency = stoneStock < 6 && !stoneSource;
+    if (knights <= (stoneEmergency ? 0 : reserve)) return null;
     // Nadmiar rycerzy w zamku: budujemy wiecej (i wiekszych) budynkow wojskowych.
     const surplus = knights - reserve >= 6;
-    if (pending >= (surplus ? 3 : hard ? 2 : 1)) return null;
-    if (s.tick - this.lastExpand < (surplus ? 200 : hard ? 300 : 700)) return null;
+    if (pending >= (surplus || stoneEmergency ? 3 : hard ? 2 : 1)) return null;
+    if (s.tick - this.lastExpand < (surplus || stoneEmergency ? 200 : hard ? 300 : 700)) return null;
     const minutes = s.tick / 600;
     const aggressive = minutes > (hard ? 8 : 14);
     if (aggressive) this.refreshEnemyCells(s);
-    const planks = this.stock(s, G.PLANK);
-    const stones = this.stock(s, G.STONE);
-    let kind: number = B.GUARDHUT;
-    if (front || surplus || (aggressive && this.enemyCells.length > 0)) {
-      if ((hard || surplus) && planks >= 8 && stones >= 8 && (surplus || this.rand(2) === 0)) kind = B.FORTRESS;
-      else if (stones >= 4) kind = B.TOWER;
+    // Kamien wolny = zapas minus to, czego jeszcze potrzebuja otwarte place budowy.
+    let committed = 0;
+    for (const b of bs) {
+      if (b.stage === STAGE.DONE) continue;
+      committed += Math.max(0, BUILDINGS[b.kind].stones - b.stonesUsed - b.stones - b.stonesTransit);
     }
+    const planks = this.stock(s, G.PLANK);
+    const stones = this.stock(s, G.STONE) - committed;
+    const early = minutes < 15 && stones < 25;
+    // Kamien jest cenny: bez zapasu stawiamy baraki (0 kamienia).
+    let kind: number = stones >= 14 && total >= 2 ? B.GUARDHOUSE : B.GUARDHUT;
+    if (!early && (front || surplus || (aggressive && this.enemyCells.length > 0))) {
+      // Front: duze garnizony, zeby bylo z czego atakowac.
+      if ((hard || surplus) && planks >= 8 && stones >= 16 && (surplus || this.rand(2) === 0)) kind = B.FORTRESS;
+      else if (stones >= 10) kind = B.TOWER;
+      else if (stones >= 6) kind = B.GUARDHOUSE;
+    }
+    const needStone = stones < 15 || stoneEmergency;
+    const needWood = this.near(s, castle.pos, 12, (i) => m.obj[i] === O.TREE) < 15;
     this.lastExpand = s.tick;
     if (surplus) this.refreshEnemyCells(s);
     const toward = (aggressive || surplus) && this.enemyCells.length > 0;
+    const enemyCastle = this.nearestEnemyCastlePos(s, castle.pos);
     return {
       kind,
       want: total + 1,
@@ -485,9 +602,17 @@ export class Bot {
         const r = BUILDINGS[kind].radius;
         let sc = 0;
         for (const i of spiral(m.w, m.h, pos % m.w, (pos / m.w) | 0, r)) {
-          if (m.owner[i] === 0) sc += m.terrain[i] === T.MOUNTAIN ? 3 : m.obj[i] === O.TREE ? 2 : m.terrain[i] === T.GRASS ? 1 : 0;
+          if (m.owner[i] !== 0) continue;
+          sc += m.terrain[i] === T.MOUNTAIN ? 3 : m.obj[i] === O.TREE ? 2 : m.terrain[i] === T.GRASS ? 1 : 0;
+          if (needStone && isStone(m.obj[i])) sc += stoneEmergency ? 20 : 6;
+          if (needStone && m.res[i] === RES.STONE) sc += 2;
+          if (needWood && m.obj[i] === O.TREE) sc += 2;
         }
-        if (toward) sc += Math.max(0, 80 - this.distToEnemy(s, pos)) * 4;
+        if (toward) {
+          // Natarcie: blizej granicy wroga i przede wszystkim blizej jego zamku.
+          sc += Math.max(0, 80 - this.distToEnemy(s, pos)) * 2;
+          if (enemyCastle >= 0) sc += Math.max(0, 90 - this.dist(s, pos, enemyCastle)) * 5;
+        }
         return sc;
       },
       min: toward ? 0 : 6,

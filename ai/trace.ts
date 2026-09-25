@@ -10,8 +10,9 @@ import { Bot } from './bot.ts';
 const code = process.argv[2] ?? 'BOT0';
 const size = Number(process.argv[3] ?? 64);
 const levels = (process.argv[4] ?? '2,1').split(',').map(Number);
-const s = createGame({ mapCode: code, mapSize: size, players: levels.map((l, i) => ({ name: `B${i}`, color: PLAYER_COLORS[i], ai: l })), seed: 1 });
-const bots = levels.map((l, i) => new Bot(i, l, 7919 + i));
+const seed = Number(process.argv[5] ?? (Number(code.replace(/\D/g, '')) + 1));
+const s = createGame({ mapCode: code, mapSize: size, players: levels.map((l, i) => ({ name: `B${i}`, color: PLAYER_COLORS[i], ai: l })), seed });
+const bots = levels.map((l, i) => new Bot(i, l, seed * 7919 + i));
 const cmdCount: Record<string, number> = {};
 while (s.winner === -1 && s.tick < 72000) {
   const cmds = [];
@@ -53,4 +54,35 @@ for (const p of s.players) {
     const nearMil = s.buildings.filter((b) => b && b.owner === p.id && isMilitary(b.kind) && Math.abs((b.pos % w) - (c.pos % w)) + Math.abs(((b.pos / w) | 0) - ((c.pos / w) | 0)) < 20).map((b) => `${b!.kind}:${b!.stage}:${b!.knights.length}`);
     console.log(`P${p.id} -> zamek P${q.id}: obroncy ${JSON.stringify(defenderLevels(s, c))}, dostepni ${av} ${JSON.stringify(attackPreview(s, p.id, c, av))}, budynki P${p.id} blisko: ${nearMil.join(' ')}`);
   }
+}
+for (const p of s.players) {
+  const cst = s.buildings[p.castle];
+  const list = s.buildings.filter((b) => b && b.owner === p.id && isMilitary(b.kind) && b.stage === STAGE.DONE).map((b) => `${b!.kind}/z${b!.phase}/${b!.knights.length}${cst && flagDist(s, p.id, b!.flag, cst.flag, true) < UNREACHABLE ? '' : '/ODCIETY'}`);
+  console.log(`P${p.id} wojsko: ${list.join(' ')}`);
+}
+import { flagDist, UNREACHABLE } from '../sim/routing.ts';
+for (const p of s.players) {
+  const castle = s.buildings[p.castle];
+  for (const b of s.buildings) {
+    if (!b || b.owner !== p.id || b.stage > 1) continue;
+    const bs = b.builder >= 0 ? s.serfs[b.builder] : null;
+    const reach = castle ? flagDist(s, p.id, b.flag, castle.flag, true) < UNREACHABLE : false;
+    const f = s.flags[b.flag]!;
+    console.log(`P${p.id} plac k${b.kind} st${b.stage} builder=${b.builder}(${bs ? bs.state + '/' + bs.type : '-'}) digger=${b.digger} D=${b.planks}+${b.planksTransit}/${b.planksUsed} K=${b.stones}+${b.stonesTransit}/${b.stonesUsed} reach=${reach} roads=${f.roads.join(',')} goods=${f.slotGood.join(',')}`);
+  }
+}
+for (const p of s.players) {
+  const c = s.buildings[p.castle];
+  if (!c) continue;
+  const f = s.flags[c.flag];
+  if (!f) continue;
+  console.log(`P${p.id} flaga zamku: goods=${f.slotGood.join(',')} dirs=${f.slotDir.join(',')} roads=${f.roads.join(',')}`);
+}
+for (const p of s.players) {
+  const st: Record<string, number> = {};
+  for (const k of s.serfs) if (k && k.owner === p.id && k.type === 22) st[k.state] = (st[k.state] ?? 0) + 1;
+  let invK = 0;
+  const invs: string[] = [];
+  for (const b of s.buildings) if (b && b.owner === p.id && b.inv) { const n = b.inv.knights.reduce((a, c) => a + c, 0); invK += n; invs.push(`${b.kind}:${n}`); }
+  console.log(`P${p.id} rycerze wg stanu ${JSON.stringify(st)} w magazynach ${invK} [${invs.join(' ')}]`);
 }

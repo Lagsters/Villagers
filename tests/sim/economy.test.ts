@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { B, G, O, RES, S, T } from '../../sim/defs.ts';
+import { B, FIRST_TOOL, G, O, RES, S, T, TOOLS_COUNT } from '../../sim/defs.ts';
 import { spiral } from '../../sim/grid.ts';
 import { signCode } from '../../sim/geologist.ts';
 import type { GameState } from '../../sim/types.ts';
@@ -84,7 +84,7 @@ describe('M4: hutnictwo, narzedzia, bron', () => {
     const pr = s.players[0].stats.produced;
     expect(pr[G.STEEL]).toBeGreaterThan(2);
     let tools = 0;
-    for (let g = G.SHOVEL; g <= G.PINCER; g++) tools += pr[g];
+    for (let g: number = FIRST_TOOL; g < FIRST_TOOL + TOOLS_COUNT; g++) tools += pr[g];
     expect(tools).toBeGreaterThan(0);
     expect(pr[G.SWORD]).toBeGreaterThan(0);
     expect(pr[G.SHIELD]).toBe(pr[G.SWORD]);
@@ -93,20 +93,20 @@ describe('M4: hutnictwo, narzedzia, bron', () => {
 
   it('priorytety narzedzi: tylko wybrane narzedzie', () => {
     const s = newGame(1, 64, 'TOOLS');
-    const prio = new Array(9).fill(0);
-    prio[G.SAW - G.SHOVEL] = 8;
+    const prio = new Array(TOOLS_COUNT).fill(0);
+    prio[G.SAW - FIRST_TOOL] = 8;
     step(s, [{ type: 'setting', player: 0, key: 'toolPrio', value: prio }]);
     buildConnected(s, 0, B.TOOLMAKER, 3, 8);
     run(s, 5000);
     const pr = s.players[0].stats.produced;
     expect(pr[G.SAW]).toBeGreaterThan(0);
-    for (let g: number = G.SHOVEL; g <= G.PINCER; g++) if (g !== G.SAW) expect(pr[g]).toBe(0);
+    for (let g: number = FIRST_TOOL; g < FIRST_TOOL + TOOLS_COUNT; g++) if (g !== G.SAW) expect(pr[g]).toBe(0);
   });
 
-  it('huta zlota robi sztabki', () => {
+  it('mennica bije monety', () => {
     const s = newGame(1, 64, 'GOLD');
     castleInv(s).goods[G.GOLD_ORE] = 4;
-    buildConnected(s, 0, B.GOLDSMELTER, 3, 8);
+    buildConnected(s, 0, B.MINT, 3, 8);
     run(s, 4000);
     expect(s.players[0].stats.produced[G.GOLD]).toBeGreaterThan(0);
   });
@@ -116,6 +116,8 @@ describe('M4: jedzenie', () => {
   it('farma -> mlyn -> piekarnia daje chleb; chlewnia -> rzeznia daje mieso', () => {
     const s = newGame(1, 96, 'BREAD');
     buildConnected(s, 0, B.FARM, 4, 10, (pos) => countNear(s, pos, 3, (i) => s.map.obj[i] === O.NONE && s.map.terrain[i] === T.GRASS));
+    buildConnected(s, 0, B.WELL, 3, 9);
+    buildConnected(s, 0, B.WELL, 3, 9);
     buildConnected(s, 0, B.MILL, 3, 9);
     buildConnected(s, 0, B.BAKERY, 3, 9);
     buildConnected(s, 0, B.PIGFARM, 4, 10);
@@ -157,7 +159,53 @@ describe('M4: jedzenie', () => {
   });
 });
 
+describe('M4: gospodarka S2 - woda, piwo, osly, wegiel drzewny', () => {
+  it('studnia daje wode, browar piwo, a piwo jest potrzebne do rekrutacji', () => {
+    const s = newGame(1, 96, 'BEER');
+    castleInv(s).goods[G.BEER] = 0;
+    castleInv(s).goods[G.WHEAT] = 8;
+    buildConnected(s, 0, B.WELL, 3, 9);
+    buildConnected(s, 0, B.BREWERY, 3, 9);
+    const knights0 = castleInv(s).knights.reduce((a, b) => a + b, 0);
+    run(s, 300);
+    // Bez piwa miecze i tarcze nie zamieniaja sie w rycerzy.
+    expect(castleInv(s).knights.reduce((a, b) => a + b, 0)).toBe(knights0);
+    run(s, 4000);
+    expect(s.players[0].stats.produced[G.WATER]).toBeGreaterThan(0);
+    expect(s.players[0].stats.produced[G.BEER]).toBeGreaterThan(0);
+    expect(castleInv(s).knights.reduce((a, b) => a + b, 0)).toBeGreaterThan(knights0);
+  });
+
+  it('hodowla oslow daje osly do magazynu', () => {
+    const s = newGame(1, 96, 'DONKEY');
+    castleInv(s).goods[G.WHEAT] = 8;
+    castleInv(s).goods[G.WATER] = 8;
+    const d0 = castleInv(s).serfs[S.DONKEY];
+    buildConnected(s, 0, B.DONKEYBREEDER, 4, 10);
+    run(s, 5000);
+    expect(castleInv(s).serfs[S.DONKEY]).toBeGreaterThan(d0);
+  });
+
+  it('smolarnia robi wegiel z pni i zboza', () => {
+    const s = newGame(1, 96, 'CHAR');
+    castleInv(s).goods[G.WHEAT] = 8;
+    buildConnected(s, 0, B.CHARBURNER, 4, 10);
+    run(s, 4000);
+    expect(s.players[0].stats.produced[G.COAL]).toBeGreaterThan(0);
+  });
+});
+
 describe('M4: inne', () => {
+  it('magazyn dostaje materialy, powstaje i przyjmuje towary', () => {
+    const s = newGame(1, 96, 'STORE');
+    const { pos, ok } = buildConnected(s, 0, B.WAREHOUSE, 5, 10);
+    expect(ok).toBe(true);
+    run(s, 3000);
+    const b = s.buildings[s.map.objId[pos]]!;
+    expect(b.stage).toBe(STAGE.DONE);
+    expect(b.inv).not.toBeNull();
+  });
+
   it('stocznia buduje lodzie', () => {
     const s = newGame(1, 64, 'BOAT');
     buildConnected(s, 0, B.SHIPYARD, 3, 8);

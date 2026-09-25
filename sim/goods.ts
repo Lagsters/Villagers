@@ -2,7 +2,7 @@
  * Towary: rozliczanie towarow w drodze do budynkow, wybor celu, umieszczanie na flagach
  * i wyznaczanie kierunku na kazdej fladze.
  */
-import { BUILDINGS, B, G, isFood, isInventory, isMilitary, isMine } from './defs.ts';
+import { BUILDINGS, B, G, isFood, isMilitary, isMine } from './defs.ts';
 import { UNREACHABLE, routeTo } from './routing.ts';
 import { DIR_INTO, FLAG_SLOTS, STAGE, type Building, type Flag, type GameState } from './types.ts';
 
@@ -50,7 +50,7 @@ export function addTransit(b: Building, g: number, delta: number): void {
 export function cancelTransit(s: GameState, dest: number, g: number): void {
   if (dest < 0) return;
   const b = s.buildings[dest];
-  if (!b || isInventory(b.kind)) return;
+  if (!b || b.inv) return;
   addTransit(b, g, -1);
 }
 
@@ -92,9 +92,13 @@ export function distWeight(s: GameState, b: Building, g: number): number {
     case B.TOOLMAKER: return g === G.PLANK ? st.plankToolmaker : st.steelToolmaker;
     case B.WEAPONSMITH: return g === G.STEEL ? st.steelWeaponsmith : st.coalWeapons;
     case B.STEELWORKS: return g === G.COAL ? st.coalSteel : 8;
-    case B.GOLDSMELTER: return g === G.COAL ? st.coalGold : 8;
+    case B.MINT: return g === G.COAL ? st.coalGold : 8;
     case B.MILL: return st.wheatMill;
-    case B.PIGFARM: return st.wheatPig;
+    case B.PIGFARM: return g === G.WATER ? st.waterPig : st.wheatPig;
+    case B.BAKERY: return g === G.WATER ? st.waterBakery : 8;
+    case B.BREWERY: return g === G.WATER ? st.waterBrewery : st.wheatBrewery;
+    case B.DONKEYBREEDER: return g === G.WATER ? st.waterDonkey : st.wheatDonkey;
+    case B.CHARBURNER: return g === G.WHEAT ? st.wheatCharburner : 8;
     default: return 8;
   }
 }
@@ -114,7 +118,7 @@ export function chooseDestination(s: GameState, p: number, flagId: number, g: nu
   if (allowConsumers) {
     for (const b of s.buildings) {
       if (!b || b.owner !== p) continue;
-      if (isInventory(b.kind) || !acceptsGoods(b)) continue;
+      if (b.inv || !acceptsGoods(b) || b.paused) continue;
       if (demand(b, g) <= 0) continue;
       const w = distWeight(s, b, g);
       if (w <= 0) continue;
@@ -215,7 +219,7 @@ export function rerouteSlot(s: GameState, f: Flag, i: number): void {
     dest = chooseDestination(s, f.owner, f.id, g);
     if (dest >= 0) {
       const b = s.buildings[dest]!;
-      if (!isInventory(b.kind)) addTransit(b, g, 1);
+      if (!b.inv) addTransit(b, g, 1);
     }
     dir = goodDir(s, f, dest);
   }

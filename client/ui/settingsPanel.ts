@@ -1,5 +1,5 @@
 /** Ustawienia gospodarki: rozdzial towarow, priorytety narzedzi i transportu, obsada wojska. */
-import { GOOD_NAMES_PL, GOODS_COUNT } from '../../sim/defs.ts';
+import { FIRST_TOOL, GOOD_NAMES_PL, GOODS_COUNT, TOOLS_COUNT } from '../../sim/defs.ts';
 import type { Settings } from '../../sim/types.ts';
 import type { GameSession } from '../game/session.ts';
 import { button, el } from './dom.ts';
@@ -36,7 +36,7 @@ function group(title: string, rows: HTMLElement[]): HTMLElement {
   return g;
 }
 
-const TOOL_NAMES = GOOD_NAMES_PL.slice(15, 24);
+const TOOL_NAMES = GOOD_NAMES_PL.slice(FIRST_TOOL, FIRST_TOOL + TOOLS_COUNT);
 
 export function openSettings(parent: HTMLElement, session: GameSession): Modal {
   const m = new Modal(parent, 'Gospodarka', true);
@@ -51,18 +51,25 @@ export function openSettings(parent: HTMLElement, session: GameSession): Modal {
       ]));
       grid.appendChild(group('Deski', [
         slider(session, 'Budowa', 'plankConstruction'), slider(session, 'Stocznia', 'plankShipyard'),
-        slider(session, 'Narzędziownia', 'plankToolmaker'),
+        slider(session, 'Kuźnia narzędzi', 'plankToolmaker'),
       ]));
-      grid.appendChild(group('Stal', [slider(session, 'Narzędziownia', 'steelToolmaker'), slider(session, 'Zbrojownia', 'steelWeaponsmith')]));
+      grid.appendChild(group('Żelazo', [slider(session, 'Kuźnia narzędzi', 'steelToolmaker'), slider(session, 'Zbrojownia', 'steelWeaponsmith')]));
       grid.appendChild(group('Węgiel', [
-        slider(session, 'Huta żelaza', 'coalSteel'), slider(session, 'Huta złota', 'coalGold'), slider(session, 'Zbrojownia', 'coalWeapons'),
+        slider(session, 'Huta żelaza', 'coalSteel'), slider(session, 'Mennica', 'coalGold'), slider(session, 'Zbrojownia', 'coalWeapons'),
       ]));
-      grid.appendChild(group('Zboże', [slider(session, 'Młyn', 'wheatMill'), slider(session, 'Chlewnia', 'wheatPig')]));
+      grid.appendChild(group('Zboże', [
+        slider(session, 'Młyn', 'wheatMill'), slider(session, 'Chlewnia', 'wheatPig'), slider(session, 'Browar', 'wheatBrewery'),
+        slider(session, 'Hodowla osłów', 'wheatDonkey'), slider(session, 'Smolarnia', 'wheatCharburner'),
+      ]));
+      grid.appendChild(group('Woda', [
+        slider(session, 'Piekarnia', 'waterBakery'), slider(session, 'Chlewnia', 'waterPig'), slider(session, 'Browar', 'waterBrewery'),
+        slider(session, 'Hodowla osłów', 'waterDonkey'),
+      ]));
       body.appendChild(grid);
       body.appendChild(el('p', 'hint', 'Waga 0 = nie dostarczaj. Przy równych wagach odbiorcy dostają na zmianę.'));
     }],
     ['Narzędzia', (body) => {
-      body.appendChild(el('p', 'hint', 'Narzędziownia robi narzędzie o najwyższym priorytecie, a braki osadników czekających na narzędzie go podbijają.'));
+      body.appendChild(el('p', 'hint', 'Kuźnia robi narzędzie o najwyższym priorytecie, a braki osadników czekających na narzędzie go podbijają.'));
       const rows = TOOL_NAMES.map((name, i) => {
         const row = el('label', 'slider-row');
         row.appendChild(el('span', 'slider-label', name));

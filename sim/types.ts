@@ -97,6 +97,8 @@ export interface Building {
   served: number;
   /** licznik produkcji (statystyki na budynek) */
   produced: number;
+  /** produkcja wstrzymana przez gracza (budynek nie pracuje i nie zamawia wejsc) */
+  paused: boolean;
 }
 
 export interface Serf {
@@ -151,6 +153,13 @@ export interface Settings {
   coalWeapons: number;
   wheatMill: number;
   wheatPig: number;
+  wheatBrewery: number;
+  wheatDonkey: number;
+  wheatCharburner: number;
+  waterBakery: number;
+  waterPig: number;
+  waterBrewery: number;
+  waterDonkey: number;
   toolPrio: number[];
   /** minimalna obsada: wewnatrz, przy granicy, przy wrogu (0..pojemnosc, 99 = pelna) */
   knightsInterior: number;

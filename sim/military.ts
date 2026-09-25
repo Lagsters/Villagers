@@ -10,7 +10,7 @@ import { destroyBuilding, applyTerritoryLoss } from './construction.ts';
 import { DIR_NW, DIR_SE, hexDist, spiral } from './grid.ts';
 import { clearFlagGoods } from './goods.ts';
 import { findPath } from './pathfind.ts';
-import { chance } from './rng.ts';
+import { chance, randInt } from './rng.ts';
 import { removeFlag, removeRoad } from './roads.ts';
 import { invalidateRoutes } from './routing.ts';
 import { SS, createSerf, enterInventory, killSerf, sendHome } from './serfs.ts';
@@ -428,6 +428,22 @@ function capture(s: GameState, b: Building, k: Serf): void {
   invalidateRoutes(s, old);
   invalidateRoutes(s, k.owner);
   event(s, 'captured', k.owner, b.pos, old);
+  // Pozostali atakujacy (nie walczacy) wchodza do zdobytego budynku jako zaloga, do pojemnosci.
+  let room = BUILDINGS[b.kind].knights - 1;
+  const fp = f.pos;
+  for (const o of s.serfs) {
+    if (room <= 0) break;
+    if (!o || o.owner !== k.owner || o.type !== S.KNIGHT || o.target !== b.id) continue;
+    if (o.state !== SS.KNIGHT_WAIT && o.state !== SS.KNIGHT_ATTACK) continue;
+    const from = o.to >= 0 ? o.to : o.pos;
+    const p = from === fp ? [] : findPath(s.map, from, fp, (i) => isFreeWalkable(s.map, i) || i === fp, 600);
+    if (!p) continue;
+    o.path = [...p, DIR_NW];
+    o.state = SS.KNIGHT_RETURN;
+    o.home = b.id;
+    o.sub = -1;
+    room--;
+  }
   const changed = recomputeTerritory(s, b.pos, BUILDINGS[b.kind].radius, b);
   applyTerritoryLoss(s, changed);
   // Po przejeciu sasiednie budynki starego wlasciciela moga stracic zasieg - przelicz szerzej.
@@ -568,6 +584,44 @@ export function updateKnight(s: GameState, k: Serf): boolean {
     }
   }
   return false;
+}
+
+// ---------- Katapulta ----------
+
+export const CATAPULT_HIT = 40;
+
+/**
+ * Katapulta: co cykl, majac kamien, strzela w najblizszy wrogi budynek wojskowy w zasiegu
+ * z co najmniej 2 rycerzami. Trafienie zabija losowego rycerza (ostatni zostaje).
+ */
+export function updateCatapult(s: GameState, b: Building, serf: Serf): void {
+  const def = BUILDINGS[b.kind];
+  if (b.timer > 0) {
+    b.timer--;
+    return;
+  }
+  if (b.stock[0] <= 0) { serf.anim = 0; return; }
+  let target: Building | null = null;
+  let bd = 1 << 20;
+  for (const t of s.buildings) {
+    if (!t || t.owner === b.owner || t.stage !== STAGE.DONE || !isMilitary(t.kind) || t.knights.length < 2) continue;
+    const d = dist(s, b.pos, t.pos);
+    if (d <= def.radius && (d < bd || (d === bd && target && t.id < target.id))) { bd = d; target = t; }
+  }
+  b.timer = def.cycle;
+  if (!target) { serf.anim = 0; return; }
+  b.stock[0]--;
+  serf.anim = 1;
+  event(s, 'catapult', b.owner, b.pos, target.pos);
+  if (!chance(s, CATAPULT_HIT)) return;
+  const idx = randInt(s, target.knights.length);
+  const k = s.serfs[target.knights[idx]];
+  target.knights.splice(idx, 1);
+  if (k) {
+    event(s, 'death', k.owner, target.pos);
+    killSerf(s, k);
+  }
+  s.players[target.owner].lastAttacked = s.tick;
 }
 
 // ---------- Eliminacja i zwyciestwo ----------

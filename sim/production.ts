@@ -6,12 +6,13 @@
  * road = pole wody (rybak), sub = podstan (WS), timer = czas pracy.
  */
 import { animalsNear, removeAnimalById } from './animalsApi.ts';
-import { B, BUILDINGS, G, NO_GOOD, O, RES, T, TOOLS_COUNT, FIRST_TOOL, isStone, mineResource } from './defs.ts';
+import { B, BUILDINGS, G, NO_GOOD, O, RES, S, T, TOOLS_COUNT, FIRST_TOOL, isStone, mineResource } from './defs.ts';
 import { DIR_NW, DIR_SE, spiral } from './grid.ts';
 import { addTransit, chooseDestination, freeSlot, putGood } from './goods.ts';
 import { findPath } from './pathfind.ts';
 import { randInt } from './rng.ts';
-import { SS, sendHome } from './serfs.ts';
+import { SS, createSerf, sendHome } from './serfs.ts';
+import { updateCatapult } from './military.ts';
 import { STAGE, type Building, type GameState, type Serf } from './types.ts';
 import { event, isFreeWalkable, nb } from './world.ts';
 
@@ -74,6 +75,10 @@ function isMineKind(k: number): boolean {
 
 function updateWorkshop(s: GameState, b: Building, serf: Serf): void {
   const def = BUILDINGS[b.kind];
+  if (b.kind === B.CATAPULT) {
+    updateCatapult(s, b, serf);
+    return;
+  }
   if (b.phase === 0) {
     if (b.out.length >= OUT_QUEUE_MAX) { serf.anim = 0; return; }
     for (let i = 0; i < b.stock.length; i++) if (b.stock[i] <= 0) { serf.anim = 0; return; }
@@ -96,6 +101,7 @@ function updateWorkshop(s: GameState, b: Building, serf: Serf): void {
       }
     }
     b.phase = product === NO_GOOD ? 2 : 1;
+    if (b.kind === B.DONKEYBREEDER) b.phase = 3;
     b.timer = def.cycle;
     // Wybrane narzedzie zapamietujemy w `phase` (>= 10) - bez dodatkowego pola.
     if (b.kind === B.TOOLMAKER && product !== NO_GOOD) b.phase = 10 + (product - FIRST_TOOL);
@@ -107,6 +113,13 @@ function updateWorkshop(s: GameState, b: Building, serf: Serf): void {
   const phase = b.phase;
   b.phase = 0;
   if (phase === 2) return; // pusty cykl kopalni
+  if (phase === 3) {
+    // Nowy osiol wychodzi z hodowli i idzie do magazynu.
+    const d = createSerf(s, b.owner, S.DONKEY, b.pos);
+    sendHome(s, d);
+    b.produced++;
+    return;
+  }
   if (b.kind === B.TOOLMAKER) {
     const g = FIRST_TOOL + (phase - 10);
     b.out.push(g);
@@ -397,6 +410,7 @@ export function updateProduction(s: GameState, b: Building): void {
   if (def.worker < 0) return;
   const serf = s.serfs[b.worker];
   if (!serf || serf.state !== SS.INSIDE) return;
+  if (b.paused) { serf.anim = 0; return; }
   // Najpierw wynosimy gotowe wyroby na flage.
   if (b.out.length > 0) {
     const f = s.flags[b.flag];

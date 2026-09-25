@@ -2,7 +2,7 @@
  * Interfejs gry w DOM: gorny pasek, panel kontekstowy wybranego pola, tryb budowy drogi,
  * komunikaty. Nie zmienia stanu gry bezposrednio - wysyla komendy przez sesje.
  */
-import { BUILDINGS, B, G, GOOD_NAMES_PL, O, S, SERF_NAMES_PL, SIZE, isMilitary } from '../../sim/defs.ts';
+import { BUILDINGS, B, FIRST_TOOL, G, GOOD_NAMES_PL, GOODS_COUNT, O, S, SERF_NAMES_PL, SIZE, TOOLS_COUNT, isMilitary } from '../../sim/defs.ts';
 import { DIR_SE } from '../../sim/grid.ts';
 import { findRoadPath, roadAt } from '../../sim/roads.ts';
 import { STAGE, type Building, type GameEvent, type GameState } from '../../sim/types.ts';
@@ -233,13 +233,13 @@ export class Hud {
   update(): void {
     const s = this.state;
     const me = this.me;
-    const tot = new Array(26).fill(0);
+    const tot = new Array(GOODS_COUNT).fill(0);
     let serfs = 0;
     let knights = 0;
     for (const b of s.buildings) {
       if (!b || b.owner !== me) continue;
       if (b.inv) {
-        for (let g = 0; g < 26; g++) tot[g] += b.inv.goods[g];
+        for (let g = 0; g < GOODS_COUNT; g++) tot[g] += b.inv.goods[g];
         for (let t = 0; t < b.inv.serfs.length; t++) if (t !== S.DONKEY) serfs += b.inv.serfs[t];
         for (const k of b.inv.knights) knights += k;
       }
@@ -250,7 +250,7 @@ export class Hud {
       else serfs++;
     }
     let tools = 0;
-    for (let g = G.SHOVEL; g <= G.PINCER; g++) tools += tot[g];
+    for (let g: number = FIRST_TOOL; g < FIRST_TOOL + TOOLS_COUNT; g++) tools += tot[g];
     this.resEls.get('plank')!.textContent = String(tot[G.PLANK]);
     this.resEls.get('stone')!.textContent = String(tot[G.STONE]);
     this.resEls.get('lumber')!.textContent = String(tot[G.LUMBER]);
@@ -362,7 +362,7 @@ export class Hud {
     let k = `${idx}:${o}:${m.objId[idx]}:${m.roads[idx]}:${m.owner[idx]}`;
     if ((o === O.BUILDING || o === O.BUILDING_PART) && m.objId[idx] >= 0) {
       const b = s.buildings[m.objId[idx]];
-      if (b) k += `:${b.stage}:${b.planks}:${b.stones}:${b.planksUsed}:${b.stonesUsed}:${b.stock.join(',')}:${b.worker}:${b.workerInside}:${b.knights.length}:${b.gold}:${b.out.length}:${b.inv ? b.inv.goods.join(',') + b.inv.serfs.join(',') + b.inv.knights.join(',') : ''}`;
+      if (b) k += `:${b.paused}:${b.stage}:${b.planks}:${b.stones}:${b.planksUsed}:${b.stonesUsed}:${b.stock.join(',')}:${b.worker}:${b.workerInside}:${b.knights.length}:${b.gold}:${b.out.length}:${b.inv ? b.inv.goods.join(',') + b.inv.serfs.join(',') + b.inv.knights.join(',') : ''}`;
     }
     if (o === O.FLAG) {
       const f = s.flags[m.objId[idx]];
@@ -386,11 +386,11 @@ export class Hud {
       pos = neighbor(s.map, idx, 4);
       if (pos < 0 || neighbor(s.map, pos, DIR_SE) !== idx) return;
     }
-    const groups: [string, number[]][] = [['Małe budynki', []], ['Duże budynki', []], ['Kopalnie', []]];
+    const groups: [string, number[]][] = [['Chaty', []], ['Domy', []], ['Duże budynki', []], ['Kopalnie', []]];
     for (let k = 1; k < BUILDINGS.length; k++) {
       if (!canBuild(s, this.me, pos, k)) continue;
       const size = BUILDINGS[k].size;
-      groups[size === SIZE.SMALL ? 0 : size === SIZE.LARGE ? 1 : 2][1].push(k);
+      groups[size === SIZE.SMALL ? 0 : size === SIZE.MEDIUM ? 1 : size === SIZE.LARGE ? 2 : 3][1].push(k);
     }
     for (const [title, kinds] of groups) {
       if (!kinds.length) continue;
@@ -430,7 +430,7 @@ export class Hud {
       if (b.inv) {
         const inv = b.inv;
         const list = el('div', 'inv-list');
-        for (let g = 0; g < 26; g++) if (inv.goods[g] > 0) list.appendChild(el('span', 'inv-item', `${GOOD_NAMES_PL[g]}: ${inv.goods[g]}`));
+        for (let g = 0; g < GOODS_COUNT; g++) if (inv.goods[g] > 0) list.appendChild(el('span', 'inv-item', `${GOOD_NAMES_PL[g]}: ${inv.goods[g]}`));
         this.panel.appendChild(el('h4', '', 'Towary'));
         this.panel.appendChild(list);
         const sl = el('div', 'inv-list');
@@ -447,7 +447,10 @@ export class Hud {
         this.panel.appendChild(el('p', '', b.workerInside ? `Pracownik: ${SERF_NAMES_PL[def.worker]}` : `Czeka na: ${SERF_NAMES_PL[def.worker]}`));
         const inputs = b.kind >= B.COALMINE && b.kind <= B.STONEMINE ? ['Jedzenie'] : def.inputs.map((g) => GOOD_NAMES_PL[g]);
         if (inputs.length) this.panel.appendChild(el('p', '', inputs.map((n, i) => `${n}: ${b.stock[i]}`).join(', ')));
-        this.panel.appendChild(el('p', 'sub', `Wyprodukowano: ${b.produced}`));
+        this.panel.appendChild(el('p', 'sub', `Wyprodukowano: ${b.produced}${b.paused ? ' — produkcja wstrzymana' : ''}`));
+        this.panel.appendChild(button(b.paused ? 'Wznów produkcję' : 'Wstrzymaj produkcję', () => {
+          this.session.submit({ type: 'pause', player: this.me, pos: b.pos, on: !b.paused });
+        }, 'Wstrzymany budynek nie pracuje i nie zamawia surowców'));
       }
     }
     if (b.kind !== B.CASTLE && b.stage !== STAGE.BURN) {

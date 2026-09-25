@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { BUILDINGS, SIZE } from '../../sim/defs.ts';
 
 type RGB = [number, number, number];
 
@@ -121,6 +122,8 @@ const ROOFS: RGB[] = [
 
 function smallBuilding(kind: number): THREE.BufferGeometry {
   const roof = ROOFS[kind % ROOFS.length];
+  // Dom (sredni) jest wyzszy i szerszy od chaty.
+  if (BUILDINGS[kind]?.size === SIZE.MEDIUM) return merge(house(0.72, 0.62, 0.5, roof, C.wall, 0.42));
   return merge(house(0.55, 0.5, 0.38, roof));
 }
 
@@ -154,7 +157,7 @@ registerBuilder('building_fortress', () => merge([
   colored(at(new THREE.CylinderGeometry(0.3, 0.34, 1.4, 6), -0.25, 0.7, -0.25), [0.76, 0.72, 0.66]),
   colored(at(new THREE.ConeGeometry(0.4, 0.5, 6), -0.25, 1.65, -0.25), [0.35, 0.35, 0.55]),
 ]));
-for (let k = 2; k <= 21; k++) {
+for (let k = 2; k <= 30; k++) {
   const kind = k;
   registerBuilder(`building_${kind}`, () => smallBuilding(kind));
 }

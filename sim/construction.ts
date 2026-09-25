@@ -45,6 +45,7 @@ function blankBuilding(id: number, p: number, kind: number, pos: number, flag: n
     trainTimer: 0,
     served: 0,
     produced: 0,
+    paused: false,
   };
 }
 

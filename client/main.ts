@@ -5,6 +5,7 @@ import { SceneRenderer } from './render/scene.ts';
 import { InputController } from './input.ts';
 import { GameSession, LocalDriver } from './game/session.ts';
 import { Hud } from './ui/hud.ts';
+import { Bot } from '../ai/bot.ts';
 import { openSettings } from './ui/settingsPanel.ts';
 import { openStats } from './ui/statsPanel.ts';
 import { canBuild, canPlaceFlag, neighbor } from '../sim/world.ts';
@@ -39,6 +40,13 @@ window.addEventListener('resize', fit);
 view.lookAtIdx(state.players[0].start);
 
 const driver = new LocalDriver();
+// Boty dla graczy komputerowych.
+for (const p of state.players) {
+  if (p.ai > 0) {
+    const bot = new Bot(p.id, p.ai, state.config.seed * 7919 + p.id);
+    driver.producers.push((s) => bot.think(s));
+  }
+}
 const session = new GameSession(state, driver, 0);
 const hud = new Hud(app, session, {
   setPreview: (cells, ok) => view.overlay.setPreview(session.state, cells, ok),

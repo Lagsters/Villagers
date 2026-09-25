@@ -17,7 +17,8 @@ export type Command =
   | { type: 'attack'; player: number; pos: number; count: number }
   | { type: 'geologist'; player: number; pos: number }
   | { type: 'setting'; player: number; key: keyof Settings; value: number | number[] }
-  | { type: 'surrender'; player: number };
+  | { type: 'surrender'; player: number }
+  | { type: 'pause'; player: number; pos: number; on: boolean };
 
 export type CommandHandler = (s: GameState, c: Command) => void;
 
@@ -66,6 +67,14 @@ export function applyCommand(s: GameState, c: Command): void {
         const rid = roadAt(s, c.pos);
         if (rid >= 0 && s.roads[rid]!.owner === c.player) removeRoad(s, rid);
       }
+      return;
+    }
+    case 'pause': {
+      const map = s.map;
+      const o = map.obj[c.pos];
+      if (o !== O.BUILDING && o !== O.BUILDING_PART) return;
+      const b = s.buildings[map.objId[c.pos]];
+      if (b && b.owner === c.player && BUILDINGS[b.kind].worker >= 0) b.paused = !!c.on;
       return;
     }
     case 'setting':
