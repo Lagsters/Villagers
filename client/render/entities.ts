@@ -32,11 +32,11 @@ function local(lx: number, ly: number): [number, number] {
 
 /** Szczyt masztu flagi na budynkach wojskowych i zamku: [lx, ly, wysokosc]. */
 const BANNER: Record<number, [number, number, number]> = {
-  [B.CASTLE]: [0, 0.1, 1.37],
-  [B.GUARDHUT]: [0, 0.05, 0.73],
-  [B.TOWER]: [0, 0, 1.06],
-  [B.FORTRESS]: [0, 0.08, 1.26],
-  [B.GUARDHOUSE]: [0, 0, 0.68],
+  [B.CASTLE]: [0, 0.12, 1.58],
+  [B.GUARDHUT]: [0, 0, 0.74],
+  [B.TOWER]: [0.08, 0.08, 1.42],
+  [B.FORTRESS]: [0, 0.14, 1.12],
+  [B.GUARDHOUSE]: [-0.18, 0.14, 0.8],
 };
 const MILL_HUB = local(0, -0.2);
 
@@ -44,6 +44,24 @@ const HIP = 0.14;
 const SHOULDER = 0.31;
 /** Jednostki nieco wieksze niz w skali budynkow - czytelnosc z kamery izometrycznej. */
 const UNIT_SCALE = 1.25;
+
+/** Wyglad zawodow: nakrycie glowy (hat_*) i narzedzie w prawej rece (tool_*), wg typu osadnika. */
+const HATS = ['hair', 'cap', 'straw', 'hood', 'feather', 'miner', 'brim', 'miller', 'chef', 'leather', 'explorer', 'sailor', 'kettle', 'beret'] as const;
+const TOOLS = ['axe', 'hammer', 'pick', 'shovel', 'scythe', 'rod', 'bow', 'saw', 'rolling_pin', 'cleaver', 'tongs', 'bucket'] as const;
+type Hat = (typeof HATS)[number];
+type Tool = (typeof TOOLS)[number];
+const LOOK: Partial<Record<number, [Hat | null, Tool | null]>> = {
+  [S.GENERIC]: ['hair', null], [S.TRANSPORTER]: ['cap', null], [S.SAILOR]: ['sailor', null],
+  [S.DIGGER]: ['straw', 'shovel'], [S.BUILDER]: ['leather', 'hammer'], [S.WOODCUTTER]: ['hood', 'axe'],
+  [S.FORESTER]: ['feather', 'shovel'], [S.SAWYER]: ['cap', 'saw'], [S.STONECUTTER]: ['leather', 'pick'],
+  [S.MINER]: ['miner', 'pick'], [S.FISHER]: ['brim', 'rod'], [S.HUNTER]: ['feather', 'bow'],
+  [S.FARMER]: ['straw', 'scythe'], [S.MILLER]: ['miller', null], [S.BAKER]: ['chef', 'rolling_pin'],
+  [S.PIGFARMER]: ['straw', 'bucket'], [S.BUTCHER]: ['miller', 'cleaver'], [S.SMELTER]: ['leather', 'tongs'],
+  [S.TOOLMAKER]: ['leather', 'hammer'], [S.WEAPONSMITH]: ['leather', 'hammer'], [S.BOATBUILDER]: ['sailor', 'hammer'],
+  [S.GEOLOGIST]: ['explorer', 'hammer'], [S.WELLER]: ['cap', 'bucket'], [S.BREWER]: ['hood', 'bucket'],
+  [S.DONKEYBREEDER]: ['straw', null], [S.CHARBURNER]: ['hood', 'shovel'], [S.CATAPULTER]: ['kettle', null],
+  [S.MINTER]: ['beret', 'tongs'],
+};
 
 export class EntitiesRenderer {
   readonly group = new THREE.Group();
@@ -61,6 +79,8 @@ export class EntitiesRenderer {
   private helmet: InstancedLayer;
   private shield: InstancedLayer;
   private sword: InstancedLayer;
+  private hats = new Map<string, InstancedLayer>();
+  private tools = new Map<string, InstancedLayer>();
   private donkey: InstancedLayer;
   private border: InstancedLayer;
   private animals: InstancedLayer;
@@ -112,10 +132,12 @@ export class EntitiesRenderer {
     this.torso = this.layer('serf_torso', 512, true);
     this.head = this.layer('serf_head', 512);
     this.leg = this.layer('serf_leg', 1024);
-    this.arm = this.layer('serf_arm', 1024, true);
+    this.arm = this.layer('serf_arm', 1024);
     this.helmet = this.layer('knight_helmet', 64);
     this.shield = this.layer('knight_shield', 64);
     this.sword = this.layer('knight_sword', 64);
+    for (const h of HATS) this.hats.set(h, this.layer(`hat_${h}`, h === 'cap' ? 256 : 32));
+    for (const t of TOOLS) this.tools.set(t, this.layer(`tool_${t}`, 32));
     this.donkey = this.layer('donkey', 32);
     this.border = this.layer('border', 1024, true);
     this.animals = this.layer('animal', 64);
@@ -240,7 +262,7 @@ export class EntitiesRenderer {
   }
 
   private updateSerfs(s: GameState, alpha: number): void {
-    const layers = [this.torso, this.head, this.leg, this.arm, this.helmet, this.shield, this.sword, this.donkey];
+    const layers = [this.torso, this.head, this.leg, this.arm, this.helmet, this.shield, this.sword, this.donkey, ...this.hats.values(), ...this.tools.values()];
     for (const l of layers) l.begin();
     const a = new THREE.Vector3();
     const b = new THREE.Vector3();
@@ -300,10 +322,13 @@ export class EntitiesRenderer {
       this.part(this.head, a.x, y, a.z, rot, 0, 0, 0, 0);
       this.part(this.leg, a.x, y, a.z, rot, -0.035, HIP, 0, legSwing);
       this.part(this.leg, a.x, y, a.z, rot, 0.035, HIP, 0, -legSwing);
-      const li = this.part(this.arm, a.x, y, a.z, rot, -0.09, SHOULDER, 0, armL);
-      const ri = this.part(this.arm, a.x, y, a.z, rot, 0.09, SHOULDER, 0, armR);
-      this.arm.color(li, c.r, c.g, c.b);
-      this.arm.color(ri, c.r, c.g, c.b);
+      this.part(this.arm, a.x, y, a.z, rot, -0.09, SHOULDER, 0, armL);
+      this.part(this.arm, a.x, y, a.z, rot, 0.09, SHOULDER, 0, armR);
+      const look = LOOK[serf.type];
+      if (look) {
+        if (look[0]) this.part(this.hats.get(look[0])!, a.x, y, a.z, rot, 0, 0, 0, 0);
+        if (look[1] && !carrying) this.part(this.tools.get(look[1])!, a.x, y, a.z, rot, 0.09, SHOULDER, 0, armR);
+      }
       if (serf.type === S.KNIGHT) {
         this.part(this.helmet, a.x, y, a.z, rot, 0, 0, 0, 0);
         this.part(this.shield, a.x, y, a.z, rot, 0, 0, 0, 0);

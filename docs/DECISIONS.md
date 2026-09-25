@@ -133,3 +133,22 @@ Drogi wodne z łodziami zostają (część pierwsza).
   vCPU, bez GPU, rasteryzacja programowa na tych samych rdzeniach) dał 18,7 FPS i skok ticku 13,6 ms, podczas
   gdy lokalnie przy CPU ×4 test daje 45 FPS i 3,7 ms. W CI twardo sprawdzane są pamięć, liczba wywołań
   rysowania i średni tick; pełne kryteria uruchamia `npm run test:perf` na zwykłym komputerze.
+
+## 2026-09-25 — Dopracowanie modeli (uwaga właściciela)
+- **Styl budynków wzorowany na pierwszej części klasycznej serii** (tylko sylwetki i paleta, bez żadnych
+  grafik z oryginału): dachy z terakoty z rzędami dachówek, ściany bielone z widocznymi kamieniami,
+  z desek albo z bali, każdy budynek z własną sylwetką - smukłe białe wieże zamku ze spiczastymi dachami,
+  drewniana wieża wyciągowa nad szopą kopalni i kupka urobku w kolorze rudy, silos farmy, osobny chlew,
+  przysadzista kamienna chata wartownicza pod wielkim dachem, wysoka kamienna wieża z przybudówką,
+  otwarte palenisko z żarem w zbrojowni, kwadratowy komin-wieża narzędziowni. Budynki drugiej części
+  (studnia, browar, hodowla osłów, smolarnia, katapulta, wartownia) w tym samym stylu.
+- **Kamera 44° zamiast 52° nad horyzontem**, ściany wyższe, dachy niższe - z góry dachy zasłaniały ściany,
+  a to ściany (deski, bale, kamień) odróżniają budynki. W kadrze mieści się ~18% więcej terenu; test
+  wydajności nadal 39,5 FPS przy CPU ×4 i 52 wywołaniach rysowania.
+- **Zawody widać po postaci**: 14 nakryć głowy (część z brodami: górnik, kowale, geolog) i 12 narzędzi
+  w prawej ręce (siekiera, piła, kilof, łopata, kosa, wędka, łuk, wałek, tasak, szczypce, młotek, wiadro)
+  jako osobne warstwy instancji; narzędzie porusza się z ręką, znika przy niesieniu towaru. Budżet
+  sprawdzany w teście: ciało + najcięższa czapka + najcięższe narzędzie ≤ 300 trójkątów (296).
+- Rękawy lniane zamiast barwionych kolorem gracza (barwienie instancji mnożyło też kolor dłoni);
+  kolor gracza niesie tunika.
+- Fałszywy AO w kolorach wierzchołków budynków (przyciemnienie przy ziemi) zamiast cieni - zero kosztu.

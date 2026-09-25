@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES, GOODS_COUNT, SIZE } from '../../sim/defs.ts';
 
 const DIR = 'art/models';
+const HATS = ['hair', 'cap', 'straw', 'hood', 'feather', 'miner', 'brim', 'miller', 'chef', 'leather', 'explorer', 'sailor', 'kettle', 'beret'];
+const TOOLS = ['axe', 'hammer', 'pick', 'shovel', 'scythe', 'rod', 'bow', 'saw', 'rolling_pin', 'cleaver', 'tongs', 'bucket'];
 
 async function load(name: string): Promise<{ tris: number; attrs: string[] }> {
   const buf = readFileSync(`${DIR}/${name}.glb`);
@@ -39,6 +41,7 @@ const REQUIRED = [
   'site_small', 'site_medium', 'site_large', 'mill_sails',
   'tree_pine', 'tree_leaf', 'stump', 'stone', 'field', 'field_ripe', 'sign', 'ruin', 'fire', 'border', 'flag', 'flag_cloth', 'animal',
   'serf_torso', 'serf_head', 'serf_leg', 'serf_arm', 'knight_helmet', 'knight_shield', 'knight_sword', 'donkey',
+  ...HATS.map((h) => `hat_${h}`), ...TOOLS.map((t) => `tool_${t}`),
 ];
 
 describe('M8: modele z Blendera', () => {
@@ -66,6 +69,13 @@ describe('M8: modele z Blendera', () => {
       knight += (await load(n)).tris * count;
     }
     expect(knight).toBeLessThanOrEqual(300);
+    // Osadnik: cialo + najciezsze nakrycie glowy + najciezsze narzedzie.
+    let body = 0;
+    for (const [n, count] of [['serf_torso', 1], ['serf_head', 1], ['serf_leg', 2], ['serf_arm', 2]] as const) body += (await load(n)).tris * count;
+    let hat = 0, tool = 0;
+    for (const h of HATS) hat = Math.max(hat, (await load(`hat_${h}`)).tris);
+    for (const t of TOOLS) tool = Math.max(tool, (await load(`tool_${t}`)).tris);
+    expect(body + hat + tool).toBeLessThanOrEqual(300);
     const total = readdirSync(DIR).reduce((a, f) => a + statSync(`${DIR}/${f}`).size, 0);
     expect(total).toBeLessThan(5 * 1024 * 1024);
   });

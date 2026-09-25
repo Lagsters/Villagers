@@ -58,6 +58,10 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 - UI: ustawienia gospodarki (rozdział, narzędzia, kolejność transportu, obsada), statystyki (wykres
   porównawczy z legendą, etykietami i tabelą; tabela towarów).
 
+### Po M10: modele
+- Budynki przebudowane w stylu pierwszej części serii (terakota, bielone ściany, deski, bale, unikalne
+  sylwetki), kamera 44°, postacie z nakryciami głowy i narzędziami zawodów (docs/DECISIONS.md).
+
 ## Dalej
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.
 

@@ -35,6 +35,11 @@ PALETTE = {
     'skin': '#f0c8a0', 'hair': '#5a3b24', 'cloth': '#ffffff', 'trousers': '#5b4a3c', 'boots': '#3a2f28',
     'donkey': '#8f8578', 'donkey_dark': '#6a6258', 'deer': '#a8703f', 'deer_light': '#d8b58a',
     'pig': '#f0a8a8', 'cream': '#f4ecd8', 'red': '#c0392b', 'white': '#f2f2f2', 'black': '#222222',
+    'roof_red_dark': '#8e3a2e', 'roof_brown_dark': '#62412a', 'roof_green_dark': '#4a6630', 'roof_blue_dark': '#3d5474',
+    'roof_slate_dark': '#474e58', 'thatch_dark': '#a8863f', 'glass': '#34465a', 'shutter': '#4f7a52',
+    'brick': '#a2553f', 'brick_dark': '#7c3f2f',
+    'terracotta': '#c9582c', 'terracotta_dark': '#933d1d', 'whitewash': '#ece7dc', 'plank': '#b35a2b', 'plank_dark': '#7a3a1b',
+    'log_o': '#a55a2f', 'rock': '#8d8a84',
     'bread': '#c98a3d', 'fish': '#8fb3cc', 'meat': '#b5483c', 'flour': '#f5f1e6', 'beer': '#d9a441',
 }
 
@@ -134,6 +139,29 @@ class Model:
         self._xf(bm, x, y, z)
         return self._add(bm, col)
 
+    def cbox(self, w, d, h, x=0.0, y=0.0, z=0.0, col='wall', rx=0.0, ry=0.0, rz=0.0, jitter=0.04):
+        """Prostopadloscian ze srodkiem w (x, y, z) - wygodny do obracanych plyt (polacie dachu, belki)."""
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.scale(bm, vec=(w, d, h), verts=bm.verts)
+        self._xf(bm, x, y, z, rz, rx, ry)
+        return self._add(bm, col, jitter)
+
+    def beam(self, p0, p1, t=0.03, col='wood_dark'):
+        """Belka o przekroju t x t miedzy punktami p0 i p1 (krotki od zera do dowolnego kierunku)."""
+        a, b = Vector(p0), Vector(p1)
+        d = b - a
+        length = d.length
+        if length < 1e-6:
+            return None
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.scale(bm, vec=(t, t, length), verts=bm.verts)
+        rot = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_matrix().to_4x4()
+        mid = (a + b) / 2
+        bmesh.ops.transform(bm, matrix=Matrix.Translation(mid) @ rot, verts=bm.verts)
+        return self._add(bm, col)
+
     def wedge(self, w, d, h, x=0.0, y=0.0, z=0.0, col='wood', rz=0.0):
         """Klin (pochylnia): wysoki na +Y."""
         bm = bmesh.new()
@@ -145,8 +173,11 @@ class Model:
         self._xf(bm, x, y, z, rz)
         return self._add(bm, col)
 
-    def finish(self, rotate_deg=0.0):
-        """Laczy czesci w jeden obiekt, trianguluje i obraca. Zwraca obiekt."""
+    def finish(self, rotate_deg=0.0, ao=0.0, ao_height=0.35):
+        """
+        Laczy czesci w jeden obiekt, trianguluje i obraca. Zwraca obiekt.
+        ao > 0 przyciemnia wierzcholki przy ziemi (tani odpowiednik ambient occlusion w kolorach).
+        """
         bpy.ops.object.select_all(action='DESELECT')
         for p in self.parts:
             p.select_set(True)
@@ -164,6 +195,14 @@ class Model:
         bmesh.ops.triangulate(bm, faces=bm.faces)
         bm.to_mesh(ob.data)
         bm.free()
+        if ao > 0:
+            me = ob.data
+            attr = me.color_attributes['Col']
+            for loop in me.loops:
+                z = me.vertices[loop.vertex_index].co.z
+                k = 1.0 - ao * (1.0 - min(1.0, max(0.0, z / ao_height)))
+                c = attr.data[loop.index].color
+                attr.data[loop.index].color = (c[0] * k, c[1] * k, c[2] * k, 1.0)
         return ob
 
 
@@ -220,7 +259,8 @@ def render_preview(ob, name=None, size=256, icon=96):
     cam_data.ortho_scale = radius * 1.75
     cam = bpy.data.objects.new('cam', cam_data)
     scene.collection.objects.link(cam)
-    direction = Vector((0.45, -0.78, 0.62)).normalized()
+    # Jak kamera w grze (od poludnia, 44 stopnie nad horyzontem), lekko z boku dla czytelnosci ikon.
+    direction = Vector((0.12, -0.72, 0.69)).normalized()
     cam.location = center + direction * (radius * 6 + 2)
     cam.rotation_euler = (-direction).to_track_quat('-Z', 'Y').to_euler()
     scene.camera = cam
@@ -243,13 +283,13 @@ def selected_names(all_names):
     return [n for n in all_names if not names or n in names]
 
 
-def build(builders, icons=True):
+def build(builders, icons=True, ao=0.0):
     """Buduje wybrane modele: builders = {nazwa: funkcja(Model)->rotacja}. Wypisuje liczbe trojkatow."""
     for name in selected_names(list(builders)):
         reset()
         m = Model(name)
         rot = builders[name](m) or 0.0
-        ob = m.finish(rot)
+        ob = m.finish(rot, ao=ao)
         export(ob)
         render_preview(ob, icon=96 if icons else 0)
         print(f'MODEL {name} tris={tri_count(ob)}')
