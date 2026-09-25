@@ -16,10 +16,38 @@ import { LocalDriver } from './game/session.ts';
 import { button, el } from './ui/dom.ts';
 import { loadPrefs, savePrefs, showConnecting, showLobby, showMainMenu, showMultiplayer, showOptions, type MenuActions } from './ui/menu.ts';
 import { Modal } from './ui/modal.ts';
+import { loadModels } from './render/assets.ts';
+import { MenuBackdrop } from './ui/backdrop.ts';
 
 const app = document.getElementById('app')!;
 const prefs = loadPrefs();
 let game: GameView | null = null;
+let backdrop: MenuBackdrop | null = null;
+let menuRoot: HTMLElement | null = null;
+
+/** Warstwa ekranow menu; przy pierwszym uzyciu tworzy tez tlo 3D (poza niska jakoscia). */
+function ui(): HTMLElement {
+  if (!menuRoot || !menuRoot.isConnected) {
+    menuRoot = el('div', 'menu-layer');
+    app.appendChild(menuRoot);
+  }
+  if (!backdrop && prefs.graphics.quality !== 'low') {
+    try {
+      backdrop = new MenuBackdrop(app, graphics());
+    } catch {
+      backdrop = null;
+    }
+  }
+  return menuRoot;
+}
+
+/** Zamyka menu i tlo przed wejsciem do gry. */
+function closeMenu(): void {
+  backdrop?.dispose();
+  backdrop = null;
+  menuRoot?.remove();
+  menuRoot = null;
+}
 let room: NetHost | NetClient | null = null;
 const SAVE_KEY = 'osadnicy.save';
 
@@ -32,7 +60,7 @@ function endGame(): void {
 
 function toMenu(): void {
   endGame();
-  showMainMenu(app, prefs, actions);
+  showMainMenu(ui(), prefs, actions);
 }
 
 function graphics() {
@@ -54,8 +82,9 @@ function localDriverFor(state: GameState): LocalDriver {
 
 function startLocalState(state: GameState): void {
   endGame();
+  closeMenu();
   app.textContent = '';
-  game = new GameView(app, state, localDriverFor(state), 0, { graphics: graphics(), network: false, onMenu: () => gameMenu(false) });
+  game = new GameView(app, state, localDriverFor(state), 0, { graphics: graphics(), volume: prefs.volume, network: false, onMenu: () => gameMenu(false) });
   app.dataset.ready = '1';
 }
 
@@ -118,8 +147,9 @@ function gameMenu(network: boolean): void {
 function startNetGame(config: GameConfig, player: number, driver: LockstepHost | LockstepClient): void {
   const state = createGame(config);
   game?.dispose();
+  closeMenu();
   app.textContent = '';
-  game = new GameView(app, state, driver, player, { graphics: graphics(), network: true, onMenu: () => gameMenu(true) });
+  game = new GameView(app, state, driver, player, { graphics: graphics(), volume: prefs.volume, network: true, onMenu: () => gameMenu(true) });
   app.dataset.ready = '1';
   app.dataset.net = 'game';
   driver.onDesync = (d) => {
@@ -147,7 +177,7 @@ async function connectSignal(): Promise<SignalClient> {
 }
 
 async function createRoom(name: string): Promise<void> {
-  showConnecting(app, 'Łączenie z serwerem…', () => { room?.close(); room = null; showMultiplayer(app, prefs, actions); });
+  showConnecting(ui(), 'Łączenie z serwerem…', () => { room?.close(); room = null; showMultiplayer(ui(), prefs, actions); });
   try {
     const sig = await connectSignal();
     const code = await sig.create(name);
@@ -155,7 +185,7 @@ async function createRoom(name: string): Promise<void> {
     room = host;
     const redraw = () => {
       if (game) return;
-      showLobby(app, host.state, {
+      showLobby(ui(), host.state, {
         isHost: true,
         myPeer: sig.peerId,
         setReady: () => {},
@@ -165,26 +195,26 @@ async function createRoom(name: string): Promise<void> {
         remove: (i) => host.removePlayer(i),
         start: () => host.start(),
         canStart: () => host.canStart(),
-        leave: () => { host.close(); room = null; showMultiplayer(app, prefs, actions); },
+        leave: () => { host.close(); room = null; showMultiplayer(ui(), prefs, actions); },
       });
       app.dataset.net = 'lobby';
     };
     host.events = {
       onLobby: redraw,
       onStart: (cfg, player, driver) => startNetGame(cfg, player, driver),
-      onError: (t) => { endGame(); showMultiplayer(app, prefs, actions, t); },
+      onError: (t) => { endGame(); showMultiplayer(ui(), prefs, actions, t); },
       onPeerLeft: (n) => game?.hud.toast(`${n} opuścił grę`, 'warn'),
     };
     redraw();
     // Odswiezanie przycisku startu, gdy kanaly sie otwieraja.
     const iv = setInterval(() => { if (room !== host || game) clearInterval(iv); else redraw(); }, 1000);
   } catch (e) {
-    showMultiplayer(app, prefs, actions, (e as Error).message);
+    showMultiplayer(ui(), prefs, actions, (e as Error).message);
   }
 }
 
 async function joinRoom(code: string, name: string): Promise<void> {
-  showConnecting(app, 'Dołączanie…', () => { room?.close(); room = null; showMultiplayer(app, prefs, actions); });
+  showConnecting(ui(), 'Dołączanie…', () => { room?.close(); room = null; showMultiplayer(ui(), prefs, actions); });
   try {
     const sig = await connectSignal();
     const hostId = await sig.join(code, name);
@@ -195,7 +225,7 @@ async function joinRoom(code: string, name: string): Promise<void> {
       onLobby: (st) => {
         if (game) return;
         myColor = st.players.find((p) => p.peerId === sig.peerId)?.color ?? myColor;
-        showLobby(app, st, {
+        showLobby(ui(), st, {
           isHost: false,
           myPeer: sig.peerId,
           setReady: (v) => client.setReady(v),
@@ -205,20 +235,20 @@ async function joinRoom(code: string, name: string): Promise<void> {
           remove: () => {},
           start: () => {},
           canStart: () => false,
-          leave: () => { client.close(); room = null; showMultiplayer(app, prefs, actions); },
+          leave: () => { client.close(); room = null; showMultiplayer(ui(), prefs, actions); },
         });
         app.dataset.net = 'lobby';
       },
       onStart: (cfg, player, driver) => startNetGame(cfg, player, driver),
       onHostLost: () => {
         if (game) game.showMessage('Koniec gry', 'Gospodarz opuścił grę - rozgrywka zakończona.', [['Menu', toMenu]]);
-        else { room = null; showMultiplayer(app, prefs, actions, 'Gospodarz zamknął pokój.'); }
+        else { room = null; showMultiplayer(ui(), prefs, actions, 'Gospodarz zamknął pokój.'); }
       },
-      onError: (t) => { room = null; showMultiplayer(app, prefs, actions, t); },
+      onError: (t) => { room = null; showMultiplayer(ui(), prefs, actions, t); },
     };
-    showConnecting(app, 'Łączenie z gospodarzem…', () => { client.close(); room = null; showMultiplayer(app, prefs, actions); });
+    showConnecting(ui(), 'Łączenie z gospodarzem…', () => { client.close(); room = null; showMultiplayer(ui(), prefs, actions); });
   } catch (e) {
-    showMultiplayer(app, prefs, actions, signalErrorText((e as Error).message));
+    showMultiplayer(ui(), prefs, actions, signalErrorText((e as Error).message));
   }
 }
 
@@ -228,11 +258,22 @@ const actions: MenuActions = {
   joinRoom: (c, n) => void joinRoom(c, n),
   loadSaved,
   hasSave,
-  options: () => showOptions(app, prefs, () => { savePrefs(prefs); showMainMenu(app, prefs, actions); }),
+  options: () => showOptions(ui(), prefs, () => { savePrefs(prefs); showMainMenu(ui(), prefs, actions); }),
 };
 
-// Szybki start (dev, testy e2e): ?map=KOD&size=64&players=2
+// Ekran ladowania modeli, potem menu albo szybki start (dev, testy e2e): ?map=KOD&size=64&players=2
 const params = new URLSearchParams(location.search);
+const loading = el('div', 'menu-screen');
+const loadingCard = el('div', 'menu-card');
+loadingCard.appendChild(el('h1', 'menu-title', 'Osadnicy Doliny'));
+const bar = el('div', 'load-bar');
+const fill = el('div', 'load-fill');
+bar.appendChild(fill);
+loadingCard.appendChild(bar);
+loading.appendChild(loadingCard);
+app.appendChild(loading);
+await loadModels((f) => { fill.style.width = `${Math.round(f * 100)}%`; });
+loading.remove();
 if (params.has('map')) {
   const n = Number(params.get('players') ?? 2);
   startLocalState(createGame({
@@ -242,6 +283,6 @@ if (params.has('map')) {
     seed: Number(params.get('seed') ?? 1),
   }));
 } else {
-  showMainMenu(app, prefs, actions);
+  showMainMenu(ui(), prefs, actions);
   app.dataset.ready = 'menu';
 }

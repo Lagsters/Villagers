@@ -87,8 +87,8 @@ export function getModel(name: string): THREE.BufferGeometry {
   let g = registry.get(name);
   if (!g) {
     const b = builders[name];
-    if (!b) throw new Error(`Brak modelu ${name}`);
-    g = b();
+    // Brak zastepnika: maly szescian (model .glb zwykle zdazy sie wczytac).
+    g = b ? b() : merge([colored(new THREE.BoxGeometry(0.1, 0.1, 0.1), [0.8, 0.8, 0.8])]);
     registry.set(name, g);
   }
   return g;

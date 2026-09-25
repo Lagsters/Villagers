@@ -74,7 +74,7 @@ export class MapObjectsRenderer {
         const r = hashf(i, 3) * Math.PI * 2;
         if (isTree(o)) {
           const k = hashf(i, 4) < 0.55 ? 0 : 1;
-          const s = o === O.TREE ? 0.85 + hashf(i, 5) * 0.35 : 0.2 + (o - O.SAPLING1) * 0.15;
+          const s = o === O.TREE ? 0.62 + hashf(i, 5) * 0.25 : 0.15 + (o - O.SAPLING1) * 0.11;
           list.push({ k, x: px, y: py, z: pz, r, s, sy: s });
         } else if (o === O.STUMP) {
           list.push({ k: 2, x: px, y: py, z: pz, r, s: 1, sy: 1 });

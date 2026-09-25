@@ -9,7 +9,7 @@
 - [ ] M5 Terytorium i wojsko
 - [x] M6 AI
 - [x] M7 Sieć
-- [ ] M8 Grafika
+- [x] M8 Grafika
 - [ ] M9 Wydajność i dopracowanie
 - [ ] M10 Wydanie
 

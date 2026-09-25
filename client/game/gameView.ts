@@ -4,7 +4,8 @@
  */
 import '../../sim/index.ts';
 import { findRoadPath } from '../../sim/roads.ts';
-import { spiral } from '../../sim/grid.ts';
+import { hexDist, spiral } from '../../sim/grid.ts';
+import { Sound } from '../audio.ts';
 import type { GameState } from '../../sim/types.ts';
 import { canBuild, canPlaceFlag, neighbor } from '../../sim/world.ts';
 import { InputController } from '../input.ts';
@@ -16,6 +17,7 @@ import { GameSession, type TickDriver } from './session.ts';
 
 export interface GameViewOptions {
   graphics: GraphicsOptions;
+  volume: number;
   /** gra sieciowa: bez zmiany tempa i pauzy */
   network: boolean;
   onMenu(): void;
@@ -32,6 +34,7 @@ export class GameView {
   private endShown = false;
   private onResize: () => void;
   private overlay: HTMLElement | null = null;
+  readonly sound: Sound;
 
   constructor(app: HTMLElement, state: GameState, driver: TickDriver, localPlayer: number, opts: GameViewOptions) {
     this.app = app;
@@ -45,6 +48,8 @@ export class GameView {
     window.addEventListener('resize', this.onResize);
     this.view.lookAtIdx(state.players[localPlayer].start);
     this.session = new GameSession(state, driver, localPlayer);
+    this.sound = new Sound(opts.volume);
+    this.sound.ambient(true);
     this.hud = new Hud(app, this.session, {
       setPreview: (cells, ok) => this.view.overlay.setPreview(this.session.state, cells, ok),
       setCursor: (i) => this.view.setCursor(i),
@@ -55,7 +60,10 @@ export class GameView {
     });
     this.hud.setSpeedEnabled(!opts.network);
     this.input = new InputController(this.canvas, this.view.cam, {
-      onTap: (x, y, b) => this.hud.onTap(this.view.pick(x, y), b),
+      onTap: (x, y, b) => {
+        this.sound.click();
+        this.hud.onTap(this.view.pick(x, y), b);
+      },
       onHover: (x, y) => this.hud.onHover(this.view.pick(x, y)),
       onKey: (e) => this.hud.onKey(e),
     }, () => this.view.height);
@@ -82,6 +90,10 @@ export class GameView {
         const ev = this.session.takeEvents();
         this.view.syncState(this.session.state, ev);
         this.hud.onEvents(ev);
+        const center = this.view.centerIdx();
+        const w = this.session.state.map.w;
+        const reach = Math.ceil(16 / this.view.cam.zoom);
+        this.sound.onEvents(ev, this.session.localPlayer, (pos) => hexDist(pos % w, (pos / w) | 0, center % w, (center / w) | 0) <= reach);
         if (this.session.state.winner !== -1 && !this.endShown) {
           this.endShown = true;
           this.showEnd(this.session.state.winner);
@@ -126,6 +138,7 @@ export class GameView {
 
   dispose(): void {
     cancelAnimationFrame(this.raf);
+    this.sound.ambient(false);
     window.removeEventListener('resize', this.onResize);
     this.input.dispose();
     this.session.driver.dispose?.();

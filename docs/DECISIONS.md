@@ -90,3 +90,21 @@ Drogi wodne z łodziami zostają (część pierwsza).
   działają w Chromium i Firefoksie.
 - **W CI Firefox działa z oknem pod xvfb** (headless Firefox na Linuksie nie ma WebGL).
 - Diagnostyka połączeń: `localStorage.debugNet = '1'` włącza logi `[rtc]` w konsoli.
+
+## 2026-09-25 — M8 (grafika i dźwięk)
+
+- **Modele wyłącznie ze skryptów** `art/scripts/{nature,units,goods,buildings}.py` (bpy, `--background`),
+  wspólna biblioteka `lib.py`: bryły z kolorem w wierzchołkach z jednej palety, bez tekstur.
+  `npm run art` generuje wszystko (`art/models/*.glb`, `art/previews/*.png`, `art/icons/*.png`).
+  Wygenerowane pliki są w repozytorium, żeby CI i GitHub Pages nie potrzebowały Blendera.
+- **Budżet domów (średnich) 1200 trójkątów** - specyfikacja podaje tylko mały (800) i duży (2000).
+  Faktycznie budynki mają 98-664 trójkątów.
+- **Animacje bez szkieletu:** osadnik składa się z części (tułów, głowa, 2 nogi, 2 ręce, u rycerza hełm,
+  tarcza, miecz), każda na własnym InstancedMesh, ruch liczony w kodzie (wahadło nóg i rąk, ręce nad głową
+  przy noszeniu, zamach mieczem). Skrzydła wiatraka to osobny model obracany w rendererze.
+- **Jednostki są w skali 1,25** względem budynków (czytelność z kamery izometrycznej).
+- **Ikony UI to rendery modeli** (96 px, przezroczyste tło) - te same modele co w grze, spójny styl.
+- **Dźwięk proceduralny w WebAudio** (oscylatory + szum), bez plików; odgłosy świata tylko w kadrze kamery,
+  z limitem częstotliwości.
+- **Tło menu** to mała partia dwóch botów z krążącą kamerą; wyłączone przy niskiej jakości grafiki.
+- Rozmiar: kod + CSS ~215 KB gzip (limit 2 MB), modele 644 KB, ikony 552 KB (razem z modelami < 5 MB).

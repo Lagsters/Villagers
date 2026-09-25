@@ -90,6 +90,8 @@ export class InstancedLayer {
 
   end(): void {
     this.mesh.count = this.n;
+    // Pusta warstwa nie generuje wywolania rysowania.
+    this.mesh.visible = this.n > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }

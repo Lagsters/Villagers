@@ -7,11 +7,27 @@ import { DIR_SE } from '../../sim/grid.ts';
 import { findRoadPath, roadAt } from '../../sim/roads.ts';
 import { STAGE, type Building, type GameEvent, type GameState } from '../../sim/types.ts';
 import { attackersAvailable } from '../../sim/military.ts';
+import { iconUrl } from '../render/assets.ts';
 import { canBuild, canPlaceFlag, neighbor } from '../../sim/world.ts';
 import type { GameSession } from '../game/session.ts';
 import { el, button, clear } from './dom.ts';
 
 const TERRAIN_PL = ['Woda', 'Trawa', 'Pustynia', 'Góry', 'Śnieg'];
+
+/** Ikona towaru z liczba (tooltip z nazwa). */
+function goodChip(g: number, n: number): HTMLElement {
+  const chip = el('span', 'inv-item good-chip');
+  chip.title = GOOD_NAMES_PL[g];
+  const src = iconUrl(`good_${g}`);
+  if (src) {
+    const img = el('img', 'good-icon');
+    img.src = src;
+    img.alt = GOOD_NAMES_PL[g];
+    chip.appendChild(img);
+  } else chip.appendChild(el('span', '', GOOD_NAMES_PL[g] + ':'));
+  chip.appendChild(el('b', '', String(n)));
+  return chip;
+}
 const RES_PL = ['nic', 'węgiel', 'żelazo', 'złoto', 'kamień', 'ryby'];
 const STAGE_PL = ['Wyrównywanie terenu', 'W budowie', 'Gotowy', 'Płonie'];
 
@@ -67,10 +83,17 @@ export class Hud {
     }
     this.top.appendChild(speeds);
     const res = el('span', 'res');
-    for (const [key, label] of [['plank', 'Deski'], ['stone', 'Kamień'], ['lumber', 'Pnie'], ['food', 'Jedzenie'], ['tools', 'Narzędzia'], ['gold', 'Złoto'], ['serfs', 'Osadnicy'], ['knights', 'Rycerze']] as const) {
+    const RES_ICON: Record<string, string> = { plank: 'good_9', stone: 'good_11', lumber: 'good_8', food: 'good_5', tools: 'good_18', gold: 'good_16', serfs: 'icon_serf', knights: 'icon_knight' };
+    for (const [key, label] of [['plank', 'Deski'], ['stone', 'Kamień'], ['lumber', 'Pnie'], ['food', 'Jedzenie'], ['tools', 'Narzędzia'], ['gold', 'Monety'], ['serfs', 'Osadnicy'], ['knights', 'Rycerze']] as const) {
       const item = el('span', `res-item res-${key}`);
       item.title = label;
-      item.appendChild(el('span', 'res-label', label));
+      const src = iconUrl(RES_ICON[key]);
+      if (src) {
+        const img = el('img', 'res-icon');
+        img.src = src;
+        img.alt = label;
+        item.appendChild(img);
+      } else item.appendChild(el('span', 'res-label', label));
       const v = el('b', '', '0');
       item.appendChild(v);
       this.resEls.set(key, v);
@@ -405,6 +428,13 @@ export class Hud {
         }, `${d.name} — koszt: ${d.planks} desek, ${d.stones} kamieni`);
         b.classList.add('build-btn');
         b.dataset.kind = String(k);
+        const src = iconUrl(`building_${k}`);
+        if (src) {
+          const img = el('img', 'bicon');
+          img.src = src;
+          img.alt = '';
+          b.appendChild(img);
+        }
         b.appendChild(el('span', 'bname', d.name));
         b.appendChild(el('span', 'bcost', cost));
         grid.appendChild(b);
@@ -430,7 +460,7 @@ export class Hud {
       if (b.inv) {
         const inv = b.inv;
         const list = el('div', 'inv-list');
-        for (let g = 0; g < GOODS_COUNT; g++) if (inv.goods[g] > 0) list.appendChild(el('span', 'inv-item', `${GOOD_NAMES_PL[g]}: ${inv.goods[g]}`));
+        for (let g = 0; g < GOODS_COUNT; g++) if (inv.goods[g] > 0) list.appendChild(goodChip(g, inv.goods[g]));
         this.panel.appendChild(el('h4', '', 'Towary'));
         this.panel.appendChild(list);
         const sl = el('div', 'inv-list');
