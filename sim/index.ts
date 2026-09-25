@@ -7,13 +7,10 @@ import { sweepMap } from './mapsweep.ts';
 import { updateProduction, updateWorkerOut } from './production.ts';
 import { hooks } from './step.ts';
 
-let registered = false;
-if (!registered) {
-  registered = true;
-  hooks.preTick.push(sweepMap, updateAnimals);
-  hooks.serf.push((s, serf) => updateWorkerOut(s, serf));
-  hooks.building.push(updateProduction);
-}
+// Modul ES wykonuje sie raz, wiec rejestracja nastepuje dokladnie jeden raz.
+hooks.preTick.push(sweepMap, updateAnimals);
+hooks.serf.push((s, serf) => updateWorkerOut(s, serf));
+hooks.building.push(updateProduction);
 
 export { createGame } from './state.ts';
 export { step, hooks } from './step.ts';
