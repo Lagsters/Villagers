@@ -92,3 +92,4 @@ select { font: inherit; color: var(--text); background: #262b20; border: 1px sol
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .end-screen { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--accent); border-radius: 14px; padding: 24px 40px; text-align: center; z-index: 30; }
 .end-screen h1 { margin: 0 0 8px; color: var(--accent); }
+.fatal { max-width: 480px; margin: 15vh auto; padding: 24px; text-align: center; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; }

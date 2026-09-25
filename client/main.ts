@@ -24,7 +24,14 @@ const state = createGame({
   seed: 1,
 });
 
-const view = new SceneRenderer(canvas, { quality: 'medium', maxDpr: 1, fpsLimit: 30 });
+let view: SceneRenderer;
+try {
+  view = new SceneRenderer(canvas, { quality: 'medium', maxDpr: 1, fpsLimit: 30 });
+} catch (e) {
+  app.innerHTML = '<div class="fatal"><h1>Brak WebGL</h1><p>Ta przeglądarka nie może wyświetlić grafiki 3D (WebGL). Włącz akcelerację sprzętową albo użyj aktualnej przeglądarki.</p></div>';
+  app.dataset.ready = 'nowebgl';
+  throw e;
+}
 view.setMap(state.map);
 const fit = () => view.resize(app.clientWidth, app.clientHeight);
 fit();

@@ -15,7 +15,16 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 } },
+    {
+      name: 'firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        viewport: { width: 1280, height: 720 },
+        deviceScaleFactor: 1,
+        // Headless Firefox na serwerze CI bez GPU domyslnie wylacza WebGL - wlaczamy programowe.
+        launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false, 'webgl.enable-webgl2': true } },
+      },
+    },
   ],
   webServer: [
     {
