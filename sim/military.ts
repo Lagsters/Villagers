@@ -290,7 +290,7 @@ function returnKnight(s: GameState, k: Serf): void {
 /** Wysyla obronce z budynku przeciwko czekajacemu atakujacemu. */
 function sendDefender(s: GameState, b: Building, attacker: Serf): void {
   const m = s.map;
-  let d: Serf | null = null;
+  let d: Serf;
   if (b.inv) {
     let lvl = -1;
     for (let l = 4; l >= 0; l--) if (b.inv.knights[l] > 0) { lvl = l; break; }
