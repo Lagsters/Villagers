@@ -13,6 +13,11 @@ export default tseslint.config(
     },
   },
   {
+    // Testy e2e siegaja do window.__game z page.evaluate - tam `any` jest uzasadnione.
+    files: ['tests/e2e/**/*.ts'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+  {
     // Symulacja musi byc deterministyczna: zakaz Math.random, Date i floatowych funkcji Math.
     files: ['sim/**/*.ts'],
     rules: {
