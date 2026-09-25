@@ -9,6 +9,7 @@ import { defaultSettings } from './settings.ts';
 import type { GameConfig, GameState, PlayerState } from './types.ts';
 import { SIM_VERSION } from './version.ts';
 import { recomputeTerritory } from './world.ts';
+import { ANIMAL_SPAWN_TICKS, maxAnimals, spawnAnimal } from './animals.ts';
 
 export type { GameConfig, GameState, PlayerState } from './types.ts';
 
@@ -50,6 +51,7 @@ export function createGame(input: GameConfig): GameState {
     morale: 50,
     territory: 0,
     lastAttacked: -1,
+    toolWant: new Array(9).fill(0),
   }));
   const s: GameState = {
     version: SIM_VERSION,
@@ -66,6 +68,9 @@ export function createGame(input: GameConfig): GameState {
     freeRoads: [],
     freeBuildings: [],
     freeSerfs: [],
+    animals: [],
+    freeAnimals: [],
+    animalTimer: ANIMAL_SPAWN_TICKS,
     sweep: 0,
     winner: -1,
     _events: [],
@@ -84,6 +89,8 @@ export function createGame(input: GameConfig): GameState {
     pl.totalSerfs = START_SERFS + START_KNIGHTS.reduce((a, b) => a + b, 0);
     recomputeTerritory(s, pl.start, 9);
   }
+  const initialAnimals = maxAnimals(s) >> 1;
+  for (let i = 0; i < initialAnimals * 4 && s.animals.length < initialAnimals; i++) spawnAnimal(s);
   s._events = [];
   return s;
 }

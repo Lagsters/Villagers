@@ -28,6 +28,7 @@ function onBuildingArrive(s: GameState, serf: Serf, b: Building): void {
   if (constructionArrive(serf, b)) return;
   if (b.worker === serf.id && b.stage === STAGE.DONE && BUILDINGS[b.kind].worker === serf.type) {
     b.workerInside = true;
+    serf.home = b.id;
     serf.state = SS.INSIDE;
     serf.anim = 0;
     serf.timer = 0;

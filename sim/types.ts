@@ -122,6 +122,18 @@ export interface Serf {
   anim: number;
 }
 
+/** Dzikie zwierze (cel mysliwego). */
+export interface Animal {
+  id: number;
+  pos: number;
+  to: number;
+  t: number;
+  dur: number;
+  timer: number;
+  /** id mysliwego, ktory je sciga, albo -1 */
+  hunter: number;
+}
+
 export interface Settings {
   /** kolejnosc towarow: transportPrio[g] = priorytet (wiekszy = wazniejszy) */
   transportPrio: number[];
@@ -171,8 +183,10 @@ export interface PlayerState {
   stats: Stats;
   morale: number;
   territory: number;
-  /** zdarzenia do UI (nie wplywaja na logike): ostatni atak itp. */
+  /** tick ostatniego ataku na gracza (komunikat w UI) */
   lastAttacked: number;
+  /** ilu osadnikow czeka na narzedzie danego typu (dla narzedziowni) */
+  toolWant: number[];
 }
 
 export interface GameConfig {
@@ -197,6 +211,9 @@ export interface GameState {
   freeRoads: number[];
   freeBuildings: number[];
   freeSerfs: number[];
+  animals: (Animal | null)[];
+  freeAnimals: number[];
+  animalTimer: number;
   /** kursor przegladu mapy (wzrost drzew, pol, ryb) */
   sweep: number;
   winner: number;

@@ -33,9 +33,30 @@ export function findSite(s: GameState, p: number, kind: number, minDist = 3, max
   return -1;
 }
 
+/** Miejsce z najlepszym wynikiem funkcji oceny (np. liczba skal w promieniu). */
+export function findSiteBest(s: GameState, p: number, kind: number, score: (pos: number) => number, maxDist = 10): number {
+  const castle = s.buildings[s.players[p].castle]!;
+  const w = s.map.w;
+  let best = -1;
+  let bestScore = -Infinity;
+  for (const i of spiral(w, s.map.h, castle.pos % w, (castle.pos / w) | 0, maxDist)) {
+    if (!canBuild(s, p, i, kind)) continue;
+    const sc = score(i);
+    if (sc > bestScore) { bestScore = sc; best = i; }
+  }
+  return best;
+}
+
+/** Liczba pol spelniajacych warunek w promieniu r od pos. */
+export function countNear(s: GameState, pos: number, r: number, pred: (i: number) => boolean): number {
+  let n = 0;
+  for (const i of spiral(s.map.w, s.map.h, pos % s.map.w, (pos / s.map.w) | 0, r)) if (pred(i)) n++;
+  return n;
+}
+
 /** Stawia budynek i laczy jego flage droga z flaga zamku. */
-export function buildConnected(s: GameState, p: number, kind: number, minDist = 3, maxDist = 8): { pos: number; ok: boolean } {
-  const pos = findSite(s, p, kind, minDist, maxDist);
+export function buildConnected(s: GameState, p: number, kind: number, minDist = 3, maxDist = 8, score?: (pos: number) => number): { pos: number; ok: boolean } {
+  const pos = score ? findSiteBest(s, p, kind, score, maxDist) : findSite(s, p, kind, minDist, maxDist);
   if (pos < 0) return { pos, ok: false };
   step(s, [{ type: 'build', player: p, pos, kind }]);
   const flagPos = neighbor(s.map, pos, DIR_SE);

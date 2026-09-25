@@ -4,7 +4,7 @@
 - [x] M0 Szkielet
 - [x] M1 Mapa
 - [x] M2 Drogi i tragarze
-- [ ] M3 Budowa i pierwsze łańcuchy
+- [x] M3 Budowa i pierwsze łańcuchy
 - [ ] M4 Pełna gospodarka
 - [ ] M5 Terytorium i wojsko
 - [ ] M6 AI
@@ -42,8 +42,15 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
   znaczniki miejsc budowy, HUD (czas, tempo, zapasy), panel kontekstowy.
 - Testy: scenariusze transportu i budowy, determinizm (2 instancje + zapis/odczyt w połowie).
 
+### M3
+- Przegląd mapy (`sim/mapsweep.ts`): wzrost sadzonek i zboża, pnie, znaki, ruiny, odnawianie ryb.
+- Produkcja (`sim/production.ts`): warsztaty, kopalnie, zbieracze wychodzący w teren z rezerwacją celu,
+  wynoszenie wyrobów na flagę, wybór celu towaru. Od razu wszystkie budynki gospodarcze (M4 dopina testy).
+- Zwierzęta dla myśliwego. Rendering zwierząt.
+- E2E: budowa drwala i drogi przez prawdziwe kliknięcia w UI (Chromium + Firefox).
+
 ## Dalej
-M3: map sweep (wzrost drzew), drwal, leśnik, tartak, kamieniarz; e2e z budową przez UI.
+M4: testy pełnej gospodarki (kopalnie, huty, narzędzia, jedzenie), geolog, UI ustawień i statystyk.
 
 ## Znane problemy
 Brak.

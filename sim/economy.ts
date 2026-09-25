@@ -3,7 +3,7 @@
  * zamowienia towarow, osly na zatloczonych drogach, narodziny osadnikow, szkolenie rycerzy.
  * Przebieg dla gracza p odbywa sie co ECON_PERIOD tickow (fazy graczy sa przesuniete).
  */
-import { BUILDINGS, G, S, isInventory, isMilitary } from './defs.ts';
+import { BUILDINGS, FIRST_TOOL, G, S, SERF_TOOLS, isInventory, isMilitary } from './defs.ts';
 import { DIR_NW, DIR_SE, opposite } from './grid.ts';
 import { addTransit, demand, distWeight, flagGoodsCount, putGood } from './goods.ts';
 import { UNREACHABLE, flagDist, routeTo, walkRoute } from './routing.ts';
@@ -47,6 +47,18 @@ function pickInventoryForSerf(s: GameState, ctx: PassCtx, p: number, type: numbe
   return best;
 }
 
+/** Zapamietuje brak narzedzi, zeby narzedziownia wiedziala, co robic. */
+function noteMissingTools(s: GameState, ctx: PassCtx, p: number, type: number): void {
+  const tools = SERF_TOOLS[type];
+  if (tools.length === 0 || type === S.KNIGHT || type === S.SAILOR) return;
+  // Brak narzedzia tylko wtedy, gdy sa wolni osadnicy.
+  if (!ctx.invs.some((b) => b.inv!.serfs[S.GENERIC] > 0)) return;
+  const want = s.players[p].toolWant;
+  for (const g of tools) {
+    if (ctx.invs.every((b) => b.inv!.goods[g] <= 0)) want[g - FIRST_TOOL]++;
+  }
+}
+
 function noteSerfOut(ctx: PassCtx, b: Building): void {
   ctx.serfsOut.set(b.id, (ctx.serfsOut.get(b.id) ?? 0) + 1);
 }
@@ -54,7 +66,10 @@ function noteSerfOut(ctx: PassCtx, b: Building): void {
 /** Wysyla osadnika z magazynu do budynku. Zwraca id osadnika albo -1. */
 function dispatchSerfToBuilding(s: GameState, ctx: PassCtx, b: Building, type: number): number {
   const inv = pickInventoryForSerf(s, ctx, b.owner, type, b.flag);
-  if (!inv) return -1;
+  if (!inv) {
+    noteMissingTools(s, ctx, b.owner, type);
+    return -1;
+  }
   const route = walkRoute(s, b.owner, inv.flag, b.flag);
   if (!route) return -1;
   const serf = takeSerfFromInventory(s, inv, type);
@@ -224,6 +239,7 @@ export function economyPass(s: GameState, p: number): void {
   const invs = inventoriesOf(s, p);
   if (invs.length === 0) return;
   const ctx: PassCtx = { invs, goodsOut: new Map(), serfsOut: new Map() };
+  pl.toolWant.fill(0);
   serfRequests(s, ctx, p);
   goodsRequests(s, ctx, p);
   trainKnights(s, p, invs);

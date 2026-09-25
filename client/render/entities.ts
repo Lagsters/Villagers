@@ -45,6 +45,7 @@ export class EntitiesRenderer {
   private serfHead: InstancedLayer;
   private knightHead: InstancedLayer;
   private border: InstancedLayer;
+  private animals: InstancedLayer;
   private material: THREE.Material;
   private lastOwner: Uint8Array | null = null;
   private borderDirty = true;
@@ -61,6 +62,7 @@ export class EntitiesRenderer {
     this.serfHead = this.layer('serf_head', 512);
     this.knightHead = this.layer('knight_head', 64);
     this.border = this.layer('border', 1024, true);
+    this.animals = this.layer('animal', 64);
   }
 
   private layer(model: string, cap: number, color = false): InstancedLayer {
@@ -87,7 +89,26 @@ export class EntitiesRenderer {
     this.updateBuildings(s);
     this.updateFlags(s);
     this.updateSerfs(s, alpha);
+    this.updateAnimals(s, alpha);
     this.updateBorders(s);
+  }
+
+  private updateAnimals(s: GameState, alpha: number): void {
+    this.animals.begin();
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    for (const an of s.animals) {
+      if (!an) continue;
+      this.wp(s, an.pos, a);
+      let rot = an.id * 1.7;
+      if (an.to >= 0) {
+        this.wp(s, an.to, b);
+        rot = Math.atan2(b.x - a.x, b.z - a.z);
+        a.lerp(b, Math.min(1, (an.t + alpha) / Math.max(1, an.dur)));
+      }
+      this.animals.push(a.x, a.y, a.z, rot);
+    }
+    this.animals.end();
   }
 
   private updateBuildings(s: GameState): void {

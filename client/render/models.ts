@@ -189,3 +189,9 @@ registerBuilder('fire', () => merge([
 registerBuilder('border', () => merge([
   colored(at(new THREE.CylinderGeometry(0.025, 0.035, 0.22, 4), 0, 0.11, 0), [1, 1, 1]),
 ]));
+registerBuilder('animal', () => merge([
+  colored(at(new THREE.BoxGeometry(0.1, 0.1, 0.24), 0, 0.17, 0), [0.6, 0.42, 0.25]),
+  colored(at(new THREE.BoxGeometry(0.07, 0.08, 0.09), 0, 0.26, 0.13), [0.55, 0.38, 0.22]),
+  ...[[-0.035, -0.08], [0.035, -0.08], [-0.035, 0.08], [0.035, 0.08]].map(([x, z]) =>
+    colored(at(new THREE.BoxGeometry(0.025, 0.12, 0.025), x, 0.06, z), [0.4, 0.28, 0.18])),
+]));

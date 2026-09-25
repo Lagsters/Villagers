@@ -154,6 +154,15 @@ export class SceneRenderer {
     this.roads.sync(s);
   }
 
+  /** Pozycja pola na ekranie (piksele CSS wzgledem okna). */
+  project(idx: number): { x: number; y: number } {
+    const m = this.map;
+    const v = new THREE.Vector3(vx(idx % m.w, (idx / m.w) | 0), m.height[idx] * H_SCALE, vz((idx / m.w) | 0));
+    v.project(this.cam.camera);
+    const r = this.canvas.getBoundingClientRect();
+    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+  }
+
   /** Pole mapy pod srodkiem widoku. */
   centerIdx(): number {
     return nearestIdx(this.map, this.cam.target.x, this.cam.target.z);
