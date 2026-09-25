@@ -97,8 +97,9 @@ export function walkRoute(s: GameState, p: number, from: number, to: number): nu
   while (f !== to) {
     if (++guard > 10000) return null;
     const d = t.dir[f];
-    const flag = s.flags[f]!;
-    const road = s.roads[flag.roads[d]]!;
+    const flag = s.flags[f];
+    const road = flag && d >= 0 ? s.roads[flag.roads[d]] : null;
+    if (!road) return null;
     if (road.a === f) {
       for (const x of road.path) out.push(x);
       f = road.b;

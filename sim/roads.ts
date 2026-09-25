@@ -6,7 +6,7 @@ import { opposite } from './grid.ts';
 import { clearFlagGoods, rerouteFlags } from './goods.ts';
 import { invalidateRoutes } from './routing.ts';
 import { sendHome } from './serfs.ts';
-import { carrierAfterSplit, releaseClaims } from './transport.ts';
+import { carrierAfterSplit } from './transport.ts';
 import { FLAG_SLOTS, type Flag, type GameState, type Road } from './types.ts';
 import { allocId, canPlaceFlag, isClearObj, isLandWalkable, neighbor, ownedBy, walkCost } from './world.ts';
 import { cancelTransit } from './goods.ts';
@@ -205,11 +205,15 @@ export function removeRoad(s: GameState, rid: number): void {
     map.roads[r.cells[i]] &= ~(1 << r.path[i]);
     map.roads[r.cells[i + 1]] &= ~(1 << opposite(r.path[i]));
   }
+  // Najpierw usuwamy droge i uniewazniamy trasy - dopiero potem tragarze szukaja drogi do domu.
+  s.roads[rid] = null;
+  s.freeRoads.push(rid);
+  invalidateRoutes(s, r.owner);
   for (const sid of [r.carrier, r.donkey]) {
     if (sid < 0) continue;
     const serf = s.serfs[sid];
     if (!serf) continue;
-    releaseClaims(s, serf);
+    releaseClaimsOf(s, serf, fa, fb);
     if (serf.carry >= 0) {
       cancelTransit(s, serf.carryDest, serf.carry);
       serf.carry = -1;
@@ -219,10 +223,15 @@ export function removeRoad(s: GameState, rid: number): void {
     serf.road = -1;
     sendHome(s, serf);
   }
-  s.roads[rid] = null;
-  s.freeRoads.push(rid);
-  invalidateRoutes(s, r.owner);
   rerouteFlags(s, r.owner);
+}
+
+/** Zwalnia rezerwacje tragarza na flagach usuwanej drogi (droga juz nie istnieje w stanie). */
+function releaseClaimsOf(_s: GameState, serf: { id: number }, fa: Flag | null, fb: Flag | null): void {
+  for (const f of [fa, fb]) {
+    if (!f) continue;
+    for (let i = 0; i < FLAG_SLOTS; i++) if (f.slotClaim[i] === serf.id) f.slotClaim[i] = -1;
+  }
 }
 
 /** Usuwa flage razem z drogami i budynkiem. */

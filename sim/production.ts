@@ -32,14 +32,24 @@ function produced(s: GameState, b: Building, g: number, n = 1): void {
 
 // ---------- Warsztaty i kopalnie ----------
 
-/** Wybor narzedzia wg priorytetow i brakow. -1 = nic. */
+/** Zapas narzedzi pod dostatkiem - bez zapotrzebowania narzedziownia ich nie robi. */
+const TOOL_STOCK_ENOUGH = 4;
+
+/**
+ * Wybor narzedzia: waga = priorytet * (1 + czekajacy) * 16 - zapas * 4.
+ * Narzedzie bez czekajacych i z zapasem >= TOOL_STOCK_ENOUGH jest pomijane. -1 = nic.
+ */
 function chooseTool(s: GameState, p: number): number {
   const st = s.players[p].settings;
   const want = s.players[p].toolWant;
+  const stock = new Array(TOOLS_COUNT).fill(0);
+  for (const b of s.buildings) if (b && b.owner === p && b.inv) for (let t = 0; t < TOOLS_COUNT; t++) stock[t] += b.inv.goods[FIRST_TOOL + t];
   let best = -1;
   let bestScore = 0;
   for (let t = 0; t < TOOLS_COUNT; t++) {
-    const score = st.toolPrio[t] * (1 + want[t]);
+    if (st.toolPrio[t] <= 0) continue;
+    if (want[t] === 0 && stock[t] >= TOOL_STOCK_ENOUGH) continue;
+    const score = st.toolPrio[t] * (1 + want[t]) * 16 - stock[t] * 4 + 1;
     if (score > bestScore) {
       bestScore = score;
       best = t;

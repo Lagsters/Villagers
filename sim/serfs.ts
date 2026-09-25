@@ -53,12 +53,45 @@ export function killSerf(s: GameState, serf: Serf): void {
 // ---------- Magazyn ----------
 
 /** Czy magazyn moze wydac osadnika danego zawodu (sam albo wolny + narzedzia). */
+/** Zawody, ktorych bezczynnych przedstawicieli mozna przekwalifikowac (oddaja narzedzia). */
+function retrainable(t: number): boolean {
+  return t !== S.GENERIC && t !== S.TRANSPORTER && t !== S.KNIGHT && t !== S.DONKEY && t !== S.SAILOR;
+}
+
+/** Czy narzedzie jest w magazynie albo u bezczynnego specjalisty, ktory moze je oddac. */
+function toolAvailable(inv: Inventory, g: number, except: number): boolean {
+  if (inv.goods[g] > 0) return true;
+  for (let t = 0; t < inv.serfs.length; t++) {
+    if (t !== except && inv.serfs[t] > 0 && retrainable(t) && SERF_TOOLS[t].includes(g)) return true;
+  }
+  return false;
+}
+
+/** Przekwalifikowuje bezczynnego specjaliste w wolnego osadnika (narzedzia wracaja do puli). */
+function retrainOne(inv: Inventory, pred: (t: number) => boolean): boolean {
+  for (let t = 0; t < inv.serfs.length; t++) {
+    if (inv.serfs[t] > 0 && retrainable(t) && pred(t)) {
+      inv.serfs[t]--;
+      inv.serfs[S.GENERIC]++;
+      for (const g of SERF_TOOLS[t]) inv.goods[g]++;
+      return true;
+    }
+  }
+  return false;
+}
+
+function anyRetrainable(inv: Inventory, except: number): boolean {
+  for (let t = 0; t < inv.serfs.length; t++) if (t !== except && inv.serfs[t] > 0 && retrainable(t)) return true;
+  return false;
+}
+
+/** Czy magazyn moze wydac osadnika danego zawodu (sam, wolny + narzedzia, albo po przekwalifikowaniu). */
 export function canProvideSerf(inv: Inventory, type: number): boolean {
   if (type === S.KNIGHT) return inv.knights.some((k) => k > 0);
   if (inv.serfs[type] > 0) return true;
   if (type === S.DONKEY) return false;
-  if (inv.serfs[S.GENERIC] <= 0) return false;
-  for (const g of SERF_TOOLS[type]) if (inv.goods[g] <= 0) return false;
+  if (inv.serfs[S.GENERIC] <= 0 && !anyRetrainable(inv, type)) return false;
+  for (const g of SERF_TOOLS[type]) if (!toolAvailable(inv, g, type)) return false;
   return true;
 }
 
@@ -81,8 +114,14 @@ export function takeSerfFromInventory(s: GameState, b: Building, type: number, w
   } else if (inv.serfs[type] > 0) {
     inv.serfs[type]--;
   } else {
-    if (inv.serfs[S.GENERIC] <= 0) return null;
+    if (!canProvideSerf(inv, type)) return null;
+    // Brakujace narzedzia odzyskujemy od bezczynnych specjalistow.
+    for (const g of SERF_TOOLS[type]) {
+      if (inv.goods[g] <= 0) retrainOne(inv, (t) => t !== type && SERF_TOOLS[t].includes(g));
+    }
+    if (inv.serfs[S.GENERIC] <= 0) retrainOne(inv, (t) => t !== type);
     for (const g of SERF_TOOLS[type]) if (inv.goods[g] <= 0) return null;
+    if (inv.serfs[S.GENERIC] <= 0) return null;
     for (const g of SERF_TOOLS[type]) inv.goods[g]--;
     inv.serfs[S.GENERIC]--;
   }

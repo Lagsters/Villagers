@@ -173,6 +173,38 @@ export function attackSources(s: GameState, p: number, target: Building): [Build
   return out;
 }
 
+/**
+ * Poziomy rycerzy, ktorych wyslalaby komenda ataku o danej liczbie (w tej samej kolejnosci:
+ * zrodla wg odleglosci, z kazdego najsilniejsi). Uzywane przez boty i UI.
+ */
+export function attackPreview(s: GameState, p: number, target: Building, count: number): number[] {
+  const out: number[] = [];
+  for (const [b, n] of attackSources(s, p, target)) {
+    let take = Math.min(n, count - out.length);
+    if (take <= 0) break;
+    if (b.inv) {
+      for (let l = 4; l >= 0 && take > 0; l--) {
+        const k = Math.min(take, b.inv.knights[l]);
+        for (let i = 0; i < k; i++) out.push(l);
+        take -= k;
+      }
+    } else {
+      const lv = b.knights.map((id) => s.serfs[id]?.level ?? 0).sort((a, c) => c - a);
+      for (let i = 0; i < take; i++) out.push(lv[i]);
+    }
+  }
+  return out;
+}
+
+/** Poziomy obroncow celu. */
+export function defenderLevels(s: GameState, t: Building): number[] {
+  const out: number[] = [];
+  if (t.inv) {
+    for (let l = 0; l < 5; l++) for (let i = 0; i < t.inv.knights[l]; i++) out.push(l);
+  } else for (const id of t.knights) out.push(s.serfs[id]?.level ?? 0);
+  return out;
+}
+
 export function attackersAvailable(s: GameState, p: number, target: Building): number {
   return attackSources(s, p, target).reduce((a, [, n]) => a + n, 0);
 }
@@ -500,7 +532,7 @@ export function updateKnight(s: GameState, k: Serf): boolean {
       // Atakujacy zniknal: wracamy.
       k.sub = -2;
       const b = s.buildings[k.target];
-      if (b && b.owner === k.owner) {
+      if (b && b.owner === k.owner && b.stage === STAGE.DONE) {
         const fp = s.flags[b.flag]!.pos;
         const p = findPath(s.map, k.pos, fp, (i) => isFreeWalkable(s.map, i) || i === fp, 300);
         k.path = [...(p ?? []), DIR_NW];
