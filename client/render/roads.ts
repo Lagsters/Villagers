@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { GameState } from '../../sim/types.ts';
 import { H_SCALE, vx, vz } from './coords.ts';
 
-const WIDTH = 0.13;
+const WIDTH = 0.075;
 const LIFT = 0.04;
 
 export class RoadsRenderer {
@@ -44,7 +44,7 @@ export class RoadsRenderer {
     };
     for (const r of s.roads) {
       if (!r) continue;
-      const c = r.water ? [0.75, 0.85, 0.95] : [0.55, 0.42, 0.27];
+      const c = r.water ? [0.75, 0.85, 0.95] : [0.62, 0.47, 0.28];
       for (let i = 0; i + 1 < r.cells.length; i++) {
         const a = p(r.cells[i]);
         const b = p(r.cells[i + 1]);

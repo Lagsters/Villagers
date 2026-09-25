@@ -1,21 +1,61 @@
 /**
- * Teren jako chunki 32x32 pol. Kazde pole ma dwa trojkaty: [v, SE, E] i [v, SW, SE].
- * Kolor trojkata zalezy od terenu jego wierzcholkow (flat shading = styl low-poly).
+ * Teren jako chunki 32x32 pol: wspolne wierzcholki (kolor per pole, plynne przejscia), gladkie
+ * normalne liczone z mapy wysokosci (bez szwow miedzy chunkami) i generowana w kodzie faktura
+ * (szum) mnozona przez kolor - miekko cieniowane, ziarniste laki zamiast plaskich trojkatow.
  * three.js sam odrzuca chunki poza kadrem (frustum culling po boundingSphere).
  */
 import * as THREE from 'three';
 import { T } from '../../sim/defs.ts';
 import { stepXY, DIR_E, DIR_SE, DIR_SW } from '../../sim/grid.ts';
 import type { MapData } from '../../sim/mapgen.ts';
-import { H_SCALE, vx, vz } from './coords.ts';
-import { DEEP_WATER, SHORE_COLOR, TERRAIN_COLORS } from './palette.ts';
+import { H_SCALE, ROW_H, vx, vz } from './coords.ts';
+import { DEEP_WATER, GRASS_DARK, GRASS_LIGHT, SHORE_COLOR, TERRAIN_COLORS } from './palette.ts';
 
 export const CHUNK = 32;
+/** Powtorzenie faktury: ile pol na jeden kafel tekstury. */
+const TEX_TILE = 3;
 
-function jitter(i: number, k: number): number {
+function hash(i: number, k: number): number {
   let h = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b) ^ k;
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  return (((h >>> 0) % 1000) / 1000 - 0.5) * 0.08;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Szum wartosci o niskiej czestotliwosci (laty ciemniejszej i jasniejszej trawy). */
+function patch(x: number, y: number): number {
+  const S = 6;
+  const gx = Math.floor(x / S), gy = Math.floor(y / S);
+  const fx = x / S - gx, fy = y / S - gy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const v = (a: number, b: number) => hash(a * 7919 + b * 104729, 3);
+  const top = v(gx, gy) * (1 - sx) + v(gx + 1, gy) * sx;
+  const bot = v(gx, gy + 1) * (1 - sx) + v(gx + 1, gy + 1) * sx;
+  return top * (1 - sy) + bot * sy;
+}
+
+/** Faktura: ziarnisty szum w odcieniach szarosci (mnozony przez kolor wierzcholka). */
+function detailTexture(): THREE.Texture {
+  const N = 128;
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const i = y * N + x;
+      // Drobne ziarno + kepki (wieksze plamki).
+      const fine = hash(i, 11);
+      const clump = hash(((x >> 2) & 31) + ((y >> 2) & 31) * 32, 5);
+      const v = 205 + fine * 38 + (clump > 0.8 ? 12 : clump < 0.15 ? -18 : 0);
+      const c = Math.max(0, Math.min(255, Math.round(v)));
+      data[i * 4] = c; data[i * 4 + 1] = c; data[i * 4 + 2] = c; data[i * 4 + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 export class TerrainRenderer {
@@ -30,7 +70,16 @@ export class TerrainRenderer {
 
   constructor(map: MapData) {
     this.map = map;
-    this.material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    this.material = new THREE.MeshLambertMaterial({ vertexColors: true, map: detailTexture() });
+    // Atrybut grain (0..1) wlacza fakture: otwarta woda jest gladka, zeby brzeg mapy zlewal sie z tlem.
+    this.material.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float grain;\nvarying float vGrain;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGrain = grain;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vGrain;')
+        .replace('#include <map_fragment>', '#ifdef USE_MAP\ndiffuseColor *= mix(vec4(1.0), texture2D(map, vMapUv), vGrain);\n#endif');
+    };
     this.cw = Math.ceil((map.w - 1) / CHUNK);
     this.ch = Math.ceil((map.h - 1) / CHUNK);
     for (let cy = 0; cy < this.ch; cy++) {
@@ -48,8 +97,8 @@ export class TerrainRenderer {
   markDirty(idx: number): void {
     const x = idx % this.map.w;
     const y = (idx / this.map.w) | 0;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
         const cx = Math.floor((x + dx) / CHUNK);
         const cy = Math.floor((y + dy) / CHUNK);
         if (cx >= 0 && cy >= 0 && cx < this.cw && cy < this.ch) this.dirty.add(cy * this.cw + cx);
@@ -72,73 +121,102 @@ export class TerrainRenderer {
     this.dirty.clear();
   }
 
-  private triColor(a: number, b: number, c: number, out: number[], seedIdx: number): void {
+  private at(x: number, y: number): number {
     const m = this.map;
-    const ta = m.terrain[a], tb = m.terrain[b], tc = m.terrain[c];
-    let water = 0, snow = 0, mount = 0, desert = 0;
-    for (const t of [ta, tb, tc]) {
-      if (t === T.WATER) water++;
-      else if (t === T.SNOW) snow++;
-      else if (t === T.MOUNTAIN) mount++;
-      else if (t === T.DESERT) desert++;
+    x = Math.max(0, Math.min(m.w - 1, x));
+    y = Math.max(0, Math.min(m.h - 1, y));
+    return y * m.w + x;
+  }
+
+  /** Czy pole ladu sasiaduje z woda (brzeg - piasek). */
+  private isShore(x: number, y: number): boolean {
+    const m = this.map;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+      if (m.terrain[this.at(x + dx, y + dy)] === T.WATER) return true;
     }
-    let col: [number, number, number];
-    if (water === 3) {
-      const deep = m.resAmt[a] < 10 && m.resAmt[b] < 10 && m.resAmt[c] < 10;
-      col = deep ? DEEP_WATER : TERRAIN_COLORS[T.WATER];
-    } else if (water > 0) col = SHORE_COLOR;
-    else if (snow >= 2) col = TERRAIN_COLORS[T.SNOW];
-    else if (snow === 1 || mount >= 2) col = TERRAIN_COLORS[T.MOUNTAIN];
-    else if (mount === 1) col = mix(TERRAIN_COLORS[T.MOUNTAIN], TERRAIN_COLORS[T.GRASS], 0.5);
-    else if (desert >= 2) col = TERRAIN_COLORS[T.DESERT];
-    else if (desert === 1) col = mix(TERRAIN_COLORS[T.DESERT], TERRAIN_COLORS[T.GRASS], 0.55);
-    else {
-      // Trawa: wyzej jasniejsza i bardziej zolta.
-      const hAvg = (m.height[a] + m.height[b] + m.height[c]) / 3;
-      const k = Math.min(1, Math.max(0, (hAvg - 5) / 10));
-      col = mix([0.5, 0.66, 0.3], TERRAIN_COLORS[T.GRASS], k);
+    return false;
+  }
+
+  /** Kolor wierzcholka (pola). */
+  private nodeColor(x: number, y: number, out: number[], o: number): void {
+    const m = this.map;
+    const i = y * m.w + x;
+    const t = m.terrain[i];
+    let c: readonly number[];
+    if (t === T.WATER) {
+      // Ku brzegowi mapy woda plynnie przechodzi w glebie (kolor tla sceny) - bez zabkow na krawedzi.
+      const base = m.resAmt[i] < 10 ? DEEP_WATER : TERRAIN_COLORS[T.WATER];
+      const d = Math.min(x, y, m.w - 1 - x, m.h - 1 - y);
+      const t = Math.min(1, d / 8);
+      const k = t * t * (3 - 2 * t);
+      c = [DEEP_WATER[0] + (base[0] - DEEP_WATER[0]) * k, DEEP_WATER[1] + (base[1] - DEEP_WATER[1]) * k,
+        DEEP_WATER[2] + (base[2] - DEEP_WATER[2]) * k];
+    } else if (this.isShore(x, y)) {
+      c = SHORE_COLOR;
+    } else if (t === T.GRASS) {
+      const p = patch(x, y);
+      const k = Math.min(1, Math.max(0, p * 1.4 - 0.2 + (m.height[i] - 8) * 0.03));
+      c = [GRASS_DARK[0] + (GRASS_LIGHT[0] - GRASS_DARK[0]) * k, GRASS_DARK[1] + (GRASS_LIGHT[1] - GRASS_DARK[1]) * k,
+        GRASS_DARK[2] + (GRASS_LIGHT[2] - GRASS_DARK[2]) * k];
+    } else {
+      c = TERRAIN_COLORS[t] ?? TERRAIN_COLORS[T.GRASS];
     }
-    const j = jitter(seedIdx, 7);
-    out[0] = col[0] * (1 + j);
-    out[1] = col[1] * (1 + j);
-    out[2] = col[2] * (1 + j);
+    const j = t === T.WATER ? 1 : 1 + (hash(i, 7) - 0.5) * 0.08;
+    out[o] = c[0] * j; out[o + 1] = c[1] * j; out[o + 2] = c[2] * j;
   }
 
   private buildGeometry(cx: number, cy: number): THREE.BufferGeometry {
     const m = this.map;
     const x0 = cx * CHUNK, y0 = cy * CHUNK;
     const x1 = Math.min(m.w - 1, x0 + CHUNK), y1 = Math.min(m.h - 1, y0 + CHUNK);
-    const pos: number[] = [];
-    const col: number[] = [];
-    const c3: number[] = [0, 0, 0];
-    const push = (i: number) => {
-      const x = i % m.w, y = (i / m.w) | 0;
-      pos.push(vx(x, y), m.height[i] * H_SCALE, vz(y));
-      col.push(c3[0], c3[1], c3[2]);
-    };
+    // Wierzcholki: pola od x0-1 do x1 (trojkat SW siega kolumny w lewo), wiersze y0..y1.
+    const vxMin = Math.max(0, x0 - 1);
+    const cols = x1 - vxMin + 1;
+    const rows = y1 - y0 + 1;
+    const n = cols * rows;
+    const pos = new Float32Array(n * 3);
+    const nor = new Float32Array(n * 3);
+    const col = new Float32Array(n * 3);
+    const uv = new Float32Array(n * 2);
+    const grain = new Float32Array(n);
+    const tmp = [0, 0, 0];
+    for (let y = y0; y <= y1; y++) {
+      for (let x = vxMin; x <= x1; x++) {
+        const k = (y - y0) * cols + (x - vxMin);
+        const i = y * m.w + x;
+        const wx = vx(x, y), wz = vz(y);
+        pos[k * 3] = wx; pos[k * 3 + 1] = m.height[i] * H_SCALE; pos[k * 3 + 2] = wz;
+        // Normalna z roznic centralnych mapy wysokosci (identyczna po obu stronach granicy chunku).
+        const hl = m.height[this.at(x - 1, y)], hr = m.height[this.at(x + 1, y)];
+        const hu = m.height[this.at(x, y - 1)], hd = m.height[this.at(x, y + 1)];
+        const nx = -(hr - hl) * H_SCALE / 2;
+        const nz = -(hd - hu) * H_SCALE / (2 * ROW_H);
+        const len = Math.hypot(nx, 1, nz);
+        nor[k * 3] = nx / len; nor[k * 3 + 1] = 1 / len; nor[k * 3 + 2] = nz / len;
+        this.nodeColor(x, y, tmp, 0);
+        col[k * 3] = tmp[0]; col[k * 3 + 1] = tmp[1]; col[k * 3 + 2] = tmp[2];
+        uv[k * 2] = wx / TEX_TILE; uv[k * 2 + 1] = wz / TEX_TILE;
+        grain[k] = m.terrain[i] === T.WATER ? 0 : 1;
+      }
+    }
+    const idx: number[] = [];
+    const vi = (x: number, y: number) => (y - y0) * cols + (x - vxMin);
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
-        const v = y * m.w + x;
         const [ex, ey] = stepXY(x, y, DIR_E);
         const [sex, sey] = stepXY(x, y, DIR_SE);
         const [swx, swy] = stepXY(x, y, DIR_SW);
-        const se = sey * m.w + sex;
-        if (sex < m.w && sey < m.h && ex < m.w) {
-          const e = ey * m.w + ex;
-          this.triColor(v, se, e, c3, v * 2);
-          push(v); push(se); push(e);
-        }
-        if (swx >= 0 && swy < m.h && sex < m.w) {
-          const sw = swy * m.w + swx;
-          this.triColor(v, sw, se, c3, v * 2 + 1);
-          push(v); push(sw); push(se);
-        }
+        if (sex <= x1 && sey <= y1 && ex <= x1) idx.push(vi(x, y), vi(sex, sey), vi(ex, ey));
+        if (swx >= vxMin && swy <= y1 && sex <= x1) idx.push(vi(x, y), vi(swx, swy), vi(sex, sey));
       }
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    g.computeVertexNormals();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('grain', new THREE.BufferAttribute(grain, 1));
+    g.setIndex(idx);
     g.computeBoundingSphere();
     g.computeBoundingBox();
     return g;
@@ -146,10 +224,7 @@ export class TerrainRenderer {
 
   dispose(): void {
     for (const c of this.chunks) c.geometry.dispose();
+    this.material.map?.dispose();
     this.material.dispose();
   }
-}
-
-function mix(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
-  return [a[0] * t + b[0] * (1 - t), a[1] * t + b[1] * (1 - t), a[2] * t + b[2] * (1 - t)];
 }

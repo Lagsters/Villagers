@@ -11,15 +11,33 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
+from mathutils import Matrix  # noqa: E402
 from lib import PALETTE, build  # noqa: E402
 
 PALETTE.update({
     'linen': '#e9dfc8', 'hat_brown': '#7a5634', 'hat_green': '#4f7a3a', 'hat_red': '#a8402f', 'hat_yellow': '#d9b43a',
-    'hat_blue': '#3f5f8f', 'hat_purple': '#6c4a8a', 'feather': '#e8e2d0', 'beard': '#6b4a2e', 'beard_grey': '#b8b2a8',
+    'hat_blue': '#3f5f8f', 'hat_purple': '#6c4a8a', 'feather': '#e8e2d0', 'beard': '#a44a26', 'beard_grey': '#b8b2a8',
+    'hair': '#b0502a', 'eye': '#1c1c1c', 'mask': '#9aa0a6',
 })
 
 R = math.pi / 2
 HAND = -0.15  # dlon wzgledem barku
+# Duze glowy (jak na portretach zawodow): glowa i wszystko, co na niej, powiekszone wzgledem szyi.
+HEAD_K = 1.35
+NECK = (0.0, 0.0, 0.315)
+
+
+def big(f):
+    """Buduje czesci funkcja f i skaluje je wzgledem szyi (glowa, czapki, helm)."""
+    def g(m):
+        n = len(m.parts)
+        r = f(m)
+        mat = Matrix.Translation(NECK) @ Matrix.Scale(HEAD_K, 4) @ Matrix.Translation(tuple(-c for c in NECK))
+        for ob in m.parts[n:]:
+            ob.data.transform(mat)
+        return r
+    g.__name__ = f.__name__
+    return g
 
 
 # ---------------------------------------------------------------- cialo
@@ -27,12 +45,13 @@ HAND = -0.15  # dlon wzgledem barku
 def serf_torso(m):
     m.cyl(0.075, 0.19, 7, z=0.13, col='cloth', r_top=0.058)  # tunika
     m.cyl(0.079, 0.024, 7, z=0.155, col='wood_dark')  # pas
-    m.box(0.026, 0.012, 0.022, y=-0.078, z=0.156, col='gold')  # klamra
 
 
 def serf_head(m):
     m.cyl(0.054, 0.09, 8, z=0.33, col='skin', r_top=0.049)
-    m.box(0.018, 0.022, 0.024, y=-0.058, z=0.355, col='skin')  # nos
+    m.box(0.022, 0.026, 0.026, y=-0.06, z=0.352, col='skin')  # duzy nos
+    for x in (-0.022, 0.022):  # oczy
+        m.box(0.013, 0.01, 0.015, x=x, y=-0.05, z=0.377, col='eye')
 
 
 def serf_leg(m):
@@ -51,12 +70,14 @@ def serf_arm(m):
 def hat_hair(m):
     m.cyl(0.058, 0.032, 6, z=0.392, col='hair', r_top=0.044)
     m.box(0.1, 0.03, 0.05, y=0.036, z=0.352, col='hair')
+    m.box(0.07, 0.03, 0.045, y=-0.04, z=0.305, col='beard', rx=0.2)
 
 
 def hat_cap(m):
     """Tragarz, tracz, studniarz: plaska czapka z daszkiem."""
     m.cyl(0.06, 0.03, 6, z=0.4, col='hat_brown', r_top=0.052)
     m.box(0.07, 0.05, 0.01, y=-0.06, z=0.402, col='hat_brown', rx=-0.15)
+    m.box(0.07, 0.03, 0.045, y=-0.04, z=0.305, col='beard', rx=0.2)
 
 
 def hat_straw(m):
@@ -114,6 +135,12 @@ def hat_explorer(m):
     m.cyl(0.085, 0.01, 5, z=0.395, col='cream')
     m.cyl(0.058, 0.045, 5, z=0.4, col='cream', r_top=0.03)
     m.box(0.07, 0.03, 0.06, y=-0.04, z=0.305, col='beard_grey', rx=0.15)
+
+
+def hat_mask(m):
+    """Hutnik: skorzana czapka i uniesiona maska ochronna."""
+    m.cyl(0.059, 0.035, 6, z=0.39, col='wood_dark', r_top=0.05)
+    m.box(0.08, 0.02, 0.07, y=-0.06, z=0.4, col='mask', rx=-0.5)
 
 
 def hat_sailor(m):
@@ -203,8 +230,7 @@ def tool_bucket(m):
 def knight_helmet(m):
     m.cyl(0.066, 0.075, 6, z=0.33, col='metal', r_top=0.06)  # helm garnczkowy
     m.cone(0.061, 0.045, 6, z=0.405, col='metal')
-    m.box(0.07, 0.02, 0.012, y=-0.062, z=0.37, col='black')  # wizjer
-    m.box(0.014, 0.09, 0.04, y=0.01, z=0.45, col='red', rx=0.3)  # pioropusz
+    m.box(0.07, 0.014, 0.012, y=-0.062, z=0.37, col='black')  # wizjer
 
 
 def knight_shield(m):
@@ -236,7 +262,7 @@ def figure(m, tunic, hat=None, tool=None, arm_r=0.0):
     """Cala postac w pozie stojacej (do ikon i arkusza podgladow)."""
     m.cyl(0.075, 0.19, 7, z=0.13, col=tunic, r_top=0.058)
     m.cyl(0.079, 0.024, 7, z=0.155, col='wood_dark')
-    serf_head(m)
+    big(serf_head)(m)
     for x in (-0.035, 0.035):
         m.box(0.046, 0.05, 0.12, x=x, z=0.02, col='trousers')
         m.box(0.052, 0.074, 0.032, x=x, y=-0.012, col='boots')
@@ -244,7 +270,7 @@ def figure(m, tunic, hat=None, tool=None, arm_r=0.0):
         m.box(0.036, 0.042, 0.12, x=x, z=0.19, col='linen')
         m.box(0.032, 0.034, 0.032, x=x, z=0.163, col='skin')
     if hat:
-        hat(m)
+        big(hat)(m)
     if tool:
         n = len(m.parts)
         tool(m)
@@ -259,7 +285,7 @@ def icon_serf(m):
 
 def icon_knight(m):
     figure(m, '#4f7fcf')
-    knight_helmet(m)
+    big(knight_helmet)(m)
     knight_shield(m)
     n = len(m.parts)
     knight_sword(m)
@@ -271,15 +297,17 @@ HATS = {
     'hat_hair': hat_hair, 'hat_cap': hat_cap, 'hat_straw': hat_straw, 'hat_hood': hat_hood, 'hat_feather': hat_feather,
     'hat_miner': hat_miner, 'hat_brim': hat_brim, 'hat_miller': hat_miller, 'hat_chef': hat_chef, 'hat_leather': hat_leather,
     'hat_explorer': hat_explorer, 'hat_sailor': hat_sailor, 'hat_kettle': hat_kettle, 'hat_beret': hat_beret,
+    'hat_mask': hat_mask,
 }
+HATS = {k: big(f) for k, f in HATS.items()}
 TOOLS = {
     'tool_axe': tool_axe, 'tool_hammer': tool_hammer, 'tool_pick': tool_pick, 'tool_shovel': tool_shovel,
     'tool_scythe': tool_scythe, 'tool_rod': tool_rod, 'tool_bow': tool_bow, 'tool_saw': tool_saw,
     'tool_rolling_pin': tool_rolling_pin, 'tool_cleaver': tool_cleaver, 'tool_tongs': tool_tongs, 'tool_bucket': tool_bucket,
 }
 BUILDERS = {
-    'serf_torso': serf_torso, 'serf_head': serf_head, 'serf_leg': serf_leg, 'serf_arm': serf_arm,
-    'knight_helmet': knight_helmet, 'knight_shield': knight_shield, 'knight_sword': knight_sword, 'donkey': donkey,
+    'serf_torso': serf_torso, 'serf_head': big(serf_head), 'serf_leg': serf_leg, 'serf_arm': serf_arm,
+    'knight_helmet': big(knight_helmet), 'knight_shield': knight_shield, 'knight_sword': knight_sword, 'donkey': donkey,
     **HATS, **TOOLS,
 }
 ICON_BUILDERS = {'icon_serf': icon_serf, 'icon_knight': icon_knight}
@@ -291,6 +319,7 @@ PROFESSIONS = {
     'baker': (hat_chef, tool_rolling_pin), 'butcher': (hat_miller, tool_cleaver), 'smith': (hat_leather, tool_hammer),
     'geologist': (hat_explorer, tool_hammer), 'sawyer': (hat_cap, tool_saw), 'weller': (hat_cap, tool_bucket),
     'minter': (hat_beret, tool_tongs), 'sailor': (hat_sailor, None), 'catapulter': (hat_kettle, None), 'generic': (hat_hair, None),
+    'smelter': (hat_mask, tool_tongs), 'carrier': (hat_cap, None),
 }
 
 

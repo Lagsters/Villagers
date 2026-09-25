@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES, GOODS_COUNT, SIZE } from '../../sim/defs.ts';
 
 const DIR = 'art/models';
-const HATS = ['hair', 'cap', 'straw', 'hood', 'feather', 'miner', 'brim', 'miller', 'chef', 'leather', 'explorer', 'sailor', 'kettle', 'beret'];
+const HATS = ['hair', 'cap', 'straw', 'hood', 'feather', 'miner', 'brim', 'miller', 'chef', 'leather', 'explorer', 'sailor', 'kettle', 'beret', 'mask'];
 const TOOLS = ['axe', 'hammer', 'pick', 'shovel', 'scythe', 'rod', 'bow', 'saw', 'rolling_pin', 'cleaver', 'tongs', 'bucket'];
 
 async function load(name: string): Promise<{ tris: number; attrs: string[] }> {

@@ -2,14 +2,17 @@
 import { T } from '../../sim/defs.ts';
 
 export const TERRAIN_COLORS: Record<number, [number, number, number]> = {
-  [T.WATER]: [0.2, 0.45, 0.62],
-  [T.GRASS]: [0.42, 0.62, 0.27],
-  [T.DESERT]: [0.86, 0.76, 0.5],
-  [T.MOUNTAIN]: [0.52, 0.47, 0.42],
+  [T.WATER]: [0.12, 0.34, 0.6],
+  [T.GRASS]: [0.2, 0.46, 0.08],
+  [T.DESERT]: [0.8, 0.64, 0.36],
+  [T.MOUNTAIN]: [0.46, 0.37, 0.28],
   [T.SNOW]: [0.94, 0.95, 0.97],
 };
-export const SHORE_COLOR: [number, number, number] = [0.83, 0.77, 0.56];
-export const DEEP_WATER: [number, number, number] = [0.15, 0.36, 0.55];
+/** Soczysta zielen lak: ciemne i jasne laty. */
+export const GRASS_DARK: [number, number, number] = [0.12, 0.36, 0.05];
+export const GRASS_LIGHT: [number, number, number] = [0.3, 0.58, 0.1];
+export const SHORE_COLOR: [number, number, number] = [0.82, 0.72, 0.46];
+export const DEEP_WATER: [number, number, number] = [0.08, 0.25, 0.5];
 
 /** Kolory towarow (maly szescian na fladze / nad glowa tragarza). */
 export const GOOD_COLORS: readonly [number, number, number][] = [

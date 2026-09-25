@@ -32,21 +32,23 @@ function local(lx: number, ly: number): [number, number] {
 
 /** Szczyt masztu flagi na budynkach wojskowych i zamku: [lx, ly, wysokosc]. */
 const BANNER: Record<number, [number, number, number]> = {
-  [B.CASTLE]: [0, 0.12, 1.58],
-  [B.GUARDHUT]: [0, 0, 0.74],
-  [B.TOWER]: [0.08, 0.08, 1.42],
-  [B.FORTRESS]: [0, 0.14, 1.12],
+  [B.CASTLE]: [0, 0.12, 1.46],
+  [B.GUARDHUT]: [0, 0, 0.68],
+  [B.TOWER]: [0.08, 0.08, 1.35],
+  [B.FORTRESS]: [0, 0.14, 1.02],
   [B.GUARDHOUSE]: [-0.18, 0.14, 0.8],
 };
 const MILL_HUB = local(0, -0.2);
 
 const HIP = 0.14;
 const SHOULDER = 0.31;
-/** Jednostki nieco wieksze niz w skali budynkow - czytelnosc z kamery izometrycznej. */
-const UNIT_SCALE = 1.25;
+/** Skala jednostek (drobne postacie z duzymi glowami, jak w pierwowzorze). */
+const UNIT_SCALE = 1.0;
+/** Flagi na drogach mniejsze niz na budynkach - drobne proporczyki. */
+const FLAG_SCALE = 0.8;
 
 /** Wyglad zawodow: nakrycie glowy (hat_*) i narzedzie w prawej rece (tool_*), wg typu osadnika. */
-const HATS = ['hair', 'cap', 'straw', 'hood', 'feather', 'miner', 'brim', 'miller', 'chef', 'leather', 'explorer', 'sailor', 'kettle', 'beret'] as const;
+const HATS = ['hair', 'cap', 'straw', 'hood', 'feather', 'miner', 'brim', 'miller', 'chef', 'leather', 'explorer', 'sailor', 'kettle', 'beret', 'mask'] as const;
 const TOOLS = ['axe', 'hammer', 'pick', 'shovel', 'scythe', 'rod', 'bow', 'saw', 'rolling_pin', 'cleaver', 'tongs', 'bucket'] as const;
 type Hat = (typeof HATS)[number];
 type Tool = (typeof TOOLS)[number];
@@ -56,7 +58,7 @@ const LOOK: Partial<Record<number, [Hat | null, Tool | null]>> = {
   [S.FORESTER]: ['feather', 'shovel'], [S.SAWYER]: ['cap', 'saw'], [S.STONECUTTER]: ['leather', 'pick'],
   [S.MINER]: ['miner', 'pick'], [S.FISHER]: ['brim', 'rod'], [S.HUNTER]: ['feather', 'bow'],
   [S.FARMER]: ['straw', 'scythe'], [S.MILLER]: ['miller', null], [S.BAKER]: ['chef', 'rolling_pin'],
-  [S.PIGFARMER]: ['straw', 'bucket'], [S.BUTCHER]: ['miller', 'cleaver'], [S.SMELTER]: ['leather', 'tongs'],
+  [S.PIGFARMER]: ['straw', 'bucket'], [S.BUTCHER]: ['miller', 'cleaver'], [S.SMELTER]: ['mask', 'tongs'],
   [S.TOOLMAKER]: ['leather', 'hammer'], [S.WEAPONSMITH]: ['leather', 'hammer'], [S.BOATBUILDER]: ['sailor', 'hammer'],
   [S.GEOLOGIST]: ['explorer', 'hammer'], [S.WELLER]: ['cap', 'bucket'], [S.BREWER]: ['hood', 'bucket'],
   [S.DONKEYBREEDER]: ['straw', null], [S.CHARBURNER]: ['hood', 'shovel'], [S.CATAPULTER]: ['kettle', null],
@@ -235,9 +237,9 @@ export class EntitiesRenderer {
       if (!f) continue;
       this.wp(s, f.pos, p);
       if (!this.inView(p.x, p.z)) continue;
-      this.flagPole.push(p.x, p.y, p.z);
+      this.flagPole.push(p.x, p.y, p.z, 0, FLAG_SCALE);
       const wave = Math.sin(this.time * 4 + f.id) * 0.3;
-      const ci = this.flagCloth.push(p.x, p.y, p.z, wave);
+      const ci = this.flagCloth.push(p.x, p.y, p.z, wave, FLAG_SCALE);
       const c = playerColor(f.owner);
       this.flagCloth.color(ci, c.r, c.g, c.b);
       for (let i = 0; i < FLAG_SLOTS; i++) {

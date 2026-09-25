@@ -152,3 +152,14 @@ Drogi wodne z łodziami zostają (część pierwsza).
 - Rękawy lniane zamiast barwionych kolorem gracza (barwienie instancji mnożyło też kolor dłoni);
   kolor gracza niesie tunika.
 - Fałszywy AO w kolorach wierzchołków budynków (przyciemnienie przy ziemi) zamiast cieni - zero kosztu.
+- **Druga runda (uwaga: „za duże dachy, za mało podobne domki, ludzie i teren”)**, porównanie ze zrzutem
+  rozgrywki i portretami zawodów oryginału:
+  - dachy: okap 0,035 zamiast 0,06-0,07, wysokość 0,34 rozpiętości zamiast 0,62, cieńsze połacie i listwy;
+  - teren: wspólne wierzchołki z kolorem per pole (płynne przejścia zamiast płaskich trójkątów), gładkie
+    normalne z mapy wysokości (bez szwów między chunkami), soczysta zieleń w łatach (szum niskiej
+    częstotliwości), generowana w kodzie faktura 128×128 (ziarno + kępki) mnożona przez kolor, gładka
+    otwarta woda przechodząca ku krawędzi mapy w kolor tła (brzeg mapy niewidoczny), węższe drogi-ścieżki;
+  - postacie: głowa ×1,35 (głowa, czapki i hełm skalowane względem szyi), oczy, duży nos, rude włosy
+    i brody, hutnik w masce; jednostki w skali 1,0 zamiast 1,25, flagi na drogach ×0,8 - w oryginale
+    ludziki i proporczyki są drobne względem domów. Rycerz bez pióropusza (budżet 298/300 trójkątów).
+  - Wydajność po zmianach: 36,5 FPS przy CPU ×4, 52 wywołania rysowania, najdłuższy tick 3,6 ms.

@@ -54,7 +54,8 @@ export class SceneRenderer {
     this.renderer.shadowMap.enabled = false;
     // Ocean wokol mapy to po prostu kolor tla (kolor oswietlonej glebokiej wody) - bez dodatkowej
     // plaszczyzny pod mapa, ktora podwajala koszt wypelniania ekranu.
-    this.scene.background = new THREE.Color().setRGB(99 / 255, 147 / 255, 172 / 255, THREE.SRGBColorSpace);
+    // Kolor oswietlonej glebokiej wody (DEEP_WATER pod swiatlem sceny) - brzeg mapy zlewa sie z tlem.
+    this.scene.background = new THREE.Color().setRGB(17 / 255, 51 / 255, 95 / 255, THREE.LinearSRGBColorSpace);
     this.scene.add(new THREE.HemisphereLight(0xdfeeff, 0x4a4030, 1.2));
     this.sun = new THREE.DirectionalLight(0xfff1d6, 2.0);
     this.sun.position.set(-30, 60, 20);

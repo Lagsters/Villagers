@@ -38,7 +38,7 @@ PALETTE = {
     'roof_red_dark': '#8e3a2e', 'roof_brown_dark': '#62412a', 'roof_green_dark': '#4a6630', 'roof_blue_dark': '#3d5474',
     'roof_slate_dark': '#474e58', 'thatch_dark': '#a8863f', 'glass': '#34465a', 'shutter': '#4f7a52',
     'brick': '#a2553f', 'brick_dark': '#7c3f2f',
-    'terracotta': '#c9582c', 'terracotta_dark': '#933d1d', 'whitewash': '#ece7dc', 'plank': '#b35a2b', 'plank_dark': '#7a3a1b',
+    'terracotta': '#b8532c', 'terracotta_dark': '#86391c', 'whitewash': '#ece7dc', 'plank': '#b35a2b', 'plank_dark': '#7a3a1b',
     'log_o': '#a55a2f', 'rock': '#8d8a84',
     'bread': '#c98a3d', 'fish': '#8fb3cc', 'meat': '#b5483c', 'flour': '#f5f1e6', 'beer': '#d9a441',
 }

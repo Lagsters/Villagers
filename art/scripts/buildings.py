@@ -22,7 +22,7 @@ R = math.pi / 2
 # Architektura
 # =====================================================================
 
-def roof(m, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', over=0.07, tiles=3, gable_col='plaster', ridge='wood_dark',
+def roof(m, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', over=0.04, tiles=3, gable_col='plaster', ridge='wood_dark',
          trim='wood_dark', front=False, frame=None):
     """Dach dwuspadowy z grubymi polaciami, rzedami dachowek, kalenica i scianami szczytowymi.
     w = dlugosc kalenicy, d = rozpietosc. Domyslnie kalenica wzdluz X; front=True - wzdluz Y (szczyt od frontu).
@@ -32,7 +32,7 @@ def roof(m, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', over=0.07, tiles=3, ga
     def P(lx, ly):
         return (x - ly, y + lx) if front else (x + lx, y + ly)
 
-    t = 0.035
+    t = 0.022
     m.gable(w - 0.01, d - 0.01, h, x=x, y=y, z=z, col=gable_col, overhang=0.0, rz=rz)
     ye = d / 2 + over
     drop = over * h / (d / 2)
@@ -47,11 +47,11 @@ def roof(m, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', over=0.07, tiles=3, ga
         ny, nz = s * math.sin(ang), math.cos(ang)
         for k in range(tiles):
             f = (k + 0.5) / tiles - 0.5  # -0.5 okap .. 0.5 kalenica
-            px, py = P(0, s * (ye / 2 - f * ye) + ny * 0.02)
-            m.cbox(w + 2 * over + 0.01, 0.025, 0.018, x=px, y=py, z=cz + f * dz + nz * 0.02, col=col + '_dark', rx=-s * ang, rz=rz)
+            px, py = P(0, s * (ye / 2 - f * ye) + ny * 0.014)
+            m.cbox(w + 2 * over + 0.004, 0.018, 0.012, x=px, y=py, z=cz + f * dz + nz * 0.014, col=col + '_dark', rx=-s * ang, rz=rz)
         px, py = P(0, s * ye)
-        m.cbox(w + 2 * over + 0.02, 0.02, 0.03, x=px, y=py, z=z - drop + 0.005, col=trim, rz=rz)
-    m.cbox(w + 2 * over + 0.04, 0.05, 0.045, x=x, y=y, z=z + h + 0.03, col=ridge, rz=rz)
+        m.cbox(w + 2 * over + 0.01, 0.014, 0.022, x=px, y=py, z=z - drop + 0.004, col=trim, rz=rz)
+    m.cbox(w + 2 * over + 0.02, 0.035, 0.03, x=x, y=y, z=z + h + 0.018, col=ridge, rz=rz)
     if frame:
         # Szachulec na szczycie: slup krolewski, jetka i zastrzaly.
         gx = -w / 2 - 0.006
@@ -242,9 +242,9 @@ def house(m, w, d, h, style='white', roof_col='terracotta', front=False, x=0.0, 
           side_wins=True, has_door=True, door_x=0.0, door_w=0.1, tiles=None, found=0.04, chim=None, detail=True):
     """Dom w stylu osady. Zwraca wysokosc okapu."""
     span = w if front else d
-    h *= 1.3  # wysokie sciany - czytelne z kamery z gory
-    roof_h = roof_h if roof_h is not None else span * 0.45
-    tiles = tiles or max(3, round(span * 9))
+    h *= 1.3  # wysokie sciany, niskie dachy - czytelne z kamery z gory
+    roof_h = roof_h if roof_h is not None else span * 0.34
+    tiles = tiles or max(3, round(span * 8))
     m.box(w + 0.03, d + 0.03, found, x=x, y=y, col='stone_dark')
     m.box(w, d, h, x=x, y=y, z=found, col=WALL[style])
     if detail:
@@ -258,9 +258,9 @@ def house(m, w, d, h, style='white', roof_col='terracotta', front=False, x=0.0, 
         door(m, x + door_x, y - d / 2, found, w=door_w, h=min(0.17, h * 0.72), col='plank')
     gable = WALL[style]
     if front:
-        roof(m, d, w, roof_h, x=x, y=y, z=top, col=roof_col, gable_col=gable, tiles=tiles, front=True, over=0.06)
+        roof(m, d, w, roof_h, x=x, y=y, z=top, col=roof_col, gable_col=gable, tiles=tiles, front=True, over=0.035)
     else:
-        roof(m, w, d, roof_h, x=x, y=y, z=top, col=roof_col, gable_col=gable, tiles=tiles, over=0.06)
+        roof(m, w, d, roof_h, x=x, y=y, z=top, col=roof_col, gable_col=gable, tiles=tiles, over=0.035)
     if chim:
         chimney(m, x + chim[0], y + chim[1], top + 0.02, roof_h + 0.06)
     return top
@@ -342,12 +342,12 @@ def castle(m):
     for sx in (-1, 1):
         window(m, sx * 0.1, 0.12 - 0.17, 0.72, 'front', shutters=False)
         window(m, sx * 0.1, 0.12 - 0.17, 0.5, 'front', shutters=False)
-    roof(m, 0.44, 0.34, 0.24, y=0.12, z=0.9, col='terracotta', gable_col='whitewash', tiles=4, over=0.05)
+    roof(m, 0.44, 0.34, 0.16, y=0.12, z=0.9, col='terracotta', gable_col='whitewash', tiles=4, over=0.035)
     for (x, y, r, h) in ((-0.48, -0.39, 0.09, 0.72), (0.48, -0.39, 0.09, 0.72), (-0.48, 0.38, 0.1, 0.92),
                          (0.48, 0.38, 0.1, 0.92), (-0.28, 0.22, 0.08, 1.25), (0.3, 0.2, 0.075, 1.4),
                          (-0.13, -0.43, 0.06, 0.55), (0.13, -0.43, 0.06, 0.55)):
         slim_tower(m, r, h, x, y, cone_k=3.4)
-    banner(m, 0.0, 0.12, 1.22, 0.36)
+    banner(m, 0.0, 0.12, 1.1, 0.36)
     return ROT
 
 
@@ -458,7 +458,7 @@ def mill(m):
     for (u, z) in ((0.2, 0.15), (-0.3, 0.3), (0.5, 0.42), (-0.1, 0.5)):
         m.cbox(0.05, 0.012, 0.03, x=u * 0.2, y=-0.205 + abs(u) * 0.03, z=z, col='stone_light')
     m.cyl(0.19, 0.04, 8, z=0.56, col='plank_dark')
-    m.cone(0.21, 0.24, 8, z=0.6, col='terracotta')
+    m.cone(0.19, 0.19, 8, z=0.6, col='terracotta')
     door(m, 0, -0.215, 0.05, col='plank')
     window(m, 0.0, -0.18, 0.36, 'front', shutters=False)
     m.cyl(0.035, 0.1, 6, y=-0.2, z=0.55, col='wood_dark', rx=R)  # piasta
@@ -522,7 +522,7 @@ def butcher(m):
     window(m, -0.36, 0.0, 0.2, 'left', shutters=False)
     m.cbox(0.1, 0.014, 0.08, x=0.26, y=-0.203, z=0.2, col='coal')  # duze okno
     door(m, 0.06, -0.2, 0.04, col='plank')
-    roof(m, 0.7, 0.4, 0.26, z=0.32, col='terracotta', gable_col='plank', tiles=4, over=0.06)
+    roof(m, 0.7, 0.4, 0.16, z=0.32, col='terracotta', gable_col='plank', tiles=4, over=0.035)
     chimney(m, -0.22, 0.08, 0.34, 0.3)
     for k in range(3):
         m.beam((0.14 + k * 0.08, -0.26, 0.3), (0.14 + k * 0.08, -0.26, 0.25), 0.006, 'wood_dark')
@@ -585,7 +585,7 @@ def mint(m):
     wall_detail(m, 'plank', 0.54, 0.46, 0.16, 0, 0, 0.22)
     for x in (-0.14, 0.12):
         window(m, x, -0.23, 0.3, 'front', shutters=False)
-    roof(m, 0.54, 0.46, 0.28, z=0.38, col='terracotta', gable_col='plank', tiles=4, over=0.06)
+    roof(m, 0.54, 0.46, 0.17, z=0.38, col='terracotta', gable_col='plank', tiles=4, over=0.035)
     chimney(m, 0.16, 0.1, 0.4, 0.3)
     sign(m, 0.3, -0.21, 0.2, emblem='gold', col='plank_dark')
     m.box(0.12, 0.08, 0.07, x=-0.34, y=-0.3, col='wood_dark')
@@ -618,7 +618,7 @@ def weaponsmith(m):
     m.cbox(0.06, 0.018, 0.03, x=-0.2, y=-0.218, z=0.065, col='fire_core')
     door(m, 0.2, -0.21, 0.04, col='plank')
     window(m, 0.06, -0.21, 0.24, 'front', shutters=False)
-    roof(m, 0.7, 0.42, 0.28, z=0.36, col='terracotta', gable_col='plank', tiles=4, over=0.06)
+    roof(m, 0.7, 0.42, 0.17, z=0.36, col='terracotta', gable_col='plank', tiles=4, over=0.035)
     m.box(0.12, 0.12, 0.5, x=-0.28, y=0.1, z=0.3, col='stone')  # duzy komin
     m.box(0.15, 0.15, 0.03, x=-0.28, y=0.1, z=0.8, col='stone_light')
     m.cbox(0.13, 0.015, 0.15, x=0.3, y=-0.225, z=0.24, col='red')  # tarcza-szyld
@@ -647,14 +647,14 @@ def guardhut(m):
     m.cyl(0.2, 0.22, 8, z=0.04, col='stone')
     for (a, z) in ((-1.9, 0.1), (-1.2, 0.18), (-2.6, 0.2), (-0.7, 0.09), (2.9, 0.13)):
         m.cbox(0.05, 0.03, 0.035, x=math.cos(a) * 0.2, y=math.sin(a) * 0.2, z=z, col='stone_light', rz=a + R)
-    m.cyl(0.26, 0.03, 8, z=0.26, col='plank_dark')
-    m.cone(0.3, 0.26, 8, z=0.28, col='terracotta')
+    m.cyl(0.23, 0.03, 8, z=0.26, col='plank_dark')
+    m.cone(0.25, 0.2, 8, z=0.28, col='terracotta')
     for k in range(2):
-        rr = 0.26 - k * 0.09
-        m.cyl(rr, 0.016, 8, z=0.3 + k * 0.08, col='terracotta_dark', r_top=rr - 0.03)
+        rr = 0.22 - k * 0.08
+        m.cyl(rr, 0.014, 8, z=0.3 + k * 0.065, col='terracotta_dark', r_top=rr - 0.03)
     door(m, 0.0, -0.195, 0.04, w=0.09, h=0.15, col='plank')
     window(m, -0.2, 0.0, 0.18, 'left', shutters=False)
-    banner(m, 0.0, 0.0, 0.52, 0.22)
+    banner(m, 0.0, 0.0, 0.46, 0.22)
     return ROT
 
 
@@ -667,9 +667,9 @@ def tower_building(m):
         m.cbox(0.03, 0.014, 0.07, x=0.08, y=-0.053, z=z, col='coal')
         m.cbox(0.014, 0.03, 0.07, x=-0.053, y=0.08, z=z, col='coal')
     m.box(0.3, 0.3, 0.03, x=0.08, y=0.08, z=0.9, col='stone_light')
-    m.hip(0.28, 0.28, 0.3, x=0.08, y=0.08, z=0.93, col='terracotta', overhang=0.04)
+    m.hip(0.28, 0.28, 0.22, x=0.08, y=0.08, z=0.93, col='terracotta', overhang=0.025)
     house(m, 0.28, 0.24, 0.2, 'stone', x=-0.14, y=-0.16, wins=(), side_wins=True, found=0.03, door_w=0.09)
-    banner(m, 0.08, 0.08, 1.2, 0.22)
+    banner(m, 0.08, 0.08, 1.13, 0.22)
     return ROT
 
 
@@ -684,10 +684,10 @@ def fortress(m):
     wall_detail(m, 'white', 0.5, 0.36, 0.5, 0, 0.14, 0.04)
     for sx in (-1, 1):
         window(m, sx * 0.12, 0.14 - 0.18, 0.42, 'front', shutters=False)
-    roof(m, 0.5, 0.36, 0.26, y=0.14, z=0.54, col='terracotta', gable_col='whitewash', tiles=4, over=0.05)
+    roof(m, 0.5, 0.36, 0.16, y=0.14, z=0.54, col='terracotta', gable_col='whitewash', tiles=4, over=0.035)
     for (x, y, h) in ((-0.47, -0.4, 0.5), (0.47, -0.4, 0.5), (-0.47, 0.4, 0.6), (0.47, 0.4, 0.6)):
         slim_tower(m, 0.11, h, x, y, col='stone', cone_k=2.2)
-    banner(m, 0.0, 0.14, 0.82, 0.3)
+    banner(m, 0.0, 0.14, 0.72, 0.3)
     return ROT
 
 
@@ -709,7 +709,7 @@ def well(m):
     m.cyl(0.12, 0.005, 10, z=0.13, col='water')
     for x in (-0.14, 0.14):
         m.box(0.03, 0.03, 0.34, x=x, col='plank_dark')
-    roof(m, 0.34, 0.24, 0.12, z=0.34, col='terracotta', over=0.03, tiles=2, gable_col='plank')
+    roof(m, 0.32, 0.16, 0.09, z=0.34, col='terracotta', over=0.02, tiles=2, gable_col='plank')
     m.cyl(0.022, 0.28, 6, x=-0.14, z=0.28, col='wood', ry=R)
     m.beam((0.14, 0.0, 0.28), (0.2, 0.0, 0.24), 0.012, 'wood_dark')
     m.beam((0.0, 0.0, 0.28), (0.0, 0.0, 0.2), 0.004, 'wood_dark')
