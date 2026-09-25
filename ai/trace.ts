@@ -86,3 +86,29 @@ for (const p of s.players) {
   for (const b of s.buildings) if (b && b.owner === p.id && b.inv) { const n = b.inv.knights.reduce((a, c) => a + c, 0); invK += n; invs.push(`${b.kind}:${n}`); }
   console.log(`P${p.id} rycerze wg stanu ${JSON.stringify(st)} w magazynach ${invK} [${invs.join(' ')}]`);
 }
+import { writeFileSync } from 'node:fs';
+if (process.env.DUMP) {
+  const m = s.map;
+  writeFileSync(process.env.DUMP, JSON.stringify({ w: m.w, h: m.h, owner: Array.from(m.owner), terrain: Array.from(m.terrain), obj: Array.from(m.obj), roads: Array.from(m.roads).map((r) => (r ? 1 : 0)), castles: s.players.map((p) => s.buildings[p.castle]?.pos ?? -1) }));
+}
+for (const p of s.players) {
+  for (const b of s.buildings) {
+    if (!b || b.owner !== p.id || !b.inv) continue;
+    const sf = b.inv.serfs.map((n, t) => (n ? `${t}:${n}` : '')).filter(Boolean).join(' ');
+    const c = s.buildings[p.castle];
+    const reach = c ? (b.flag === c.flag || flagDist(s, p.id, b.flag, c.flag, true) < UNREACHABLE) : false;
+    console.log(`P${p.id} magazyn k${b.kind} osadnicy[${sf}] mlotki=${b.inv.goods[18]} lopaty=${b.inv.goods[17]} polaczony=${reach}`);
+  }
+  console.log(`P${p.id} toolWant=${s.players[p.id].toolWant.join(',')} toolPrio=${s.players[p.id].settings.toolPrio.join(',')}`);
+}
+import { attackPreview as ap2, attackersAvailable as aa2, defenderLevels as dl2, isAttackTarget as iat } from '../sim/military.ts';
+for (const p of s.players) {
+  const rows: string[] = [];
+  for (const t of s.buildings) {
+    if (!t || t.owner === p.id || !iat(s, p.id, t)) continue;
+    const av = aa2(s, p.id, t);
+    if (av <= 0) continue;
+    rows.push(`k${t.kind} obr=${JSON.stringify(dl2(s, t))} atak=${JSON.stringify(ap2(s, p.id, t, av))}`);
+  }
+  console.log(`P${p.id} cele: ${rows.slice(0, 8).join(' | ') || 'brak w zasiegu'}`);
+}

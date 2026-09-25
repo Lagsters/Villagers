@@ -57,6 +57,11 @@ export class TerrainRenderer {
     }
   }
 
+  /** Przebudowa wszystkich chunkow (np. po przewinieciu gry z wyrownywaniem terenu). */
+  markAllDirty(): void {
+    for (let c = 0; c < this.chunks.length; c++) this.dirty.add(c);
+  }
+
   update(): void {
     if (this.dirty.size === 0) return;
     for (const c of this.dirty) {

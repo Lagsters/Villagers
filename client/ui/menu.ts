@@ -20,8 +20,27 @@ export interface Prefs {
   volume: number;
 }
 
+/**
+ * Domyslna jakosc: niska na slabym sprzecie (renderer programowy, <= 4 GB RAM), inaczej srednia.
+ */
+export function detectQuality(): 'low' | 'medium' {
+  try {
+    const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
+    if (mem !== undefined && mem <= 4) return 'low';
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return 'low';
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    if (/swiftshader|llvmpipe|software|microsoft basic/i.test(r)) return 'low';
+  } catch {
+    return 'low';
+  }
+  return 'medium';
+}
+
 export function loadPrefs(): Prefs {
-  const def: Prefs = { name: 'Gracz', graphics: { quality: 'medium', maxDpr: 1, fpsLimit: 30 }, volume: 0.6 };
+  const def: Prefs = { name: 'Gracz', graphics: { quality: detectQuality(), maxDpr: 1, fpsLimit: 30 }, volume: 0.6 };
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return def;

@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = 4173;
 
 export default defineConfig({
-  testDir: 'tests/e2e',
+  testDir: 'tests',
+  testMatch: ['e2e/**/*.spec.ts', 'perf/**/*.spec.ts'],
   timeout: 90_000,
   fullyParallel: false,
   workers: 1,

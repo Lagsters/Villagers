@@ -53,15 +53,20 @@ function pickInventoryForSerf(s: GameState, ctx: PassCtx, p: number, type: numbe
   return best;
 }
 
-/** Zapamietuje brak narzedzi, zeby narzedziownia wiedziala, co robic. */
-function noteMissingTools(s: GameState, ctx: PassCtx, p: number, type: number): void {
+/**
+ * Zapamietuje brak narzedzi, zeby narzedziownia wiedziala, co robic. Liczymy tylko magazyny,
+ * z ktorych da sie dojsc do budynku - narzedzia w odcietym magazynie nic nie daja.
+ */
+function noteMissingTools(s: GameState, ctx: PassCtx, p: number, type: number, targetFlag: number): void {
   const tools = SERF_TOOLS[type];
   if (tools.length === 0 || type === S.KNIGHT || type === S.SAILOR) return;
+  const reach = ctx.invs.filter((b) => b.flag === targetFlag || flagDist(s, p, b.flag, targetFlag, true) < UNREACHABLE);
+  if (reach.length === 0) return;
   // Brak narzedzia tylko wtedy, gdy sa wolni osadnicy.
-  if (!ctx.invs.some((b) => b.inv!.serfs[S.GENERIC] > 0)) return;
+  if (!reach.some((b) => b.inv!.serfs[S.GENERIC] > 0)) return;
   const want = s.players[p].toolWant;
   for (const g of tools) {
-    if (ctx.invs.every((b) => b.inv!.goods[g] <= 0)) want[g - FIRST_TOOL]++;
+    if (reach.every((b) => b.inv!.goods[g] <= 0)) want[g - FIRST_TOOL]++;
   }
 }
 
@@ -97,7 +102,7 @@ function dispatchSerfToBuilding(s: GameState, ctx: PassCtx, b: Building, type: n
     }
   }
   if (!inv) {
-    noteMissingTools(s, ctx, b.owner, type);
+    noteMissingTools(s, ctx, b.owner, type, b.flag);
     return -1;
   }
   if (!route) return -1;
@@ -176,13 +181,17 @@ function serfRequests(s: GameState, ctx: PassCtx, p: number): void {
   for (const sf of s.serfs) {
     if (sf && sf.owner === p && sf.type === S.KNIGHT && sf.state === SS.TO_BUILDING) coming.set(sf.target, (coming.get(sf.target) ?? 0) + 1);
   }
+  // Rycerze najpierw do budynkow z najmniejsza obsada (pusty budynek nie trzyma nawet terytorium).
+  const needKnights: Building[] = [];
+  for (const b of s.buildings) {
+    if (!b || b.owner !== p || b.stage !== STAGE.DONE || !isMilitary(b.kind)) continue;
+    if (b.knights.length + (coming.get(b.id) ?? 0) < desiredKnights(s, b)) needKnights.push(b);
+  }
+  needKnights.sort((a, c) => a.knights.length + (coming.get(a.id) ?? 0) - (c.knights.length + (coming.get(c.id) ?? 0)) || a.id - c.id);
+  for (const b of needKnights) dispatchSerfToBuilding(s, ctx, b, S.KNIGHT, b.phase !== ZONE.ENEMY);
   for (const b of s.buildings) {
     if (!b || b.owner !== p) continue;
-    if (b.stage === STAGE.DONE && isMilitary(b.kind)) {
-      const want = desiredKnights(s, b);
-      if (b.knights.length + (coming.get(b.id) ?? 0) < want) dispatchSerfToBuilding(s, ctx, b, S.KNIGHT, b.phase !== ZONE.ENEMY);
-      continue;
-    }
+    if (b.stage === STAGE.DONE && isMilitary(b.kind)) continue;
     if (b.stage === STAGE.LEVEL && b.digger < 0) b.digger = dispatchSerfToBuilding(s, ctx, b, S.DIGGER);
     else if ((b.stage === STAGE.BUILD || b.stage === STAGE.LEVEL) && b.builder < 0) b.builder = dispatchSerfToBuilding(s, ctx, b, S.BUILDER);
     else if (b.stage === STAGE.DONE && b.worker < 0 && BUILDINGS[b.kind].worker >= 0) {

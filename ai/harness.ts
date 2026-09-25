@@ -86,7 +86,8 @@ if (process.argv[1]?.endsWith('harness.ts')) {
   const n = Number(process.argv[2] ?? 1);
   const size = Number(process.argv[3] ?? 64);
   const levels = (process.argv[4] ?? '2,1').split(',').map(Number);
-  for (let i = 0; i < n; i++) {
+  const from = Number(process.env.FROM ?? 0);
+  for (let i = from; i < from + n; i++) {
     const r = runBotGame(`BOT${i}`, size, levels, Number(process.argv[5] ?? 72000), i + 1);
     console.log(JSON.stringify(r));
   }

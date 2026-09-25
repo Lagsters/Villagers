@@ -275,11 +275,14 @@ app.appendChild(loading);
 await loadModels((f) => { fill.style.width = `${Math.round(f * 100)}%`; });
 loading.remove();
 if (params.has('map')) {
+  // Parametry testowe grafiki (nie zapisywane w opcjach).
+  if (params.has('fps')) prefs.graphics.fpsLimit = Number(params.get('fps'));
+  if (params.has('quality')) prefs.graphics.quality = params.get('quality') === 'low' ? 'low' : 'medium';
   const n = Number(params.get('players') ?? 2);
   startLocalState(createGame({
     mapCode: params.get('map')!,
     mapSize: Number(params.get('size') ?? 96),
-    players: Array.from({ length: n }, (_, i) => ({ name: i === 0 ? 'Ty' : `Bot ${i}`, color: PLAYER_COLORS[i], ai: i === 0 ? 0 : Number(params.get('ai') ?? 1) })),
+    players: Array.from({ length: n }, (_, i) => ({ name: i === 0 ? 'Ty' : `Bot ${i}`, color: PLAYER_COLORS[i], ai: i === 0 && !params.has('allbots') ? 0 : Number(params.get('ai') ?? 1) })),
     seed: Number(params.get('seed') ?? 1),
   }));
 } else {

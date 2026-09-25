@@ -1,7 +1,7 @@
 /**
  * Tworzenie nowej gry: mapa z kodu, zamki graczy z poczatkowym inwentarzem, terytorium.
  */
-import { B, G, GOODS_COUNT, MAP_SIZES, MAX_PLAYERS, S } from './defs.ts';
+import { B, G, GOODS_COUNT, MAP_SIZES, MAX_PLAYERS, S, TOOLS_COUNT } from './defs.ts';
 import { finishBuilding, placeBuilding } from './construction.ts';
 import { generateMap, normalizeMapCode } from './mapgen.ts';
 import { seedRng } from './rng.ts';
@@ -51,7 +51,7 @@ export function createGame(input: GameConfig): GameState {
     morale: 50,
     territory: 0,
     lastAttacked: -1,
-    toolWant: new Array(9).fill(0),
+    toolWant: new Array(TOOLS_COUNT).fill(0),
   }));
   const s: GameState = {
     version: SIM_VERSION,

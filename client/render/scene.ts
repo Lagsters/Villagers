@@ -12,7 +12,6 @@ import { RoadsRenderer } from './roads.ts';
 import { EntitiesRenderer } from './entities.ts';
 import { OverlayRenderer } from './overlay.ts';
 import type { GameEvent, GameState } from '../../sim/types.ts';
-import { DEEP_WATER } from './palette.ts';
 
 export interface GraphicsOptions {
   quality: 'low' | 'medium';
@@ -53,7 +52,9 @@ export class SceneRenderer {
     });
     this.renderer.setClearColor(0x1d2a1f);
     this.renderer.shadowMap.enabled = false;
-    this.scene.background = new THREE.Color(DEEP_WATER[0] * 0.8, DEEP_WATER[1] * 0.8, DEEP_WATER[2] * 0.8);
+    // Ocean wokol mapy to po prostu kolor tla (kolor oswietlonej glebokiej wody) - bez dodatkowej
+    // plaszczyzny pod mapa, ktora podwajala koszt wypelniania ekranu.
+    this.scene.background = new THREE.Color().setRGB(99 / 255, 147 / 255, 172 / 255, THREE.SRGBColorSpace);
     this.scene.add(new THREE.HemisphereLight(0xdfeeff, 0x4a4030, 1.2));
     this.sun = new THREE.DirectionalLight(0xfff1d6, 2.0);
     this.sun.position.set(-30, 60, 20);
@@ -80,11 +81,6 @@ export class SceneRenderer {
     this.entities = new EntitiesRenderer(this.modelMaterial);
     this.scene.add(this.entities.group);
     this.scene.add(this.overlay.group);
-    // Ocean wokol mapy (tuz pod poziomem wody terenu).
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(map.w * 6, map.h * 6), new THREE.MeshLambertMaterial({ color: new THREE.Color(...DEEP_WATER) }));
-    sea.rotation.x = -Math.PI / 2;
-    sea.position.set(map.w / 2, 4 * H_SCALE - 0.05, (map.h / 2) * ROW_H);
-    this.scene.add(sea);
     this.cam.bounds = { minX: 2, maxX: map.w - 2, minZ: 2, maxZ: (map.h - 2) * ROW_H };
   }
 
@@ -173,6 +169,7 @@ export class SceneRenderer {
     this.terrain.update();
     this.objects.update(this.cam.camera, moved);
     if (s) {
+      if (moved) this.entities.setView(this.cam.camera);
       this.entities.update(s, alpha, dt);
       this.overlay.updateSites(s, me, this.centerIdx(), Math.ceil(14 / this.cam.zoom));
     }

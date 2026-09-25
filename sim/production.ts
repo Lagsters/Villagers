@@ -19,6 +19,7 @@ import { event, isFreeWalkable, nb } from './world.ts';
 export const WS = { TO_TARGET: 1, WORKING: 2, RETURN: 3, ENTER: 4, OUT_CARRY: 5 } as const;
 
 const REST_TICKS = 20;
+const TRIP_NODES = 600;
 const OUT_QUEUE_MAX = 3;
 const GATHERERS = new Set<number>([B.WOODCUTTER, B.FORESTER, B.STONECUTTER, B.FISHER, B.HUNTER, B.FARM]);
 
@@ -49,8 +50,9 @@ function chooseTool(s: GameState, p: number): number {
   let bestScore = 0;
   for (let t = 0; t < TOOLS_COUNT; t++) {
     if (st.toolPrio[t] <= 0) continue;
-    if (want[t] === 0 && stock[t] >= TOOL_STOCK_ENOUGH) continue;
-    const score = st.toolPrio[t] * (1 + want[t]) * 16 - stock[t] * 4 + 1;
+    const w = want[t] ?? 0;
+    if (w === 0 && stock[t] >= TOOL_STOCK_ENOUGH) continue;
+    const score = st.toolPrio[t] * (1 + w) * 16 - stock[t] * 4 + 1;
     if (score > bestScore) {
       bestScore = score;
       best = t;
@@ -220,7 +222,8 @@ function startTrip(s: GameState, b: Building, serf: Serf): boolean {
       const a = s.animals[c]!;
       dest = a.to >= 0 ? a.to : a.pos;
     }
-    const path = findPath(m, fp, dest, (i) => isFreeWalkable(m, i), 3000);
+    // Cele sa blisko (promien <= 9), wiec maly limit wezlow: nieudane A* nie moze byc drogie.
+    const path = findPath(m, fp, dest, (i) => isFreeWalkable(m, i), TRIP_NODES);
     if (!path) continue;
     serf.state = SS.WORK_OUT;
     serf.sub = WS.TO_TARGET;
@@ -426,7 +429,13 @@ export function updateProduction(s: GameState, b: Building): void {
   if (GATHERERS.has(b.kind)) {
     if (b.out.length >= OUT_QUEUE_MAX) return;
     if (b.timer > 0) { b.timer--; return; }
-    if (!startTrip(s, b, serf)) b.timer = 40;
+    if (startTrip(s, b, serf)) {
+      b.idleCycles = 0;
+    } else {
+      // Brak celu: ponowienie pozniej, z rozrzutem (budynki nie probuja naraz) i rosnacym odstepem.
+      b.idleCycles = Math.min(b.idleCycles + 1, 8);
+      b.timer = 40 + b.idleCycles * 30 + ((b.id * 37) % 41);
+    }
     return;
   }
   updateWorkshop(s, b, serf);

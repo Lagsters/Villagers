@@ -3,6 +3,7 @@
  * (gra lokalna z botami albo lockstep sieciowy).
  */
 import '../../sim/index.ts';
+import { step } from '../../sim/step.ts';
 import { findRoadPath } from '../../sim/roads.ts';
 import { hexDist, spiral } from '../../sim/grid.ts';
 import { Sound } from '../audio.ts';
@@ -35,6 +36,8 @@ export class GameView {
   private onResize: () => void;
   private overlay: HTMLElement | null = null;
   readonly sound: Sound;
+  /** Liczniki do testow wydajnosci. */
+  perf = { frames: 0, frameMs: 0, tickMs: 0, ticks: 0, maxTickMs: 0 };
 
   constructor(app: HTMLElement, state: GameState, driver: TickDriver, localPlayer: number, opts: GameViewOptions) {
     this.app = app;
@@ -69,7 +72,22 @@ export class GameView {
     }, () => this.view.height);
     this.loop();
     // Dostep dla testow e2e i debugowania.
-    (window as unknown as { __game: unknown }).__game = { session: this.session, view: this.view, hud: this.hud, sim: { canBuild, canPlaceFlag, neighbor, findRoadPath, spiral } };
+    (window as unknown as { __game: unknown }).__game = {
+      session: this.session, view: this.view, hud: this.hud, perf: this.perf,
+      sim: { canBuild, canPlaceFlag, neighbor, findRoadPath, spiral },
+      /** Przewiniecie gry o n tickow bez renderowania (testy wydajnosci). */
+      fastForward: (n: number) => {
+        const s = this.session;
+        const end = s.state.tick + n;
+        while (s.state.tick < end) {
+          const cmds = s.driver.commandsFor(s.state.tick, s.state);
+          if (!cmds) break;
+          step(s.state, cmds);
+        }
+        this.view.syncState(s.state, []);
+        this.view.terrain.markAllDirty();
+      },
+    };
   }
 
   private loop(): void {
@@ -99,7 +117,15 @@ export class GameView {
           this.showEnd(this.session.state.winner);
         }
       }
+      const r0 = performance.now();
       this.view.render(dtMs / 1000, this.session.state, this.session.alpha, this.session.localPlayer);
+      this.perf.frames++;
+      this.perf.frameMs += performance.now() - r0;
+      if (this.session.state.tick !== t0) {
+        this.perf.ticks++;
+        this.perf.tickMs += this.session.lastTickMs;
+        if (this.session.lastTickMs > this.perf.maxTickMs) this.perf.maxTickMs = this.session.lastTickMs;
+      }
       if (now - lastHud > 250) {
         lastHud = now;
         this.hud.update();

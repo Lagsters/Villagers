@@ -272,13 +272,50 @@ function startCandidate(map: MapData, idx: number, scratch: number[]): boolean {
   return true;
 }
 
+/**
+ * Etykiety spojnych obszarow ladu (pola przechodnie, 6-sasiedztwo). Zwraca [etykiety, etykieta najwiekszego].
+ * Starty lezace na roznych wyspach uniemozliwilyby zwyciestwo, wiec wszystkie losujemy z najwiekszego.
+ */
+function landComponents(map: MapData): [Int32Array, number] {
+  const { w, h } = map;
+  const n = w * h;
+  const label = new Int32Array(n).fill(-1);
+  const nb = neighborTable(w, h);
+  const stack: number[] = [];
+  let best = -1;
+  let bestSize = 0;
+  let next = 0;
+  for (let i = 0; i < n; i++) {
+    if (label[i] >= 0 || isBorder(map, i) || !isWalkableTerrain(map.terrain[i])) continue;
+    const id = next++;
+    let size = 0;
+    label[i] = id;
+    stack.push(i);
+    while (stack.length) {
+      const c = stack.pop()!;
+      size++;
+      for (let d = 0; d < 6; d++) {
+        const j = nb[c * 6 + d];
+        if (j < 0 || label[j] >= 0 || isBorder(map, j) || !isWalkableTerrain(map.terrain[j])) continue;
+        label[j] = id;
+        stack.push(j);
+      }
+    }
+    if (size > bestSize) {
+      bestSize = size;
+      best = id;
+    }
+  }
+  return [label, best];
+}
+
 function pickStarts(map: MapData, players: number, rng: RngHolder): number[] {
   const { w, h } = map;
   const scratch: number[] = [];
   const cands: number[] = [];
+  const [label, main] = landComponents(map);
   for (let i = 0; i < w * h; i += 1) {
-    // Rzadsze probkowanie na duzych mapach wystarcza.
-    if (startCandidate(map, i, scratch)) cands.push(i);
+    if (label[i] === main && startCandidate(map, i, scratch)) cands.push(i);
   }
   if (cands.length === 0) {
     // Awaryjnie: splaszcz teren w wybranych punktach.

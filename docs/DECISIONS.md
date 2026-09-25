@@ -108,3 +108,24 @@ Drogi wodne z łodziami zostają (część pierwsza).
   z limitem częstotliwości.
 - **Tło menu** to mała partia dwóch botów z krążącą kamerą; wyłączone przy niskiej jakości grafiki.
 - Rozmiar: kod + CSS ~215 KB gzip (limit 2 MB), modele 644 KB, ikony 552 KB (razem z modelami < 5 MB).
+
+## 2026-09-25 — M9 (wydajność, balans)
+
+- **Zasięg ataku 18** (było 14). Przy 14 fronty często nie miały celów w zasięgu i partie zamierały
+  w równowadze; w oryginale atakować można było budynki widoczne za granicą, czyli dalej niż sama
+  granica. Po zmianie 40 z 40 partii botów (trudny vs łatwy, mapa 64) kończy się zwycięstwem:
+  mediana 50 min, 90% w 87 min; trudny wygrywa 25:15.
+- **Starty graczy w największym spójnym obszarze lądu** - na osobnych wyspach zwycięstwo byłoby niemożliwe.
+- **Rycerze trafiają najpierw do budynków z najmniejszą obsadą** (pusty budynek nie trzyma terytorium).
+- **Zbieracz bez celu ponawia próbę z rozrzutem i rosnącym odstępem**, a A* dla jego wypraw ma limit
+  600 węzłów - wcześniej wszyscy jednocześnie liczyli nieudane ścieżki co 41 ticków (skoki czasu ticku).
+- **Renderer rysuje tylko encje w kadrze** (prostokąt z rzutu narożników ekranu na teren), ocean to kolor
+  tła zamiast płaszczyzny pod mapą, słupki graniczne też tylko w kadrze.
+- **Domyślna jakość grafiki wykrywana automatycznie**: renderer programowy (SwiftShader/llvmpipe) albo
+  ≤ 4 GB RAM → „niska” (bez wygładzania krawędzi).
+- **Test wydajności** w Chromium (CDP: CPU ×4, 1280×720, DPR 1, 8 graczy, 30 min gry): 45 FPS,
+  najdłuższy tick 3,7 ms, pamięć JS ~45 MB, 45 wywołań rysowania. W headless Chromium grafika jest
+  rasteryzowana programowo, więc to ostrzejszy warunek niż zintegrowana karta.
+- Bot: budowa w kolejności zastępczej (twierdza → wieża → wartownia → barak), sprawdzanie obsady
+  (narzędzia, kopacz, budowniczy) przed budową, rezerwy desek i kamienia, łączenie odciętych magazynów,
+  2 kopalnie węgla na kopalnię żelaza i smolarnia przy niedoborze węgla, tryb dobijania przy przewadze.

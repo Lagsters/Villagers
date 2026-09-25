@@ -71,6 +71,34 @@ export class EntitiesRenderer {
   private m = new THREE.Matrix4();
   private m2 = new THREE.Matrix4();
   private m3 = new THREE.Matrix4();
+  /** Prostokat widocznosci (swiat x/z) - encje poza nim nie sa rysowane. */
+  private vis = { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
+  private ray = new THREE.Raycaster();
+  private ndc = new THREE.Vector2();
+  private hit = new THREE.Vector3();
+  private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+  /** Wyznacza prostokat widocznosci: rzut naroznikow ekranu na plaszczyzny terenu (y = 0 i y = 7). */
+  setView(camera: THREE.Camera): void {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const h of [0, 7]) {
+      this.plane.constant = -h;
+      for (const [nx, ny] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        this.ndc.set(nx, ny);
+        this.ray.setFromCamera(this.ndc, camera);
+        if (!this.ray.ray.intersectPlane(this.plane, this.hit)) continue;
+        x0 = Math.min(x0, this.hit.x); x1 = Math.max(x1, this.hit.x);
+        z0 = Math.min(z0, this.hit.z); z1 = Math.max(z1, this.hit.z);
+      }
+    }
+    const M = 1.5;
+    this.vis = Number.isFinite(x0) ? { x0: x0 - M, x1: x1 + M, z0: z0 - M, z1: z1 + M } : { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
+  }
+
+  private inView(x: number, z: number): boolean {
+    const v = this.vis;
+    return x >= v.x0 && x <= v.x1 && z >= v.z0 && z <= v.z1;
+  }
 
   constructor(material: THREE.Material) {
     this.material = material;
@@ -133,6 +161,7 @@ export class EntitiesRenderer {
       if (def.size === SIZE.LARGE) { ox = LARGE_OFF_X; oz = LARGE_OFF_Z; }
       const layer = this.buildingLayers[b.kind];
       const bx = p.x + ox, bz = p.z + oz;
+      if (!this.inView(bx, bz)) continue;
       if (b.stage === STAGE.DONE) {
         layer.push(bx, p.y, bz, 0, 1);
         this.decorate(b, bx, p.y, bz);
@@ -183,6 +212,7 @@ export class EntitiesRenderer {
     for (const f of s.flags) {
       if (!f) continue;
       this.wp(s, f.pos, p);
+      if (!this.inView(p.x, p.z)) continue;
       this.flagPole.push(p.x, p.y, p.z);
       const wave = Math.sin(this.time * 4 + f.id) * 0.3;
       const ci = this.flagCloth.push(p.x, p.y, p.z, wave);
@@ -215,8 +245,9 @@ export class EntitiesRenderer {
     const a = new THREE.Vector3();
     const b = new THREE.Vector3();
     for (const serf of s.serfs) {
-      if (!serf || !this.visible(s, serf)) continue;
+      if (!serf) continue;
       this.wp(s, serf.pos, a);
+      if (!this.inView(a.x, a.z) || !this.visible(s, serf)) continue;
       let rot: number;
       let bob = 0;
       let walk = 0;
@@ -290,6 +321,7 @@ export class EntitiesRenderer {
     for (const an of s.animals) {
       if (!an) continue;
       this.wp(s, an.pos, a);
+      if (!this.inView(a.x, a.z)) continue;
       let rot = an.id * 1.7;
       if (an.to >= 0) {
         this.wp(s, an.to, b);
@@ -311,13 +343,17 @@ export class EntitiesRenderer {
     return true;
   }
 
-  /** Slupki graniczne na polach, ktorych sasiad nalezy do kogos innego. */
+  /** Pola graniczne (x, z, wlasciciel) - przeliczane tylko po zmianie terytorium. */
+  private borderCells: number[] = [];
+  private bordersDrawnFor = '';
+
+  /** Slupki graniczne na polach, ktorych sasiad nalezy do kogos innego (tylko w kadrze). */
   private updateBorders(s: GameState): void {
     const owner = s.map.owner;
     if (!this.lastOwner || this.lastOwner.length !== owner.length) {
       this.lastOwner = new Uint8Array(owner);
       this.borderDirty = true;
-    } else {
+    } else if (s.tick % 5 === 0) {
       for (let i = 0; i < owner.length; i++) {
         if (owner[i] !== this.lastOwner[i]) {
           this.lastOwner.set(owner);
@@ -326,24 +362,39 @@ export class EntitiesRenderer {
         }
       }
     }
-    if (!this.borderDirty) return;
-    this.borderDirty = false;
-    const m = s.map;
-    this.border.begin();
-    for (let y = 1; y < m.h - 1; y++) {
-      for (let x = 1; x < m.w - 1; x++) {
-        const i = y * m.w + x;
-        const o = owner[i];
-        if (o === 0) continue;
-        const odd = y & 1;
-        const nbs = [i + 1, (y + 1) * m.w + x + odd, (y + 1) * m.w + x - 1 + odd, i - 1, (y - 1) * m.w + x - 1 + odd, (y - 1) * m.w + x + odd];
-        let edge = false;
-        for (const j of nbs) if (owner[j] !== o) { edge = true; break; }
-        if (!edge) continue;
-        const bi = this.border.push(vx(x, y), m.height[i] * H_SCALE, vz(y));
-        const c = playerColor(o - 1);
-        this.border.color(bi, c.r, c.g, c.b);
+    if (this.borderDirty) {
+      this.borderDirty = false;
+      const m = s.map;
+      const cells: number[] = [];
+      for (let y = 1; y < m.h - 1; y++) {
+        for (let x = 1; x < m.w - 1; x++) {
+          const i = y * m.w + x;
+          const o = owner[i];
+          if (o === 0) continue;
+          const odd = y & 1;
+          const nbs = [i + 1, (y + 1) * m.w + x + odd, (y + 1) * m.w + x - 1 + odd, i - 1, (y - 1) * m.w + x - 1 + odd, (y - 1) * m.w + x + odd];
+          for (const j of nbs) {
+            if (owner[j] !== o) {
+              cells.push(vx(x, y), m.height[i] * H_SCALE, vz(y), o - 1);
+              break;
+            }
+          }
+        }
       }
+      this.borderCells = cells;
+      this.bordersDrawnFor = '';
+    }
+    const v = this.vis;
+    const key = `${v.x0.toFixed(1)},${v.x1.toFixed(1)},${v.z0.toFixed(1)},${v.z1.toFixed(1)},${this.borderCells.length}`;
+    if (key === this.bordersDrawnFor) return;
+    this.bordersDrawnFor = key;
+    this.border.begin();
+    const c = this.borderCells;
+    for (let k = 0; k < c.length; k += 4) {
+      if (!this.inView(c[k], c[k + 2])) continue;
+      const bi = this.border.push(c[k], c[k + 1], c[k + 2]);
+      const col = playerColor(c[k + 3]);
+      this.border.color(bi, col.r, col.g, col.b);
     }
     this.border.end();
   }

@@ -67,14 +67,19 @@ function toolAvailable(inv: Inventory, g: number, except: number): boolean {
   return false;
 }
 
-/** Przekwalifikowuje bezczynnego specjaliste w wolnego osadnika (narzedzia wracaja do puli). */
+/**
+ * Przekwalifikowuje bezczynnego specjaliste w wolnego osadnika (narzedzia wracaja do puli).
+ * Najpierw zawody z nadmiarem (ostatni przedstawiciel zawodu zostaje, jesli sie da).
+ */
 function retrainOne(inv: Inventory, pred: (t: number) => boolean): boolean {
-  for (let t = 0; t < inv.serfs.length; t++) {
-    if (inv.serfs[t] > 0 && retrainable(t) && pred(t)) {
-      inv.serfs[t]--;
-      inv.serfs[S.GENERIC]++;
-      for (const g of SERF_TOOLS[t]) inv.goods[g]++;
-      return true;
+  for (const minCount of [2, 1]) {
+    for (let t = 0; t < inv.serfs.length; t++) {
+      if (inv.serfs[t] >= minCount && retrainable(t) && pred(t)) {
+        inv.serfs[t]--;
+        inv.serfs[S.GENERIC]++;
+        for (const g of SERF_TOOLS[t]) inv.goods[g]++;
+        return true;
+      }
     }
   }
   return false;

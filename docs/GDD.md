@@ -214,8 +214,8 @@ Waga 0 oznacza „nie dostarczaj”.
   szkolą się tak samo, jeśli zamek ma monety (co 900 ticków).
 - **Morale gracza** = `50 + min(50, 4 × monety)` [%] (monety w magazynach i budynkach wojskowych).
 - Rycerz powstaje z wolnego osadnika + miecz + tarcza + piwo.
-- **Atak**: gracz wybiera wrogi budynek wojskowy lub zamek w odległości ≤ 14 od któregoś własnego
-  budynku wojskowego. Dostępni są rycerze z własnych budynków wojskowych w promieniu 14 od celu
+- **Atak**: gracz wybiera wrogi budynek wojskowy lub zamek w odległości ≤ 18 od któregoś własnego
+  budynku wojskowego. Dostępni są rycerze z własnych budynków wojskowych w promieniu 18 od celu
   (każdy budynek zostawia co najmniej 1). Rycerze idą (poza drogami) pod flagę celu.
 - **Obrona**: budynek wysyła po jednym obrońcy na atakującego, dopóki ma rycerzy (ostatni wychodzi też).
 - **Pojedynek**: runda co 6 ticków; atakujący trafia z szansą

@@ -18,7 +18,7 @@ import { STAGE, type Building, type GameState, type Serf } from './types.ts';
 import type { Command } from './commands.ts';
 import { event, isFreeWalkable, nb, recomputeTerritory } from './world.ts';
 
-export const ATTACK_RANGE = 14;
+export const ATTACK_RANGE = 18;
 export const TRAIN_TICKS = 600;
 export const CASTLE_TRAIN_TICKS = 900;
 export const ROUND_TICKS = 6;
