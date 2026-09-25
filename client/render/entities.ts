@@ -34,16 +34,16 @@ function local(lx: number, ly: number): [number, number] {
 const BANNER: Record<number, [number, number, number]> = {
   [B.CASTLE]: [0, 0.12, 1.46],
   [B.GUARDHUT]: [0, 0, 0.68],
-  [B.TOWER]: [0.08, 0.08, 1.35],
-  [B.FORTRESS]: [0, 0.14, 1.02],
-  [B.GUARDHOUSE]: [-0.18, 0.14, 0.8],
+  [B.TOWER]: [0.02, 0.1, 1.34],
+  [B.FORTRESS]: [-0.12, 0.14, 1.12],
+  [B.GUARDHOUSE]: [-0.2, 0.12, 0.8],
 };
-const MILL_HUB = local(0, -0.2);
+const MILL_HUB = local(0, -0.26);
 
 const HIP = 0.14;
 const SHOULDER = 0.31;
 /** Skala jednostek (drobne postacie z duzymi glowami, jak w pierwowzorze). */
-const UNIT_SCALE = 1.0;
+const UNIT_SCALE = 0.85;
 /** Flagi na drogach mniejsze niz na budynkach - drobne proporczyki. */
 const FLAG_SCALE = 0.8;
 
@@ -215,7 +215,7 @@ export class EntitiesRenderer {
   private decorate(b: Building, x: number, y: number, z: number): void {
     if (b.kind === B.MILL) {
       const spin = b.phase !== 0 ? this.time * 2.2 : this.time * 0.3;
-      this.m.makeTranslation(x + MILL_HUB[0], y + 0.55, z + MILL_HUB[1]);
+      this.m.makeTranslation(x + MILL_HUB[0], y + 0.5, z + MILL_HUB[1]);
       this.m2.makeRotationY(BROT);
       this.m3.makeRotationZ(spin + b.id);
       this.m.multiply(this.m2).multiply(this.m3);

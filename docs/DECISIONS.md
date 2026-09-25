@@ -171,3 +171,15 @@ Drogi wodne z łodziami zostają (część pierwsza).
   **szyld z modelem produktu** na słupku przed wejściem (kłoda, drzewko, deski, kamień, ryba, poroże,
   snop, chleb, świnia, szynka, sztaba, moneta, młotek, kufel) - tablica odchylona ku kamerze. Kamera 38°.
   Wydajność: 35,4 FPS przy CPU ×4, 52 wywołania rysowania.
+- **Czwarta runda („jeszcze bardziej jak oryginał”)**: każdy budynek odwzorowany na podstawie grafiki
+  z pierwowzoru, bez dodatków spoza oryginału - wszystkie dachy z terakoty z kratką dachówek (pionowe
+  spoiny na widocznej połaci), bez szyldów z produktami (szyld tylko w mennicy i zbrojowni, jak w oryginale).
+  Chaty z bali długą ścianą do kamery, z jasnymi czołami bali na narożniku i skrzyżowanymi deskami na
+  szczycie; magazyn z trzema równoległymi dachami, okrągłymi basztami bez dachu, kominem-wieżą i schodami;
+  tartak szczytem do kamery z łukowym otworem i dobudówką; piekarnia piętrowa z oknem pieca; rzeźnia
+  pół z desek, pół bielona; rybak na kamiennej podmurówce z siecią; kopalnie z A-ramą i szopką z desek na
+  szczycie (kopalnia granitu z kamienną szopą); huta z dwóch części z kominem; mennica kamień + deski;
+  narzędziownia z kamienną wieżą, dachem czterospadowym i wiatrowskazem; zbrojownia z otwartą kuźnią;
+  stocznia jako otwarta szopa z łodzią; kwadratowa chata wartownicza pod dachem czterospadowym; wieża
+  z murem z blankami i bramą; warownia z okrągłymi basztami z blankami; młyn niski z dużymi skrzydłami.
+  Jednostki w skali 0,85. Wydajność: 37,3 FPS przy CPU ×4.

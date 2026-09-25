@@ -49,6 +49,13 @@ def roof(m, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', over=0.04, tiles=3, ga
             f = (k + 0.5) / tiles - 0.5  # -0.5 okap .. 0.5 kalenica
             px, py = P(0, s * (ye / 2 - f * ye) + ny * 0.014)
             m.cbox(w + 2 * over + 0.004, 0.018, 0.012, x=px, y=py, z=cz + f * dz + nz * 0.014, col=col + '_dark', rx=-s * ang, rz=rz)
+        if s == (1 if front else -1):
+            # Pionowe spoiny na polaci widocznej z kamery - kratka dachowek jak w pierwowzorze.
+            n = max(3, int((w + 2 * over) / 0.075))
+            for i in range(1, n):
+                lx = -(w / 2 + over) + i * (w + 2 * over) / n
+                px, py = P(lx, s * ye / 2 + ny * 0.016)
+                m.cbox(0.01, length, 0.012, x=px, y=py, z=cz + nz * 0.016, col=col + '_dark', rx=-s * ang, rz=rz)
         px, py = P(0, s * ye)
         m.cbox(w + 2 * over + 0.01, 0.014, 0.022, x=px, y=py, z=z - drop + 0.004, col=trim, rz=rz)
     m.cbox(w + 2 * over + 0.02, 0.035, 0.03, x=x, y=y, z=z + h + 0.018, col=ridge, rz=rz)
@@ -198,57 +205,6 @@ def sign(m, x, y, z, emblem=None, col='cream'):
         m.cbox(0.045, 0.016, 0.04, x=x, y=y - 0.083, z=z - 0.07, col=emblem)
 
 
-def product(m, kind, x, y, z):
-    """Maly model produktu na szyldzie (widoczny z gory - od razu wiadomo, co budynek robi)."""
-    if kind == 'bread':
-        m.ico(0.04, x=x, y=y, z=z, col='bread', sub=1, sx=1.5, sz=0.7)
-    elif kind == 'fish':
-        m.ico(0.035, x=x, y=y, z=z, col='fish', sub=1, sx=2.0, sz=0.6)
-        m.cone(0.025, 0.035, 4, x=x + 0.075, y=y, z=z - 0.02, col='fish', ry=-R)
-    elif kind == 'plank':
-        for k in range(3):
-            m.cbox(0.13, 0.03, 0.012, x=x, y=y, z=z - 0.02 + k * 0.016, col='wood_light' if k % 2 else 'wood')
-    elif kind == 'log':
-        m.cyl(0.028, 0.13, 7, x=x - 0.065, y=y, z=z, col='log', ry=R)
-    elif kind == 'stone':
-        m.ico(0.04, x=x - 0.02, y=y, z=z, col='stone_light', sub=0)
-        m.ico(0.03, x=x + 0.035, y=y, z=z - 0.01, col='stone', sub=0)
-    elif kind == 'meat':
-        m.ico(0.04, x=x, y=y, z=z, col='meat', sub=1, sz=1.3)
-        m.cyl(0.01, 0.04, 4, x=x, y=y, z=z + 0.04, col='cream')
-    elif kind == 'pig':
-        m.cbox(0.1, 0.05, 0.05, x=x, y=y, z=z, col='pig')
-        m.cbox(0.04, 0.04, 0.04, x=x - 0.065, y=y, z=z + 0.01, col='pig')
-    elif kind == 'wheat':
-        for k in (-1, 0, 1):
-            m.cone(0.02, 0.12, 4, x=x + k * 0.025, y=y, z=z - 0.05, col='wheat', rx=R + k * 0.3, ry=R)
-    elif kind == 'beer':
-        m.cyl(0.03, 0.06, 7, x=x, y=y, z=z - 0.03, col='beer')
-        m.cyl(0.032, 0.015, 7, x=x, y=y, z=z + 0.03, col='white')
-    elif kind == 'gold':
-        m.cyl(0.04, 0.012, 8, x=x, y=y, z=z, col='gold', rx=R)
-    elif kind == 'iron':
-        m.cbox(0.1, 0.035, 0.025, x=x, y=y, z=z, col='metal')
-        m.cbox(0.1, 0.035, 0.025, x=x + 0.02, y=y, z=z + 0.026, col='metal_dark')
-    elif kind == 'hammer':
-        m.cbox(0.012, 0.012, 0.1, x=x, y=y, z=z, col='wood', ry=0.5)
-        m.cbox(0.06, 0.025, 0.025, x=x + 0.025, y=y, z=z + 0.045, col='metal_dark', ry=0.5)
-    elif kind == 'tree':
-        m.cone(0.05, 0.1, 6, x=x, y=y, z=z - 0.05, col='pine')
-    elif kind == 'antlers':
-        for sx in (-1, 1):
-            m.beam((x, y, z - 0.03), (x + sx * 0.05, y, z + 0.04), 0.01, 'cream')
-            m.beam((x + sx * 0.03, y, z + 0.01), (x + sx * 0.06, y, z), 0.008, 'cream')
-
-
-def product_sign(m, kind, x, y):
-    """Szyld na slupku przed wejsciem z produktem budynku; tablica odchylona do gory (czytelna z kamery)."""
-    m.box(0.02, 0.02, 0.22, x=x, y=y, col='wood_dark')
-    m.cbox(0.17, 0.014, 0.12, x=x, y=y - 0.01, z=0.26, col='cream', rx=-0.5)
-    m.cbox(0.19, 0.012, 0.14, x=x, y=y - 0.003, z=0.26, col='wood_dark', rx=-0.5)
-    product(m, kind, x, y - 0.045, 0.28)
-
-
 def path_stones(m, y0, n=3):
     for i in range(n):
         m.cyl(0.035, 0.012, 6, x=((i * 37) % 5 - 2) * 0.01, y=y0 - i * 0.07, col='stone_light')
@@ -361,214 +317,238 @@ def slim_tower(m, r, h, x, y, col='whitewash', roof_col='terracotta', seg=8, con
         m.cyl(0.007, 0.08, 4, x=x, y=y, z=h + 0.035 + r * cone_k - 0.02, col='wood_dark')
 
 
-def headframe(m, x, y, h=0.62):
-    """Drewniana wieza wyciagowa kopalni."""
-    b, t = 0.11, 0.06
-    corners = ((-1, -1), (1, -1), (1, 1), (-1, 1))
-    for (sx, sy) in corners:
-        m.beam((x + sx * b, y + sy * b, 0), (x + sx * t, y + sy * t, h), 0.024, 'plank')
-    for zz, k in ((0.2, 0.33), (0.42, 0.7)):
-        r = b + (t - b) * k
-        for i in range(4):
-            (ax, ay), (bx, by) = corners[i], corners[(i + 1) % 4]
-            if i in (0, 3):  # poprzeczki widoczne od frontu i z lewej
-                m.beam((x + ax * r, y + ay * r, zz), (x + bx * r, y + by * r, zz), 0.016, 'plank_dark')
-    m.beam((x - b, y - b, 0.02), (x + t, y - t, h * 0.95), 0.014, 'plank_dark')
-    m.box(0.17, 0.17, 0.02, x=x, y=y, z=h, col='plank_dark')
-    m.cyl(0.055, 0.015, 10, x=x, y=y - 0.03, z=h + 0.06, col='wood_dark', rx=R)
-    roof(m, 0.18, 0.16, 0.08, x=x, y=y, z=h + 0.1, col='terracotta', over=0.03, tiles=2, gable_col='plank')
-    for sx in (-1, 1):
-        m.box(0.02, 0.02, 0.1, x=x + sx * 0.08, y=y, z=h + 0.01, col='plank_dark')
+def log_ends(m, x, y, h, z=0.04, n=None):
+    """Jasne czola bali wystajace na narozniku chaty (lewy przedni naroznik - widoczny z kamery)."""
+    n = n or max(3, int(h / 0.05))
+    for i in range(n):
+        zz = z + (i + 0.5) * h / n
+        m.cbox(0.05, 0.035, 0.03, x=x - 0.012, y=y - 0.012, z=zz, col='wood_light')
+
+
+def crossed_gable(m, x, y, z, front=False):
+    """Skrzyzowane deski na szczycie dachu (koniki) - po lewej stronie kalenicy."""
+    for s in (-1, 1):
+        if front:
+            m.beam((x, y - 0.02, z - 0.02), (x + s * 0.06, y - 0.05, z + 0.07), 0.018, 'wood_light')
+        else:
+            m.beam((x - 0.02, y, z - 0.02), (x - 0.05, y + s * 0.06, z + 0.07), 0.018, 'wood_light')
+
+
+def cabin(m, w, d, h, x=0.0, y=0.0, style='log', roof_h=None, **kw):
+    """Chata z bali/desek: dluga sciana do kamery, szczyt po lewej, koniki na szczycie."""
+    top = house(m, w, d, h, style, x=x, y=y, roof_h=roof_h, **kw)
+    rh = roof_h if roof_h is not None else d * 0.3
+    if style == 'log':
+        log_ends(m, x - w / 2, y - d / 2, top - 0.04)
+    crossed_gable(m, x - w / 2 - 0.02, y, top + rh + 0.02)
+    return top
+
+
+def headframe(m, x, y, h=0.5):
+    """Wieza wyciagowa kopalni: A-rama z dwoch par nog i szopka z desek na szczycie."""
+    for sy in (-0.04, 0.04):
+        for sx in (-1, 1):
+            m.beam((x + sx * 0.13, y + sy, 0), (x + sx * 0.06, y + sy, h), 0.026, 'plank')
+    for zz in (0.18, 0.34):
+        k = zz / h
+        r = 0.13 + (0.06 - 0.13) * k
+        m.beam((x - r, y - 0.045, zz), (x + r, y - 0.045, zz), 0.018, 'plank_dark')
+    # Szopka na szczycie (szczelinowe deski) z daszkiem.
+    m.box(0.17, 0.12, 0.13, x=x, y=y, z=h, col='plank')
+    for i in range(1, 5):
+        m.cbox(0.008, 0.01, 0.13, x=x - 0.085 + i * 0.034, y=y - 0.062, z=h + 0.065, col='plank_dark')
+    roof(m, 0.17, 0.12, 0.07, x=x, y=y, z=h + 0.13, col='terracotta', over=0.02, tiles=2, gable_col='plank')
+
+
+def round_bastion(m, r, h, x, y, col='whitewash'):
+    """Okragla baszta z blankami, bez dachu (jak w magazynie i warowni pierwowzoru)."""
+    m.cyl(r, h, 8, x=x, y=y, col=col)
+    m.cyl(r * 0.75, 0.01, 8, x=x, y=y, z=h, col='stone_dark')
+    for k in range(4):
+        a = k * R + 0.4
+        m.box(0.045, 0.045, 0.05, x=x + math.cos(a) * r * 0.85, y=y + math.sin(a) * r * 0.85, z=h, col=col)
+    m.cbox(0.025, 0.012, 0.05, x=x, y=y - r, z=h * 0.65, col='coal')
 
 
 # =====================================================================
-# Budynki
+# Budynki (wzorowane na grafikach budynkow pierwowzoru)
 # =====================================================================
 
 def castle(m):
     m.ico(0.62, z=-0.02, col='rock', sub=1, sz=0.2)
+    for (x, y) in ((-0.5, -0.3), (0.45, -0.42), (-0.3, -0.48)):
+        m.ico(0.07, x=x, y=y, z=0.02, col='leaf', sub=1, sz=0.6)
     m.box(1.0, 0.82, 0.32, z=0.04, col='whitewash')
     wall_detail(m, 'white', 1.0, 0.82, 0.32, 0, 0, 0.04, n_front=6, n_side=4)
     crenels(m, 1.0, 0.82, 0.36, n=5, col='whitewash')
-    # Brama.
     m.cbox(0.15, 0.03, 0.2, y=-0.42, z=0.14, col='plank_dark')
     m.cbox(0.19, 0.035, 0.03, y=-0.425, z=0.255, col='stone')
-    # Donzon.
     m.box(0.44, 0.34, 0.86, y=0.12, z=0.04, col='whitewash')
     wall_detail(m, 'white', 0.44, 0.34, 0.86, 0, 0.12, 0.04)
     for sx in (-1, 1):
         window(m, sx * 0.1, 0.12 - 0.17, 0.72, 'front', shutters=False)
         window(m, sx * 0.1, 0.12 - 0.17, 0.5, 'front', shutters=False)
-    roof(m, 0.44, 0.34, 0.16, y=0.12, z=0.9, col='terracotta', gable_col='whitewash', tiles=4, over=0.035)
+    roof(m, 0.44, 0.34, 0.2, y=0.12, z=0.9, col='terracotta', gable_col='whitewash', tiles=4, over=0.03)
     for (x, y, r, h) in ((-0.48, -0.39, 0.09, 0.72), (0.48, -0.39, 0.09, 0.72), (-0.48, 0.38, 0.1, 0.92),
                          (0.48, 0.38, 0.1, 0.92), (-0.28, 0.22, 0.08, 1.25), (0.3, 0.2, 0.075, 1.4),
                          (-0.13, -0.43, 0.06, 0.55), (0.13, -0.43, 0.06, 0.55)):
         slim_tower(m, r, h, x, y, cone_k=3.4)
-    banner(m, 0.0, 0.12, 1.1, 0.36)
+    banner(m, 0.0, 0.12, 1.14, 0.32)
     return ROT
 
 
 def warehouse(m):
-    house(m, 0.62, 0.42, 0.3, 'white', wins=(-1.1, 1.1), door_w=0.16, y=0.06, hip=True)
-    for x in (-0.38, 0.38):
-        m.box(0.16, 0.16, 0.56, x=x, y=0.22, col='whitewash')
-        wall_detail(m, 'white', 0.16, 0.16, 0.56, x, 0.22, 0, n_front=2, n_side=2)
-        m.cbox(0.03, 0.012, 0.06, x=x, y=0.14 - 0.003, z=0.42, col='glass')
-        m.hip(0.16, 0.16, 0.2, x=x, y=0.22, z=0.56, col='terracotta', overhang=0.035)
-    # Niski mur z brama przed magazynem.
-    for sx in (-1, 1):
-        m.box(0.22, 0.05, 0.12, x=sx * 0.2, y=-0.36, col='whitewash')
-        m.box(0.06, 0.06, 0.16, x=sx * 0.09, y=-0.36, col='stone')
-    crate(m, 0.3, -0.24)
-    crate(m, 0.36, -0.14, rz=0.4)
-    barrel(m, -0.32, -0.24)
-    sack(m, -0.22, -0.26)
+    """Magazyn: bielony blok z trzema rownoleglymi dachami, okragle baszty, komin-wieza, schody."""
+    m.box(0.64, 0.5, 0.04, col='stone_dark')
+    m.box(0.6, 0.46, 0.34, z=0.04, col='whitewash')
+    wall_detail(m, 'white', 0.6, 0.46, 0.34, 0, 0, 0.04, n_front=6, n_side=4)
+    for x in (-0.2, 0.0, 0.2):
+        roof(m, 0.46, 0.2, 0.14, x=x, z=0.38, col='terracotta', gable_col='whitewash', tiles=2, over=0.015, front=True)
+    for x in (-0.18, 0.18):
+        window(m, x, -0.23, 0.26, 'front', shutters=False)
+    door(m, 0.0, -0.23, 0.04, w=0.12, col='plank')
+    for (x, y) in ((-0.32, -0.25), (0.32, -0.25)):
+        round_bastion(m, 0.08, 0.42, x, y)
+    m.cyl(0.07, 0.62, 8, x=-0.12, y=0.26, col='whitewash')  # komin-wieza
+    m.cyl(0.08, 0.03, 8, x=-0.12, y=0.26, z=0.62, col='stone')
+    for i in range(2):  # schody
+        m.box(0.16, 0.05, 0.03 - i * 0.012, y=-0.27 - i * 0.05, col='stone_light')
+    barrel(m, -0.2, -0.34)
     return ROT
 
 
 def woodcutter(m):
-    house(m, 0.38, 0.46, 0.22, 'log', front=True, wins=(1,), side_wins=True, has_door=False, roof_col='roof_brown')
-    double_door(m, -0.05, -0.23)
-    log_pile(m, 0.34, 0.02, n=6, length=0.3)
-    product_sign(m, 'log', 0.3, -0.32)
-    m.cyl(0.06, 0.07, 8, x=-0.3, y=-0.3, col='log')  # pniak z siekiera
-    m.beam((-0.31, -0.3, 0.07), (-0.27, -0.3, 0.18), 0.012, 'wood')
-    m.cbox(0.05, 0.008, 0.035, x=-0.315, y=-0.3, z=0.09, col='metal', ry=0.4)
+    """Chata drwala: bale, kamienny komin, pieniek z siekiera i sagi."""
+    cabin(m, 0.44, 0.36, 0.2, wins=(), side_wins=True, has_door=False)
+    double_door(m, 0.02, -0.18, w=0.14)
+    chimney(m, -0.14, 0.08, 0.36, 0.2)
+    log_pile(m, -0.34, -0.32, n=3, length=0.2, rz=R)
+    m.cyl(0.055, 0.07, 8, x=0.32, y=-0.28, col='log')
+    m.beam((0.31, -0.28, 0.07), (0.35, -0.28, 0.18), 0.012, 'wood')
+    m.cbox(0.05, 0.008, 0.035, x=0.305, y=-0.28, z=0.09, col='metal', ry=0.4)
     return ROT
 
 
 def forester(m):
-    house(m, 0.38, 0.44, 0.22, 'log', front=True, wins=(), side_wins=True, has_door=False, roof_col='roof_green')
-    double_door(m, 0, -0.22)
-    product_sign(m, 'tree', 0.12, -0.34)
-    fir(m, -0.34, -0.12, 1.2)
-    fir(m, 0.34, 0.2, 0.7)
-    for (x, y) in ((0.3, -0.25), (0.4, -0.12)):
+    """Lesniczowka: chata z bali z szerokimi wrotami, swierk obok."""
+    cabin(m, 0.46, 0.38, 0.22, wins=(), side_wins=False, has_door=False)
+    double_door(m, 0.02, -0.19, w=0.18, h=0.18)
+    fir(m, -0.34, -0.2, 1.0)
+    fir(m, 0.34, 0.24, 0.7)
+    for (x, y) in ((0.3, -0.3), (0.4, -0.2)):
         m.cone(0.035, 0.08, 5, x=x, y=y, col='leaf')
-    m.cyl(0.03, 0.04, 6, x=0.2, y=-0.33, col='metal')  # konewka
     return ROT
 
 
 def sawmill(m):
-    house(m, 0.44, 0.4, 0.26, 'white', x=0.12, y=0.08, wins=(1,), side_wins=False)
-    # Otwarta wiata z desek na lewym boku, pila i klody.
-    lean_to(m, 0.36, 0.4, 0.3, x=-0.3, y=0.04, col='roof_brown')
-    m.box(0.28, 0.1, 0.09, x=-0.3, y=-0.02, col='plank_dark')
-    m.cyl(0.07, 0.01, 12, x=-0.3, y=-0.02, z=0.1, col='metal', rx=R)
-    m.cyl(0.028, 0.3, 7, x=-0.45, y=-0.02, z=0.12, col='log', ry=R)
-    plank_stack(m, 0.12, -0.3, 4)
-    log_pile(m, -0.3, -0.34, n=3)
-    product_sign(m, 'plank', 0.36, -0.26)
+    """Tartak: bielony dom szczytem do kamery z lukowym otworem, niska dobudowka z desek."""
+    house(m, 0.36, 0.5, 0.26, 'white', front=True, x=0.1, y=0.04, wins=(), side_wins=True, has_door=False)
+    m.cbox(0.16, 0.014, 0.2, x=0.1, y=-0.213, z=0.16, col='coal')  # lukowy otwor
+    m.cyl(0.08, 0.014, 10, x=0.1, y=-0.213, z=0.26, col='coal', rx=R)
+    lean_to(m, 0.3, 0.3, 0.22, x=-0.26, y=-0.08, posts=False)
+    m.cyl(0.028, 0.3, 7, x=-0.42, y=-0.3, z=0.03, col='log', ry=R)
+    plank_stack(m, 0.3, -0.34, 4)
     return ROT
 
 
 def stonecutter(m):
-    house(m, 0.4, 0.42, 0.22, 'stone', front=True, wins=(1,), roof_col='roof_slate')
-    for (x, y, r) in ((-0.32, -0.25, 0.1), (-0.2, -0.35, 0.07), (-0.38, -0.08, 0.08)):
-        m.ico(r, x=x, y=y, col='stone', sub=1, sz=0.7)
-    stone_blocks(m, 0.22, -0.36, 4)
-    product_sign(m, 'stone', 0.34, -0.2)
-    m.beam((0.2, -0.25, 0.0), (0.24, -0.26, 0.2), 0.012, 'wood')  # kilof oparty o sciane
-    m.cbox(0.1, 0.012, 0.015, x=0.24, y=-0.262, z=0.2, col='metal')
+    """Kamieniarz: chata z desek z kominem, sterta kamieni przed wejsciem."""
+    cabin(m, 0.42, 0.36, 0.2, style='plank', wins=(1,), side_wins=False)
+    chimney(m, -0.12, 0.06, 0.34, 0.2)
+    for (x, y, r) in ((-0.3, -0.28, 0.08), (-0.18, -0.36, 0.06), (-0.38, -0.14, 0.06)):
+        m.ico(r, x=x, y=y, col='stone_light', sub=1, sz=0.7)
+    stone_blocks(m, 0.2, -0.36, 3)
     return ROT
 
 
 def fisher(m):
-    m.box(0.5, 0.44, 0.1, col='stone')  # kamienna podmurowka nad woda
-    house(m, 0.38, 0.34, 0.18, 'plank', found=0.1, wins=(1,), side_wins=False, y=0.02, roof_col='thatch')
-    lean_to(m, 0.2, 0.22, 0.26, x=-0.32, y=0.0, col='thatch')
-    product_sign(m, 'fish', 0.12, -0.34)
-    for x in (0.3, 0.44):  # suszarnia sieci
-        m.box(0.018, 0.018, 0.3, x=x, y=-0.24, col='wood')
-    m.cbox(0.14, 0.008, 0.16, x=0.37, y=-0.24, z=0.18, col='cream')
-    for k in range(3):
-        m.cbox(0.02, 0.012, 0.04, x=0.33 + k * 0.035, y=-0.25, z=0.14, col='fish')
-    m.wedge(0.12, 0.26, 0.05, x=-0.3, y=-0.32, col='plank', rz=R)  # lodka
-    barrel(m, 0.26, 0.26)
+    """Rybak: chata z desek na kamiennej podmurowce, szczyt z oknem, przybudowka i siec."""
+    m.box(0.52, 0.44, 0.08, col='stone')
+    house(m, 0.34, 0.36, 0.2, 'plank', front=True, found=0.08, wins=(), side_wins=True, y=0.02, x=-0.06)
+    window(m, -0.06, -0.16, 0.26, 'front', shutters=False)
+    lean_to(m, 0.18, 0.3, 0.24, x=0.2, y=0.02, posts=False)
+    for x in (-0.3, -0.14, 0.02):  # biala siec na plotku
+        m.box(0.016, 0.016, 0.14, x=x, y=-0.3, col='wood')
+    m.cbox(0.32, 0.006, 0.1, x=-0.14, y=-0.3, z=0.08, col='white')
+    for k in range(2):
+        m.cbox(0.02, 0.012, 0.04, x=-0.2 + k * 0.1, y=-0.31, z=0.07, col='fish')
     return ROT
 
 
 def hunter(m):
-    house(m, 0.4, 0.42, 0.22, 'log', front=True, wins=(1,), roof_col='roof_brown')
-    product_sign(m, 'antlers', 0.3, -0.3)
+    cabin(m, 0.42, 0.36, 0.2, wins=(1,), side_wins=False)
     for s in (-1, 1):  # poroze nad drzwiami
-        m.beam((0, -0.215, 0.24), (s * 0.05, -0.215, 0.31), 0.01, 'cream')
-        m.beam((s * 0.03, -0.215, 0.28), (s * 0.06, -0.215, 0.28), 0.008, 'cream')
-    m.box(0.015, 0.015, 0.24, x=-0.3, y=-0.24, col='wood')  # rama ze skora
-    m.box(0.015, 0.015, 0.24, x=-0.42, y=-0.24, col='wood')
-    m.cbox(0.1, 0.01, 0.12, x=-0.36, y=-0.24, z=0.15, col='deer')
+        m.beam((0, -0.185, 0.32), (s * 0.05, -0.185, 0.39), 0.01, 'cream')
+        m.beam((s * 0.03, -0.185, 0.36), (s * 0.06, -0.185, 0.36), 0.008, 'cream')
+    m.box(0.015, 0.015, 0.24, x=-0.28, y=-0.26, col='wood')
+    m.box(0.015, 0.015, 0.24, x=-0.4, y=-0.26, col='wood')
+    m.cbox(0.1, 0.01, 0.12, x=-0.34, y=-0.26, z=0.15, col='deer')
     return ROT
 
 
 def farm(m):
-    house(m, 0.5, 0.4, 0.24, 'white', x=-0.3, y=0.1, chim=(-0.12, 0.1), roof_col='thatch')
-    # Drewniany silos (wieza) i stodola.
-    m.box(0.22, 0.22, 0.62, x=0.3, y=0.24, col='plank')
-    wall_detail(m, 'plank', 0.22, 0.22, 0.62, 0.3, 0.24, 0)
-    m.cbox(0.08, 0.012, 0.1, x=0.3, y=0.127, z=0.5, col='plank_dark')
-    m.hip(0.22, 0.22, 0.2, x=0.3, y=0.24, z=0.62, col='terracotta', overhang=0.04)
-    house(m, 0.3, 0.3, 0.2, 'plank', x=0.24, y=-0.1, wins=(), side_wins=False, has_door=False, found=0.02, roof_col='thatch')
-    double_door(m, 0.24, -0.25, z=0.02)
-    fence(m, -0.62, -0.46, 0.2, -0.46, posts=5)
-    hay(m, 0.56, -0.3)
-    cart(m, -0.2, -0.3, rz=0.3, load='wheat')
-    product_sign(m, 'wheat', -0.5, -0.3)
+    """Farma: maly bielony dom z kominem, wysoki silos z desek, radlo i snopki."""
+    house(m, 0.44, 0.36, 0.22, 'white', x=-0.26, y=0.12, chim=(-0.1, 0.08), wins=(1,))
+    m.box(0.2, 0.2, 0.56, x=0.18, y=0.2, col='plank')
+    wall_detail(m, 'plank', 0.2, 0.2, 0.56, 0.18, 0.2, 0)
+    m.cbox(0.08, 0.012, 0.1, x=0.18, y=0.097, z=0.44, col='plank_dark')
+    roof(m, 0.2, 0.2, 0.1, x=0.18, y=0.2, z=0.56, col='terracotta', gable_col='plank', tiles=2, over=0.02)
+    # Radlo i tyczki na polu przed domem.
+    m.beam((-0.1, -0.3, 0.0), (0.2, -0.2, 0.1), 0.02, 'wood')
+    m.beam((0.14, -0.22, 0.0), (0.2, -0.2, 0.1), 0.016, 'wood_dark')
+    m.cbox(0.06, 0.012, 0.04, x=-0.1, y=-0.3, z=0.02, col='metal')
+    for (x, y) in ((0.42, -0.2), (0.5, -0.34), (-0.5, -0.3)):
+        hay(m, x, y, 0.7)
     return ROT
 
 
 def mill(m):
-    m.cyl(0.24, 0.05, 8, col='stone_dark')
-    m.cyl(0.22, 0.56, 8, col='stone', r_top=0.17)
-    for (u, z) in ((0.2, 0.15), (-0.3, 0.3), (0.5, 0.42), (-0.1, 0.5)):
-        m.cbox(0.05, 0.012, 0.03, x=u * 0.2, y=-0.205 + abs(u) * 0.03, z=z, col='stone_light')
-    m.cyl(0.19, 0.04, 8, z=0.56, col='plank_dark')
-    m.cone(0.19, 0.19, 8, z=0.6, col='terracotta')
-    door(m, 0, -0.215, 0.05, col='plank')
-    window(m, 0.0, -0.18, 0.36, 'front', shutters=False)
-    m.cyl(0.035, 0.1, 6, y=-0.2, z=0.55, col='wood_dark', rx=R)  # piasta
-    for i in range(3):
-        sack(m, 0.28 + (i % 2) * 0.07, -0.12 + (i // 2) * 0.08)
+    """Mlyn: niska okragla kamienna wieza z malym stozkiem; duze plocienne skrzydla (osobny model)."""
+    m.cyl(0.2, 0.05, 8, col='stone_dark')
+    m.cyl(0.18, 0.5, 8, col='stone', r_top=0.14)
+    for (u, z) in ((0.2, 0.15), (-0.3, 0.3), (0.5, 0.42), (-0.1, 0.46)):
+        m.cbox(0.05, 0.012, 0.03, x=u * 0.18, y=-0.17 + abs(u) * 0.03, z=z, col='stone_light')
+    m.cone(0.16, 0.14, 8, z=0.5, col='terracotta')
+    m.cbox(0.08, 0.014, 0.12, y=-0.178, z=0.1, col='coal')
+    door(m, 0.09, -0.16, 0.05, w=0.07, h=0.12, col='plank')
+    m.cyl(0.035, 0.1, 6, y=-0.16, z=0.5, col='wood_dark', rx=R)
     return ROT
 
 
 def mill_sails(m):
-    """Skrzydla wiatraka (plotno na kracie): srodek w piascie, w grze obracane wokol osi modelu."""
+    """Duze skrzydla wiatraka z krata i plotnem: srodek w piascie."""
     for k in range(4):
-        a = k * R
+        a = k * R + 0.35
         ca, sa = math.cos(a), math.sin(a)
-        m.box(0.03, 0.012, 0.5, x=sa * 0.25, z=ca * 0.25 - 0.25, col='wood_dark', ry=a)
-        m.cbox(0.12, 0.008, 0.34, x=sa * 0.3 + ca * 0.065, z=ca * 0.3 - sa * 0.065, col='white', ry=a)
-        for j in range(3):
-            f = 0.17 + j * 0.11
-            m.cbox(0.13, 0.012, 0.01, x=sa * f + ca * 0.065, z=ca * f - sa * 0.065, col='wood', ry=a)
+        m.box(0.03, 0.012, 0.46, x=sa * 0.23, z=ca * 0.23 - 0.23, col='wood_dark', ry=a)
+        m.cbox(0.13, 0.008, 0.32, x=sa * 0.28 + ca * 0.07, z=ca * 0.28 - sa * 0.07, col='white', ry=a)
+        for j in range(4):
+            f = 0.14 + j * 0.09
+            m.cbox(0.14, 0.012, 0.01, x=sa * f + ca * 0.07, z=ca * f - sa * 0.07, col='wood', ry=a)
     return 0.0
 
 
 def bakery(m):
-    house(m, 0.36, 0.46, 0.28, 'white', front=True, x=0.14, y=0.04, wins=(-1,), door_x=0.05)
-    # Nizsza przybudowka z piecem (zar w otworze) i kominem.
-    house(m, 0.3, 0.36, 0.17, 'white', x=-0.22, y=0.0, wins=(), side_wins=False, has_door=False, chim=(-0.06, 0.08), roof_col='roof_brown')
-    m.cbox(0.14, 0.014, 0.1, x=-0.22, y=-0.183, z=0.12, col='coal')
-    m.cbox(0.1, 0.016, 0.05, x=-0.22, y=-0.186, z=0.1, col='fire')
-    product_sign(m, 'bread', 0.36, -0.3)
-    m.box(0.12, 0.08, 0.06, x=-0.24, y=-0.32, col='wood')
-    m.ico(0.03, x=-0.24, y=-0.32, z=0.08, col='bread', sub=1, sx=1.4, sz=0.7)
+    """Piekarnia: wyzsza bielona czesc z tylu, nizsza z przodu z duzym oknem pieca; komin z prawej."""
+    house(m, 0.4, 0.26, 0.34, 'white', x=-0.04, y=0.14, wins=(-1,), side_wins=True, has_door=False)
+    house(m, 0.46, 0.26, 0.18, 'white', x=0.02, y=-0.12, wins=(), side_wins=False, has_door=False)
+    m.cbox(0.14, 0.014, 0.1, x=-0.08, y=-0.253, z=0.14, col='coal')  # okno pieca
+    m.cbox(0.1, 0.016, 0.03, x=-0.08, y=-0.256, z=0.1, col='fire')
+    door(m, 0.14, -0.25, 0.04, col='plank')
+    chimney(m, 0.3, 0.14, 0.2, 0.44)
     return ROT
 
 
 def pigfarm(m):
-    house(m, 0.44, 0.38, 0.24, 'white', x=-0.32, y=0.14, chim=(-0.1, 0.1), roof_col='thatch')
-    product_sign(m, 'pig', -0.08, -0.2)
-    # Oddzielna drewniana szopa-chlew i zagroda.
-    m.box(0.34, 0.26, 0.2, x=0.3, y=0.2, col='plank')
-    wall_detail(m, 'plank', 0.34, 0.26, 0.2, 0.3, 0.2, 0)
-    m.cbox(0.4, 0.34, 0.03, x=0.3, y=0.2, z=0.24, col='thatch', rx=0.25)
-    m.cbox(0.1, 0.012, 0.1, x=0.3, y=0.068, z=0.05, col='plank_dark')
-    fence(m, 0.02, -0.46, 0.62, -0.46, posts=5)
-    fence(m, 0.62, -0.46, 0.62, 0.02, posts=3)
-    fence(m, 0.02, -0.46, 0.02, -0.08, posts=3)
-    m.cyl(0.18, 0.006, 8, x=0.32, y=-0.24, col='soil')
-    for (x, y, r) in ((0.24, -0.32, 0.4), (0.44, -0.18, -0.8)):
+    """Chlewnia: bielony dom z duzymi oknami i osobna skrzynia-chlew z desek, plot."""
+    house(m, 0.42, 0.34, 0.24, 'white', x=-0.3, y=0.1, wins=(-1, 1))
+    m.box(0.34, 0.28, 0.22, x=0.28, y=0.08, col='plank')
+    wall_detail(m, 'plank', 0.34, 0.28, 0.22, 0.28, 0.08, 0)
+    m.cbox(0.38, 0.32, 0.03, x=0.28, y=0.08, z=0.25, col='terracotta', rx=0.2)
+    m.cbox(0.1, 0.012, 0.1, x=0.28, y=-0.063, z=0.05, col='plank_dark')
+    fence(m, -0.1, -0.46, 0.6, -0.46, posts=5)
+    fence(m, 0.6, -0.46, 0.6, -0.08, posts=3)
+    for (x, y, r) in ((0.2, -0.3, 0.4), (0.42, -0.24, -0.8)):
         m.cbox(0.08, 0.13, 0.07, x=x, y=y, z=0.06, col='pig', rz=r)
         m.cbox(0.06, 0.05, 0.05, x=x - math.sin(r) * 0.08, y=y - math.cos(r) * 0.08, z=0.07, col='pig', rz=r)
         for (dx, dy) in ((-0.025, -0.04), (0.025, -0.04), (-0.025, 0.04), (0.025, 0.04)):
@@ -577,34 +557,26 @@ def pigfarm(m):
 
 
 def butcher(m):
-    # Dlugi dom: czesc bielona i czesc z desek pod jednym dachem.
+    """Rzeznia: dlugi dom - czesc z desek i czesc bielona pod jednym duzym dachem, kamienny komin."""
     m.box(0.73, 0.43, 0.04, col='stone_dark')
-    m.box(0.36, 0.4, 0.36, x=-0.18, z=0.04, col='plank')
-    wall_detail(m, 'plank', 0.36, 0.4, 0.36, -0.18, 0, 0.04)
-    m.box(0.34, 0.4, 0.36, x=0.17, z=0.04, col='whitewash')
-    wall_detail(m, 'white', 0.34, 0.4, 0.36, 0.17, 0, 0.04, n_side=0)
-    window(m, -0.2, -0.2, 0.2, 'front', shutters=False)
-    window(m, -0.36, 0.0, 0.2, 'left', shutters=False)
-    m.cbox(0.1, 0.014, 0.08, x=0.26, y=-0.203, z=0.2, col='coal')  # duze okno
-    door(m, 0.06, -0.2, 0.04, col='plank')
-    roof(m, 0.7, 0.4, 0.13, z=0.4, col='terracotta', gable_col='plank', tiles=4, over=0.035)
-    chimney(m, -0.22, 0.08, 0.42, 0.24)
-    product_sign(m, 'meat', -0.3, -0.32)
-    for k in range(3):
-        m.beam((0.14 + k * 0.08, -0.26, 0.3), (0.14 + k * 0.08, -0.26, 0.25), 0.006, 'wood_dark')
-        m.ico(0.028, x=0.14 + k * 0.08, y=-0.26, z=0.22, col='meat', sub=1, sz=1.4)
-    m.beam((0.1, -0.21, 0.3), (0.34, -0.26, 0.3), 0.01, 'wood_dark')
+    m.box(0.3, 0.4, 0.3, x=-0.21, z=0.04, col='plank')
+    wall_detail(m, 'plank', 0.3, 0.4, 0.3, -0.21, 0, 0.04)
+    m.box(0.4, 0.4, 0.3, x=0.14, z=0.04, col='whitewash')
+    wall_detail(m, 'white', 0.4, 0.4, 0.3, 0.14, 0, 0.04, n_side=0)
+    m.cbox(0.1, 0.014, 0.09, x=-0.22, y=-0.203, z=0.2, col='coal')
+    m.cbox(0.12, 0.014, 0.09, x=0.25, y=-0.203, z=0.2, col='coal')
+    door(m, 0.04, -0.2, 0.04, col='plank')
+    roof(m, 0.72, 0.4, 0.2, z=0.34, col='terracotta', gable_col='plank', tiles=4, over=0.03)
+    chimney(m, -0.26, 0.06, 0.36, 0.3)
     return ROT
 
 
-def mine(m, ore):
-    headframe(m, 0.08, 0.16)
-    house(m, 0.32, 0.26, 0.18, 'plank', x=-0.06, y=-0.12, wins=(), side_wins=True, found=0.03, roof_col='roof_brown')
-    m.cbox(0.12, 0.012, 0.13, x=-0.06, y=-0.25 - 0.004, z=0.1, col='coal')  # wejscie sztolni
-    # Kupka urobku przed wejsciem.
-    for (x, y, r) in ((0.2, -0.3, 0.075), (0.3, -0.22, 0.06), (0.26, -0.38, 0.05)):
+def mine(m, ore, stone_shed=False):
+    """Kopalnia: A-rama z szopka na szczycie, pod nia szopa, kupka urobku z przodu."""
+    headframe(m, 0.0, 0.14)
+    house(m, 0.3, 0.24, 0.16, 'stone' if stone_shed else 'plank', x=0.02, y=-0.08, wins=(), side_wins=False, found=0.03)
+    for (x, y, r) in ((-0.2, -0.26, 0.08), (-0.1, -0.32, 0.06), (-0.28, -0.14, 0.05)):
         m.ico(r, x=x, y=y, col=ore, sub=1, sz=0.65)
-    lantern(m, -0.28, -0.3)
     return ROT
 
 
@@ -618,194 +590,184 @@ def ironmine(m):
 
 def goldmine(m):
     mine(m, 'gold_ore')
-    for (x, y) in ((0.2, -0.3), (0.3, -0.24)):
-        m.cbox(0.02, 0.02, 0.02, x=x, y=y, z=0.07, col='fire_core', rz=0.7)
+    for (x, y, z) in ((-0.2, -0.26, 0.08), (-0.1, -0.32, 0.06), (-0.25, -0.2, 0.2), (0.2, 0.1, 0.4), (0.24, -0.1, 0.3)):
+        m.cbox(0.02, 0.02, 0.02, x=x, y=y, z=z, col='fire_core', rz=0.7)
     return ROT
 
 
 def stonemine(m):
-    return mine(m, 'stone_light')
+    return mine(m, 'stone_light', stone_shed=True)
 
 
 def steelworks(m):
-    house(m, 0.4, 0.4, 0.28, 'stone', x=0.14, y=0.06, wins=(1,), side_wins=False, roof_col='roof_slate')
-    house(m, 0.3, 0.34, 0.18, 'stone', x=-0.22, y=0.0, wins=(), side_wins=True, has_door=False, roof_col='roof_slate')
-    product_sign(m, 'iron', 0.34, -0.36)
-    m.cyl(0.07, 0.72, 6, x=-0.26, y=0.12, col='brick', r_top=0.055)
-    m.cyl(0.07, 0.03, 6, x=-0.26, y=0.12, z=0.72, col='stone_dark')
-    m.cbox(0.12, 0.014, 0.08, x=-0.22, y=-0.173, z=0.1, col='fire')
-    m.cbox(0.06, 0.016, 0.04, x=-0.22, y=-0.176, z=0.09, col='fire_core')
-    for i in range(3):
-        m.cbox(0.12, 0.03, 0.02, x=0.32, y=-0.3 + i * 0.04, z=0.01 + (i % 2) * 0.02, col='metal')
-    m.ico(0.06, x=-0.36, y=-0.28, col='coal', sub=1, sz=0.6)
+    """Huta: bielony dom z dwoch czesci - nizsza z lewej, wyzsza z kamiennym kominem z prawej."""
+    house(m, 0.34, 0.4, 0.3, 'white', x=0.14, y=0.06, wins=(1,), side_wins=False, chim=(0.0, 0.06))
+    house(m, 0.3, 0.34, 0.18, 'white', x=-0.2, y=0.0, wins=(-1,), side_wins=True, has_door=False)
+    m.cbox(0.06, 0.016, 0.04, x=-0.14, y=-0.174, z=0.1, col='fire')
     return ROT
 
 
 def mint(m):
-    # Dol kamienny, gora z desek z lekkim nawisem, szyld ze zlotem.
+    """Mennica: dol z kamienia, gora z desek, dach z dachowek, szyld ze zlotem na slupku."""
     m.box(0.52, 0.44, 0.04, col='stone_dark')
     m.box(0.5, 0.42, 0.2, z=0.04, col='stone')
     wall_detail(m, 'stone', 0.5, 0.42, 0.2, 0, 0, 0.04, n_front=5, n_side=3)
-    door(m, -0.1, -0.21, 0.04, col='plank')
-    window(m, 0.14, -0.21, 0.13, 'front', shutters=False)
-    m.box(0.54, 0.46, 0.2, z=0.24, col='plank')
-    wall_detail(m, 'plank', 0.54, 0.46, 0.2, 0, 0, 0.24)
-    for x in (-0.14, 0.12):
-        window(m, x, -0.23, 0.34, 'front', shutters=False)
-    m.hip(0.54, 0.46, 0.18, z=0.44, col='roof_blue', overhang=0.035)
-    chimney(m, 0.16, 0.1, 0.46, 0.22)
-    product_sign(m, 'gold', 0.36, -0.34)
-    m.box(0.12, 0.08, 0.07, x=-0.34, y=-0.3, col='wood_dark')
-    m.cbox(0.13, 0.085, 0.015, x=-0.34, y=-0.3, z=0.05, col='gold')
+    door(m, -0.02, -0.21, 0.04, col='plank')
+    window(m, -0.16, -0.21, 0.15, 'front', shutters=False)
+    window(m, 0.14, -0.21, 0.15, 'front', shutters=False)
+    m.box(0.54, 0.46, 0.18, z=0.24, col='plank')
+    wall_detail(m, 'plank', 0.54, 0.46, 0.18, 0, 0, 0.24)
+    window(m, 0.0, -0.23, 0.33, 'front', shutters=False)
+    roof(m, 0.54, 0.46, 0.16, z=0.42, col='terracotta', gable_col='plank', tiles=4, over=0.03)
+    chimney(m, 0.12, 0.1, 0.44, 0.2)
+    m.box(0.02, 0.02, 0.24, x=0.36, y=-0.3, col='wood_dark')  # szyld
+    m.cbox(0.13, 0.014, 0.12, x=0.36, y=-0.31, z=0.24, col='wood_dark')
+    m.cbox(0.08, 0.016, 0.07, x=0.36, y=-0.317, z=0.24, col='gold')
     return ROT
 
 
 def toolmaker(m):
-    house(m, 0.5, 0.4, 0.26, 'white', x=0.04, y=-0.02, roof_col='roof_slate', hip=True)
-    product_sign(m, 'hammer', 0.16, -0.34)
-    # Kwadratowa kamienna wieza-komin z tylu.
-    m.box(0.16, 0.16, 0.66, x=-0.12, y=0.2, col='stone')
-    wall_detail(m, 'stone', 0.16, 0.16, 0.66, -0.12, 0.2, 0, n_front=2, n_side=3)
-    m.box(0.19, 0.19, 0.04, x=-0.12, y=0.2, z=0.66, col='stone_light')
-    m.cbox(0.05, 0.012, 0.06, x=-0.12, y=0.117, z=0.52, col='glass')
-    anvil(m, 0.4, -0.22)
-    m.cyl(0.06, 0.02, 10, x=-0.34, y=-0.3, z=0.07, col='stone_light', rx=R)  # oselka
-    m.box(0.02, 0.02, 0.07, x=-0.34, y=-0.3, col='wood')
+    """Narzedziownia: dlugi bielony dom z duzym ciemnym wejsciem; z tylu kamienna wieza z czterospadowym dachem i wiatrowskazem."""
+    house(m, 0.6, 0.36, 0.24, 'white', x=0.0, y=-0.04, wins=(-1,), side_wins=True, has_door=False)
+    m.cbox(0.14, 0.014, 0.18, x=0.1, y=-0.223, z=0.13, col='coal')
+    m.box(0.18, 0.18, 0.56, x=0.02, y=0.24, col='stone')
+    wall_detail(m, 'stone', 0.18, 0.18, 0.56, 0.02, 0.24, 0, n_front=3, n_side=3)
+    m.cbox(0.05, 0.012, 0.06, x=0.02, y=0.147, z=0.46, col='coal')
+    m.hip(0.18, 0.18, 0.14, x=0.02, y=0.24, z=0.56, col='terracotta', overhang=0.02)
+    m.cyl(0.006, 0.1, 4, x=0.02, y=0.24, z=0.7, col='metal_dark')
+    m.cbox(0.06, 0.004, 0.03, x=0.045, y=0.24, z=0.78, col='metal_dark')
+    chimney(m, -0.22, 0.0, 0.3, 0.2)
     return ROT
 
 
 def weaponsmith(m):
+    """Zbrojownia: bielony dom, z lewej otwarta kuznia z zarem pod dachem, komin, szyld na wysiegniku."""
     m.box(0.72, 0.44, 0.04, col='stone_dark')
-    m.box(0.4, 0.42, 0.38, x=0.14, z=0.04, col='whitewash')
-    wall_detail(m, 'white', 0.4, 0.42, 0.38, 0.14, 0, 0.04, n_side=0)
-    m.box(0.3, 0.42, 0.38, x=-0.21, z=0.04, col='plank')
-    wall_detail(m, 'plank', 0.3, 0.42, 0.38, -0.21, 0, 0.04)
-    # Otwarta kuznia z zarem.
-    m.cbox(0.2, 0.014, 0.16, x=-0.2, y=-0.213, z=0.12, col='coal')
-    m.cbox(0.12, 0.016, 0.05, x=-0.2, y=-0.216, z=0.07, col='fire')
-    m.cbox(0.06, 0.018, 0.03, x=-0.2, y=-0.218, z=0.065, col='fire_core')
+    m.box(0.42, 0.42, 0.3, x=0.12, z=0.04, col='whitewash')
+    wall_detail(m, 'white', 0.42, 0.42, 0.3, 0.12, 0, 0.04, n_side=0)
+    for (x, y) in ((-0.34, -0.19), (-0.34, 0.19)):
+        m.box(0.03, 0.03, 0.3, x=x, y=y, z=0.04, col='plank_dark')
+    m.box(0.25, 0.03, 0.3, x=-0.22, y=0.19, z=0.04, col='plank')
+    m.box(0.16, 0.14, 0.1, x=-0.2, y=0.0, z=0.04, col='stone')  # palenisko
+    m.cbox(0.12, 0.1, 0.02, x=-0.2, y=0.0, z=0.15, col='fire')
+    m.cbox(0.06, 0.06, 0.02, x=-0.2, y=0.0, z=0.16, col='fire_core')
+    anvil(m, -0.16, -0.22)
     door(m, 0.2, -0.21, 0.04, col='plank')
-    window(m, 0.06, -0.21, 0.24, 'front', shutters=False)
-    roof(m, 0.7, 0.42, 0.13, z=0.42, col='roof_slate', gable_col='plank', tiles=4, over=0.035)
-    m.box(0.12, 0.12, 0.5, x=-0.28, y=0.1, z=0.3, col='stone')  # duzy komin
-    m.box(0.15, 0.15, 0.03, x=-0.28, y=0.1, z=0.8, col='stone_light')
-    m.cbox(0.16, 0.015, 0.18, x=0.3, y=-0.225, z=0.28, col='red')  # tarcza-szyld
-    m.cbox(0.06, 0.017, 0.06, x=0.3, y=-0.23, z=0.3, col='metal')
-    m.cbox(0.014, 0.02, 0.2, x=0.3, y=-0.235, z=0.28, col='white', ry=0.7)  # skrzyzowane miecze
-    m.cbox(0.014, 0.02, 0.2, x=0.3, y=-0.235, z=0.28, col='white', ry=-0.7)
-    anvil(m, -0.02, -0.34)
+    window(m, 0.02, -0.21, 0.22, 'front', shutters=False)
+    roof(m, 0.72, 0.42, 0.2, z=0.34, col='terracotta', gable_col='plank', tiles=4, over=0.03)
+    chimney(m, -0.28, 0.08, 0.36, 0.3)
+    m.beam((0.33, -0.21, 0.28), (0.33, -0.33, 0.28), 0.014, 'wood_dark')  # szyld na wysiegniku
+    m.cbox(0.012, 0.012, 0.03, x=0.33, y=-0.31, z=0.26, col='metal_dark')
+    m.cbox(0.08, 0.014, 0.08, x=0.33, y=-0.31, z=0.21, col='red')
+    m.cbox(0.012, 0.016, 0.1, x=0.33, y=-0.316, z=0.21, col='white', ry=0.7)
     return ROT
 
 
 def shipyard(m):
-    house(m, 0.3, 0.3, 0.2, 'plank', x=-0.3, y=0.2, wins=(), side_wins=True, found=0.03)
-    # Otwarta szopa na pochylni z lodzia.
-    for (x, y) in ((0.02, -0.34), (0.44, -0.34), (0.02, 0.18), (0.44, 0.18)):
-        m.box(0.03, 0.03, 0.32, x=x, y=y, col='plank_dark')
-    roof(m, 0.5, 0.58, 0.14, x=0.23, y=-0.08, z=0.32, col='roof_brown', gable_col='plank', tiles=4, over=0.03, front=True)
-    m.wedge(0.16, 0.44, 0.08, x=0.23, y=-0.08, z=0.02, col='wood_dark')
-    m.cbox(0.15, 0.34, 0.07, x=0.23, y=-0.1, z=0.1, col='plank')
+    """Stocznia: otwarta szopa z desek z lodzia na pochylni."""
+    for (x, y) in ((-0.28, -0.26), (0.28, -0.26), (-0.28, 0.24), (0.28, 0.24)):
+        m.box(0.035, 0.035, 0.3, x=x, y=y, col='plank_dark')
+    m.box(0.56, 0.03, 0.3, y=0.24, col='plank')
+    roof(m, 0.58, 0.52, 0.2, z=0.3, col='plank', gable_col='plank', tiles=3, over=0.03)
+    m.wedge(0.44, 0.16, 0.08, x=0.0, y=-0.02, z=0.02, col='wood_dark', rz=R)
+    m.cbox(0.34, 0.15, 0.07, x=0.0, y=-0.02, z=0.1, col='plank')
     for k in range(4):
-        m.cbox(0.16, 0.012, 0.085, x=0.23, y=-0.22 + k * 0.08, z=0.12, col='plank_dark')
-    plank_stack(m, -0.28, -0.26, 4, rz=0.2)
+        m.cbox(0.012, 0.16, 0.085, x=-0.12 + k * 0.08, y=-0.02, z=0.12, col='plank_dark')
+    plank_stack(m, -0.1, -0.38, 3)
     return ROT
 
 
 def guardhut(m):
-    """Wachhutte: przysadzista kamienna chata pod wielkim dachem."""
-    m.cyl(0.22, 0.04, 8, col='stone_dark')
-    m.cyl(0.2, 0.22, 8, z=0.04, col='stone')
-    for (a, z) in ((-1.9, 0.1), (-1.2, 0.18), (-2.6, 0.2), (-0.7, 0.09), (2.9, 0.13)):
-        m.cbox(0.05, 0.03, 0.035, x=math.cos(a) * 0.2, y=math.sin(a) * 0.2, z=z, col='stone_light', rz=a + R)
-    m.cyl(0.23, 0.03, 8, z=0.26, col='plank_dark')
-    m.cone(0.25, 0.2, 8, z=0.28, col='terracotta')
-    for k in range(2):
-        rr = 0.22 - k * 0.08
-        m.cyl(rr, 0.014, 8, z=0.3 + k * 0.065, col='terracotta_dark', r_top=rr - 0.03)
-    door(m, 0.0, -0.195, 0.04, w=0.09, h=0.15, col='plank')
-    window(m, -0.2, 0.0, 0.18, 'left', shutters=False)
+    """Wachhutte: kwadratowa kamienna chata pod czterospadowym dachem."""
+    m.box(0.36, 0.34, 0.04, col='stone_dark')
+    m.box(0.32, 0.3, 0.24, z=0.04, col='stone')
+    wall_detail(m, 'stone', 0.32, 0.3, 0.24, 0, 0, 0.04, n_front=5, n_side=4)
+    door(m, 0.06, -0.15, 0.04, w=0.08, h=0.15, col='plank')
+    window(m, -0.08, -0.15, 0.2, 'front', shutters=False)
+    m.hip(0.32, 0.3, 0.2, z=0.28, col='terracotta', overhang=0.03)
+    for k in range(1, 3):
+        f = k / 3
+        m.cbox(0.38 - f * 0.32, 0.012, 0.012, y=-0.18 * (1 - f) - 0.004, z=0.28 + 0.2 * f + 0.006, col='terracotta_dark',
+               rx=math.atan2(0.2, 0.18))
     banner(m, 0.0, 0.0, 0.46, 0.22)
     return ROT
 
 
 def tower_building(m):
-    """Wachturm: wysoka kamienna wieza z przybudowka."""
-    m.box(0.3, 0.3, 0.04, x=0.08, y=0.08, col='stone_dark')
-    m.box(0.26, 0.26, 0.86, x=0.08, y=0.08, z=0.04, col='stone')
-    wall_detail(m, 'stone', 0.26, 0.26, 0.86, 0.08, 0.08, 0.04, n_front=6, n_side=5)
-    for z in (0.5, 0.7):
-        m.cbox(0.03, 0.014, 0.07, x=0.08, y=-0.053, z=z, col='coal')
-        m.cbox(0.014, 0.03, 0.07, x=-0.053, y=0.08, z=z, col='coal')
-    m.box(0.3, 0.3, 0.03, x=0.08, y=0.08, z=0.9, col='stone_light')
-    m.hip(0.28, 0.28, 0.22, x=0.08, y=0.08, z=0.93, col='terracotta', overhang=0.025)
-    house(m, 0.28, 0.24, 0.2, 'stone', x=-0.14, y=-0.16, wins=(), side_wins=True, found=0.03, door_w=0.09)
-    banner(m, 0.08, 0.08, 1.13, 0.22)
+    """Wachturm: wysoka kwadratowa kamienna wieza z czterospadowym dachem, z przodu mur z blankami i brama."""
+    m.box(0.3, 0.3, 0.04, x=0.02, y=0.1, col='stone_dark')
+    m.box(0.26, 0.26, 0.86, x=0.02, y=0.1, z=0.04, col='stone')
+    wall_detail(m, 'stone', 0.26, 0.26, 0.86, 0.02, 0.1, 0.04, n_front=6, n_side=5)
+    for z in (0.52, 0.72):
+        m.cbox(0.03, 0.014, 0.07, x=0.02, y=-0.033, z=z, col='coal')
+    m.hip(0.28, 0.28, 0.22, x=0.02, y=0.1, z=0.9, col='terracotta', overhang=0.025)
+    m.box(0.44, 0.1, 0.26, x=0.02, y=-0.12, col='stone')
+    wall_detail(m, 'stone', 0.44, 0.1, 0.26, 0.02, -0.12, 0, n_front=4, n_side=1)
+    crenels(m, 0.44, 0.1, 0.26, x=0.02, y=-0.12, n=4, col='stone')
+    door(m, 0.02, -0.17, 0.0, w=0.09, h=0.16, col='plank')
+    banner(m, 0.02, 0.1, 1.12, 0.22)
     return ROT
 
 
 def fortress(m):
-    """Wachburg: kamienny zamek z czerwonymi dachami i okraglymi wiezami."""
+    """Wachburg: wysoki blok z czerwonym dachem, okragle baszty z blankami, brama."""
     m.box(0.98, 0.84, 0.04, col='stone_dark')
     m.box(0.94, 0.8, 0.3, z=0.04, col='stone')
     wall_detail(m, 'stone', 0.94, 0.8, 0.3, 0, 0, 0.04, n_front=6, n_side=4)
     crenels(m, 0.94, 0.8, 0.34, n=4, col='stone_light')
     m.cbox(0.16, 0.03, 0.2, y=-0.41, z=0.14, col='plank_dark')
-    m.box(0.5, 0.36, 0.5, y=0.14, z=0.04, col='whitewash')
-    wall_detail(m, 'white', 0.5, 0.36, 0.5, 0, 0.14, 0.04)
-    for sx in (-1, 1):
-        window(m, sx * 0.12, 0.14 - 0.18, 0.42, 'front', shutters=False)
-    roof(m, 0.5, 0.36, 0.16, y=0.14, z=0.54, col='terracotta', gable_col='whitewash', tiles=4, over=0.035)
-    for (x, y, h) in ((-0.47, -0.4, 0.5), (0.47, -0.4, 0.5), (-0.47, 0.4, 0.6), (0.47, 0.4, 0.6)):
-        slim_tower(m, 0.11, h, x, y, col='stone', cone_k=2.2)
-    banner(m, 0.0, 0.14, 0.72, 0.3)
+    m.box(0.5, 0.36, 0.56, x=-0.12, y=0.14, z=0.04, col='whitewash')
+    wall_detail(m, 'white', 0.5, 0.36, 0.56, -0.12, 0.14, 0.04)
+    for z in (0.34, 0.5):
+        for sx in (-1, 1):
+            window(m, -0.12 + sx * 0.12, 0.14 - 0.18, z, 'front', shutters=False)
+    roof(m, 0.5, 0.36, 0.2, x=-0.12, y=0.14, z=0.6, col='terracotta', gable_col='whitewash', tiles=4, over=0.03)
+    for (x, y, h) in ((-0.47, -0.4, 0.5), (0.47, -0.4, 0.5), (0.47, 0.4, 0.62), (0.3, 0.2, 0.74)):
+        round_bastion(m, 0.11, h, x, y, col='stone')
+    banner(m, -0.12, 0.14, 0.82, 0.3)
     return ROT
 
 
 def guardhouse(m):
-    """Wartownia: kamienny dom z narozna wiezyczka."""
-    house(m, 0.4, 0.34, 0.22, 'stone', x=0.04, y=-0.04, wins=(1,), side_wins=True, roof_col='roof_slate')
-    m.box(0.16, 0.16, 0.52, x=-0.18, y=0.14, col='stone')
-    wall_detail(m, 'stone', 0.16, 0.16, 0.52, -0.18, 0.14, 0, n_front=2, n_side=2)
-    m.cbox(0.03, 0.012, 0.06, x=-0.18, y=0.057, z=0.4, col='coal')
-    crenels(m, 0.16, 0.16, 0.52, x=-0.18, y=0.14, n=2, col='stone_light')
-    banner(m, -0.18, 0.14, 0.58, 0.22)
-    barrel(m, 0.3, -0.26)
+    """Wartownia: kamienny dom z okragla baszta z blankami."""
+    house(m, 0.4, 0.34, 0.22, 'stone', x=0.06, y=-0.04, wins=(1,), side_wins=True)
+    round_bastion(m, 0.1, 0.56, -0.2, 0.12, col='stone')
+    banner(m, -0.2, 0.12, 0.58, 0.22)
     return ROT
 
 
 def well(m):
-    m.cyl(0.15, 0.15, 10, col='stone')
-    m.cyl(0.155, 0.02, 10, z=0.15, col='stone_light')
-    m.cyl(0.12, 0.005, 10, z=0.13, col='water')
-    for x in (-0.14, 0.14):
+    m.cyl(0.14, 0.15, 10, col='stone')
+    m.cyl(0.145, 0.02, 10, z=0.15, col='stone_light')
+    m.cyl(0.11, 0.005, 10, z=0.13, col='water')
+    for x in (-0.13, 0.13):
         m.box(0.03, 0.03, 0.34, x=x, col='plank_dark')
-    roof(m, 0.32, 0.16, 0.09, z=0.34, col='roof_brown', over=0.02, tiles=2, gable_col='plank')
-    m.cyl(0.022, 0.28, 6, x=-0.14, z=0.28, col='wood', ry=R)
-    m.beam((0.14, 0.0, 0.28), (0.2, 0.0, 0.24), 0.012, 'wood_dark')
+    roof(m, 0.28, 0.12, 0.07, z=0.34, col='terracotta', over=0.015, tiles=2, gable_col='plank')
+    m.cyl(0.022, 0.26, 6, x=-0.13, z=0.28, col='wood', ry=R)
+    m.beam((0.13, 0.0, 0.28), (0.19, 0.0, 0.24), 0.012, 'wood_dark')
     m.beam((0.0, 0.0, 0.28), (0.0, 0.0, 0.2), 0.004, 'wood_dark')
     m.cyl(0.035, 0.05, 7, y=0.0, z=0.16, col='wood')
-    m.cyl(0.035, 0.05, 7, x=0.22, y=-0.12, col='wood')
     return ROT
 
 
 def brewery(m):
-    house(m, 0.42, 0.42, 0.26, 'white', x=0.12, y=0.04, wins=(1,), side_wins=False, chim=(0.1, 0.1), hip=True)
-    lean_to(m, 0.3, 0.36, 0.26, x=-0.26, y=0.02, posts=False, col='roof_brown')
-    m.cyl(0.08, 0.1, 8, x=-0.26, y=-0.24, col='copper')  # kociol
-    m.cone(0.08, 0.05, 8, x=-0.26, y=-0.24, z=0.1, col='copper')
+    """Browar: bielony dom z przybudowka z desek, beczki i miedziany kociol."""
+    house(m, 0.42, 0.4, 0.26, 'white', x=0.12, y=0.04, wins=(1,), side_wins=False, chim=(0.1, 0.1))
+    house(m, 0.28, 0.32, 0.18, 'plank', x=-0.24, y=0.0, wins=(), side_wins=True, has_door=False)
+    m.cyl(0.07, 0.09, 8, x=-0.3, y=-0.26, col='copper')
+    m.cone(0.07, 0.05, 8, x=-0.3, y=-0.26, z=0.09, col='copper')
     for (x, y, z) in ((0.2, -0.3, 0), (0.3, -0.26, 0), (0.25, -0.28, 0.1)):
         barrel(m, x, y, z)
-    product_sign(m, 'beer', 0.04, -0.34)
     return ROT
 
 
 def donkeybreeder(m):
-    house(m, 0.3, 0.3, 0.2, 'white', x=-0.44, y=0.16, wins=(), side_wins=True, roof_col='thatch')
-    m.box(0.56, 0.36, 0.24, x=0.1, y=0.16, col='plank')
-    wall_detail(m, 'plank', 0.56, 0.36, 0.24, 0.1, 0.16, 0)
+    house(m, 0.3, 0.3, 0.2, 'white', x=-0.44, y=0.16, wins=(), side_wins=True)
+    m.box(0.56, 0.36, 0.26, x=0.1, y=0.16, col='plank')
+    wall_detail(m, 'plank', 0.56, 0.36, 0.26, 0.1, 0.16, 0)
     for x in (-0.08, 0.12, 0.3):
         m.cbox(0.1, 0.014, 0.12, x=x, y=-0.023, z=0.1, col='plank_dark')
-    roof(m, 0.56, 0.36, 0.14, x=0.1, y=0.16, z=0.24, col='thatch', gable_col='plank', tiles=3, over=0.04)
+    roof(m, 0.56, 0.36, 0.14, x=0.1, y=0.16, z=0.26, col='terracotta', gable_col='plank', tiles=3, over=0.03)
     fence(m, -0.6, -0.5, 0.58, -0.5, posts=6)
     fence(m, 0.58, -0.5, 0.58, -0.08, posts=3)
     m.cbox(0.2, 0.09, 0.09, x=0.3, y=-0.3, z=0.14, col='donkey')
@@ -819,18 +781,17 @@ def donkeybreeder(m):
 
 
 def charburner(m):
-    house(m, 0.34, 0.36, 0.2, 'log', front=True, x=-0.36, y=0.16, wins=(), side_wins=True, roof_col='thatch')
-    m.ico(0.3, x=0.22, y=-0.06, col='coal', sub=1, sz=0.55)  # mielerz
+    cabin(m, 0.36, 0.3, 0.18, x=-0.3, y=0.2, wins=(), side_wins=True)
+    m.ico(0.3, x=0.22, y=-0.06, col='coal', sub=1, sz=0.55)
     m.ico(0.23, x=0.22, y=-0.06, z=0.04, col='soil', sub=1, sz=0.6)
     for k in range(3):
         m.cone(0.05 - k * 0.012, 0.08, 5, x=0.22 + k * 0.02, y=-0.06, z=0.17 + k * 0.08, col='smoke')
     log_pile(m, -0.35, -0.3, n=5, rz=0.2)
-    m.beam((0.0, -0.3, 0.0), (0.05, -0.3, 0.22), 0.012, 'wood')
     return ROT
 
 
 def catapult(m):
-    house(m, 0.3, 0.26, 0.18, 'stone', x=-0.3, y=0.26, wins=(), side_wins=False, found=0.03, roof_col='roof_slate')
+    house(m, 0.3, 0.26, 0.18, 'stone', x=-0.3, y=0.26, wins=(), side_wins=False, found=0.03)
     m.box(0.46, 0.34, 0.05, x=0.1, y=-0.06, z=0.04, col='plank_dark')
     for x in (-0.08, 0.28):
         for y in (-0.22, 0.1):
