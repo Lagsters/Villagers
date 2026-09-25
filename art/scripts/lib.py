@@ -259,8 +259,8 @@ def render_preview(ob, name=None, size=256, icon=96):
     cam_data.ortho_scale = radius * 1.75
     cam = bpy.data.objects.new('cam', cam_data)
     scene.collection.objects.link(cam)
-    # Jak kamera w grze (od poludnia, 44 stopnie nad horyzontem), lekko z boku dla czytelnosci ikon.
-    direction = Vector((0.12, -0.72, 0.69)).normalized()
+    # Jak kamera w grze (od poludnia, 38 stopni nad horyzontem), lekko z boku dla czytelnosci ikon.
+    direction = Vector((0.12, -0.78, 0.61)).normalized()
     cam.location = center + direction * (radius * 6 + 2)
     cam.rotation_euler = (-direction).to_track_quat('-Z', 'Y').to_euler()
     scene.camera = cam

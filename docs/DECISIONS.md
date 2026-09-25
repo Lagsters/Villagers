@@ -163,3 +163,11 @@ Drogi wodne z łodziami zostają (część pierwsza).
     i brody, hutnik w masce; jednostki w skali 1,0 zamiast 1,25, flagi na drogach ×0,8 - w oryginale
     ludziki i proporczyki są drobne względem domów. Rycerz bez pióropusza (budżet 298/300 trójkątów).
   - Wydajność po zmianach: 36,5 FPS przy CPU ×4, 52 wywołania rysowania, najdłuższy tick 3,6 ms.
+- **Trzecia runda (uwaga: „domki za podobne, widać tylko dach”)**: rodzaj dachu zależny od budynku -
+  gont brązowy (chaty z bali, szopy kopalń, stocznia, studnia), zielony gont (leśnik), strzecha (farma,
+  rybak, chlewnia, hodowla osłów, smolarnia), łupek (kamieniarz, huta, narzędziownia, zbrojownia,
+  wartownia, katapulta), niebieski czterospadowy (mennica), terakota (domy rzemieślników); dachy
+  czterospadowe (magazyn, narzędziownia, browar, mennica); ściany ×1,5, dach 0,3 rozpiętości;
+  **szyld z modelem produktu** na słupku przed wejściem (kłoda, drzewko, deski, kamień, ryba, poroże,
+  snop, chleb, świnia, szynka, sztaba, moneta, młotek, kufel) - tablica odchylona ku kamerze. Kamera 38°.
+  Wydajność: 35,4 FPS przy CPU ×4, 52 wywołania rysowania.

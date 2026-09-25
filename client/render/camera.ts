@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 
-const PITCH = THREE.MathUtils.degToRad(44);
+const PITCH = THREE.MathUtils.degToRad(38);
 const DIST = 80;
 
 export class CameraController {
