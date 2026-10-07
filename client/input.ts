@@ -45,7 +45,12 @@ export class InputController {
       const r = el.getBoundingClientRect();
       const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
       const ny = 1 - ((e.clientY - r.top) / r.height) * 2;
-      this.cam.zoomAt(e.deltaY > 0 ? 0.88 : 1.14, nx, ny);
+      // Proporcjonalnie do ruchu (touchpad i plynne przewijanie wysylaja wiele malych zdarzen);
+      // deltaMode 1 = linie, 2 = strony. Jeden zabek kolka (~100 px) to okolo 14%.
+      // Gest szczypania na touchpadzie przychodzi jako wheel z ctrlKey i malymi wartosciami.
+      const px = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1) * (e.ctrlKey ? 8 : 1);
+      const f = Math.exp(-Math.max(-300, Math.min(300, px)) * 0.0013);
+      this.cam.zoomAt(f, nx, ny);
     }, { passive: false });
     on('contextmenu', (e) => e.preventDefault());
     const kd = (e: KeyboardEvent) => this.keyDown(e);
