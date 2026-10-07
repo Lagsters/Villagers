@@ -183,3 +183,7 @@ Drogi wodne z łodziami zostają (część pierwsza).
   stocznia jako otwarta szopa z łodzią; kwadratowa chata wartownicza pod dachem czterospadowym; wieża
   z murem z blankami i bramą; warownia z okrągłymi basztami z blankami; młyn niski z dużymi skrzydłami.
   Jednostki w skali 0,85. Wydajność: 37,3 FPS przy CPU ×4.
+- **Swobodna kamera** (uwaga: „nie mogę obracać, myślałem, że to 3D”): zamiast samych skoków o 60° (Q/E)
+  obrót o dowolny kąt przeciąganiem prawym/środkowym przyciskiem myszy i skrętem dwóch palców, pochylenie
+  22°-80° (przeciąganie w pionie, R/F), Home przywraca widok domyślny (38°). Prawy klik bez przeciągania
+  nadal anuluje akcję. Nowy krok samouczka opisuje sterowanie kamerą.

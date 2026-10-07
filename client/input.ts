@@ -1,7 +1,8 @@
 /**
- * Wejscie: mysz (klik = wybor, przeciaganie = przesuwanie, kolko = zoom),
- * klawiatura (WASD/strzalki, Q/E obrot, +/- zoom) i dotyk (1 palec przesuwa, dotkniecie wybiera,
- * 2 palce: pinch = zoom).
+ * Wejscie: mysz (klik = wybor, przeciaganie lewym = przesuwanie, przeciaganie prawym/srodkowym =
+ * obrot (poziomo) i pochylenie (pionowo), kolko = zoom), klawiatura (WASD/strzalki, Q/E obrot,
+ * R/F pochylenie, Home widok domyslny, +/- zoom) i dotyk (1 palec przesuwa, dotkniecie wybiera,
+ * 2 palce: rozsuwanie = zoom, skret = obrot).
  */
 import type { CameraController } from './render/camera.ts';
 
@@ -17,6 +18,7 @@ export class InputController {
   private pointers = new Map<number, { x: number; y: number; sx: number; sy: number; button: number }>();
   private dragging = false;
   private pinchDist = 0;
+  private pinchAngle = 0;
   private keys = new Set<string>();
   private disposers: (() => void)[] = [];
 
@@ -55,6 +57,7 @@ export class InputController {
     if (this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()];
       this.pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      this.pinchAngle = Math.atan2(b.y - a.y, b.x - a.x);
       this.dragging = true;
     }
   }
@@ -74,11 +77,21 @@ export class InputController {
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       if (this.pinchDist > 0) this.cam.zoomBy(d / this.pinchDist);
       this.pinchDist = d;
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      let da = ang - this.pinchAngle;
+      if (da > Math.PI) da -= Math.PI * 2;
+      if (da < -Math.PI) da += Math.PI * 2;
+      this.cam.rotateBy(-da);
+      this.pinchAngle = ang;
       this.cam.panPixels(dx / 2, dy / 2, this.viewportH());
       return;
     }
     if (!this.dragging && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > DRAG_THRESHOLD) this.dragging = true;
-    if (this.dragging) this.cam.panPixels(dx, dy, this.viewportH());
+    if (this.dragging && (p.button === 1 || p.button === 2)) {
+      // Prawy/srodkowy przycisk: obrot wokol pionu i pochylenie.
+      this.cam.rotateBy(-dx * 0.008);
+      this.cam.tiltBy(dy * 0.006);
+    } else if (this.dragging) this.cam.panPixels(dx, dy, this.viewportH());
     else if (e.pointerType === 'mouse') this.h.onHover(e.clientX, e.clientY);
   }
 
@@ -102,6 +115,9 @@ export class InputController {
     const k = e.key.toLowerCase();
     if (k === 'q') this.cam.rotate(-1);
     else if (k === 'e') this.cam.rotate(1);
+    else if (k === 'r') this.cam.tiltBy(0.15, true);
+    else if (k === 'f') this.cam.tiltBy(-0.15, true);
+    else if (k === 'home') this.cam.resetView();
     else if (k === '+' || k === '=') this.cam.zoomBy(1.15);
     else if (k === '-') this.cam.zoomBy(0.87);
     else this.keys.add(k);

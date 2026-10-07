@@ -30,7 +30,10 @@ przez budynki wojskowe i pojedynki rycerzy. Gra z botami albo **multiplayer P2P 
 
 - **Kliknięcie pola** — panel z możliwymi akcjami (flaga, budynki, droga, atak).
 - **Przeciąganie** (mysz albo palec) — przesuwanie widoku; **kółko / szczypanie** — zoom;
-  **Q / E** — obrót o 60°; **WASD / strzałki** — przesuwanie.
+  **WASD / strzałki** — przesuwanie.
+- **Przeciąganie prawym (lub środkowym) przyciskiem** — swobodny obrót kamery (w bok) i pochylenie
+  (w górę/dół); **Q / E** — obrót o 60°; **R / F** — pochylenie; **Home** — widok domyślny;
+  na dotyku **skręt dwoma palcami** obraca widok.
 - **B** — pokaż miejsca pod budowę; **spacja** — pauza (gra z botami); **Esc** — anuluj.
 - Budowa drogi: kliknij flagę → „Buduj drogę” → kliknij cel (flagę albo wolne pole).
 

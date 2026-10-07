@@ -28,6 +28,7 @@ const STEPS: Step[] = [
   { text: 'Tragarz już idzie na drogę. Teraz postaw „Tartak” (wśród domów) i też połącz go drogą - z pni zrobi deski.', done: (s, me) => has(s, me, [B.SAWMILL], true) },
   { text: 'Leśnik sadzi nowe drzewa, a Kamieniarz obok skał wydobywa kamień. Postaw oba.', done: (s, me) => has(s, me, [B.FORESTER]) && has(s, me, [B.STONECUTTER]) },
   { text: 'Przycisk „Miejsca budowy” (klawisz B) pokazuje, co się gdzie zmieści: zielone - chata lub dom, niebieskie - duży budynek, brązowe - kopalnia, żółte - flaga.', done: (_s, _me, t) => t > 600 },
+  { text: 'Widok jest trójwymiarowy: przeciągnij prawym przyciskiem myszy, żeby obrócić (w bok) i pochylić (w górę/dół) kamerę. Klawisze: Q/E obrót, R/F pochylenie, Home - widok domyślny. Na dotyku: skręć dwoma palcami.', done: (_s, _me, t) => t > 500 },
   { text: 'Granice poszerzasz budynkami wojskowymi. Postaw „Barak” przy granicy - gdy wejdzie rycerz, terytorium urośnie.', done: (s, me) => s.buildings.some((b) => !!b && b.owner === me && isMilitary(b.kind) && b.stage === STAGE.DONE && b.knights.length > 0) },
   { text: 'Kopalnie potrzebują jedzenia: Rybak, Myśliwy albo Farma + Młyn + Piekarnia + Studnia. Zadbaj o jedzenie.', done: (s, me) => has(s, me, [B.FISHER, B.HUNTER, B.BAKERY]) },
   { text: 'Rycerz powstaje z miecza, tarczy i piwa: kopalnie węgla i żelaza, Huta żelaza, Zbrojownia, a Browar (zboże + woda) robi piwo.', done: (s, me) => has(s, me, [B.WEAPONSMITH]) },
