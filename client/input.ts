@@ -40,7 +40,13 @@ export class InputController {
     on('pointermove', (e) => this.move(e));
     on('pointerup', (e) => this.up(e));
     on('pointercancel', (e) => this.cancel(e));
-    on('wheel', (e) => { e.preventDefault(); this.cam.zoomBy(e.deltaY > 0 ? 0.88 : 1.14); }, { passive: false });
+    on('wheel', (e) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
+      const ny = 1 - ((e.clientY - r.top) / r.height) * 2;
+      this.cam.zoomAt(e.deltaY > 0 ? 0.88 : 1.14, nx, ny);
+    }, { passive: false });
     on('contextmenu', (e) => e.preventDefault());
     const kd = (e: KeyboardEvent) => this.keyDown(e);
     const ku = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());

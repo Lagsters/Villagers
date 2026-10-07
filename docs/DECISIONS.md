@@ -187,3 +187,4 @@ Drogi wodne z łodziami zostają (część pierwsza).
   obrót o dowolny kąt przeciąganiem prawym/środkowym przyciskiem myszy i skrętem dwóch palców, pochylenie
   22°-80° (przeciąganie w pionie, R/F), Home przywraca widok domyślny (38°). Prawy klik bez przeciągania
   nadal anuluje akcję. Nowy krok samouczka opisuje sterowanie kamerą.
+- **Zoom do 10× (było 3,2×) i przybliżanie kółkiem do punktu pod kursorem** (uwaga: „za mało można przybliżyć”) - z bliska widać postacie i detale budynków.

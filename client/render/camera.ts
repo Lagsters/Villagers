@@ -8,6 +8,8 @@ const PITCH_DEFAULT = THREE.MathUtils.degToRad(38);
 const PITCH_MIN = THREE.MathUtils.degToRad(22);
 const PITCH_MAX = THREE.MathUtils.degToRad(80);
 const DIST = 80;
+const ZOOM_MIN = 0.35;
+const ZOOM_MAX = 10;
 
 export class CameraController {
   readonly camera: THREE.OrthographicCamera;
@@ -61,8 +63,23 @@ export class CameraController {
   }
 
   zoomBy(factor: number): void {
-    this.zoom = THREE.MathUtils.clamp(this.zoom * factor, 0.35, 3.2);
+    this.zoom = THREE.MathUtils.clamp(this.zoom * factor, ZOOM_MIN, ZOOM_MAX);
     this.moved = true;
+  }
+
+  /** Zoom z punktem pod kursorem w miejscu (ndcX, ndcY w [-1, 1], y w gore). */
+  zoomAt(factor: number, ndcX: number, ndcY: number): void {
+    const before = this.zoom;
+    this.zoomBy(factor);
+    const k = 1 - before / this.zoom;
+    if (k === 0) return;
+    const half = this.viewHalf / before;
+    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+    // Punkt terenu pod kursorem wzgledem srodka widoku (rzut ortograficzny na plaszczyzne).
+    this.target.addScaledVector(right, ndcX * half * this.aspect * k);
+    this.target.addScaledVector(fwd, (ndcY * half * k) / Math.sin(this.pitch));
+    this.clampTarget();
   }
 
   /** Przesuniecie w pikselach ekranu (przeciaganie). */

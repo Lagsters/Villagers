@@ -29,7 +29,7 @@ przez budynki wojskowe i pojedynki rycerzy. Gra z botami albo **multiplayer P2P 
 ## Sterowanie
 
 - **Kliknięcie pola** — panel z możliwymi akcjami (flaga, budynki, droga, atak).
-- **Przeciąganie** (mysz albo palec) — przesuwanie widoku; **kółko / szczypanie** — zoom;
+- **Przeciąganie** (mysz albo palec) — przesuwanie widoku; **kółko / szczypanie** — zoom (kółkiem do punktu pod kursorem, do 10×);
   **WASD / strzałki** — przesuwanie.
 - **Przeciąganie prawym (lub środkowym) przyciskiem** — swobodny obrót kamery (w bok) i pochylenie
   (w górę/dół); **Q / E** — obrót o 60°; **R / F** — pochylenie; **Home** — widok domyślny;
