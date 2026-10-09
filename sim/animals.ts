@@ -34,7 +34,7 @@ export function spawnAnimal(s: GameState): boolean {
       const j = t[i * 6 + d];
       if (j >= 0 && freeForAnimal(s, j)) {
         const id = allocId(s.animals, s.freeAnimals);
-        const a: Animal = { id, pos: j, to: -1, t: 0, dur: 0, timer: 20 + randInt(s, 40), hunter: -1 };
+        const a: Animal = { id, pos: j, to: -1, t: 0, dur: 0, timer: 20 + randInt(s, 40), hunter: -1, dead: false };
         s.animals[id] = a;
         return true;
       }
@@ -56,6 +56,12 @@ export function updateAnimals(s: GameState): void {
   const t = nb(s.map);
   for (const a of s.animals) {
     if (!a) continue;
+    if (a.dead) {
+      // Upolowane zwierze bez mysliwego (zginal, chata zniknela) - nikt go nie zabierze.
+      const h = a.hunter >= 0 ? s.serfs[a.hunter] : null;
+      if (!h || h.target !== a.id) removeAnimal(s, a);
+      continue;
+    }
     if (a.to >= 0) {
       if (++a.t < a.dur) continue;
       a.pos = a.to;

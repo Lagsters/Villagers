@@ -3,7 +3,7 @@
  * Kolor linii = kolor gracza (ta sama tozsamosc co w swiecie gry); tozsamosc zawsze niesie tez
  * legenda z nazwami, etykieta na koncu linii (do 4 graczy) i tabela biezacych wartosci.
  */
-import { GOOD_NAMES_PL, GOODS_COUNT, PLAYER_COLORS } from '../../sim/defs.ts';
+import { GOOD_NAMES_PL, GOODS_COUNT, PLAYER_COLORS, TICKS_PER_SECOND } from '../../sim/defs.ts';
 import { ST, summarize } from '../../sim/stats.ts';
 import type { GameState } from '../../sim/types.ts';
 import type { GameSession } from '../game/session.ts';
@@ -23,7 +23,7 @@ function hex(c: number): string {
 }
 
 function fmtTime(tick: number): string {
-  const m = Math.floor(tick / 600);
+  const m = Math.floor(tick / (60 * TICKS_PER_SECOND));
   return `${m} min`;
 }
 

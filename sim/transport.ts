@@ -41,7 +41,7 @@ function midIndex(road: Road): number {
 }
 
 /** Najlepszy towar na fladze czekajacy na te droge (niezarezerwowany) albo -1. */
-function bestSlot(s: GameState, f: Flag, dir: number): number {
+export function bestSlot(s: GameState, f: Flag, dir: number): number {
   const prio = s.players[f.owner].settings.transportPrio;
   let best = -1;
   for (let i = 0; i < FLAG_SLOTS; i++) {

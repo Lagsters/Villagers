@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import type { MapData } from '../../sim/mapgen.ts';
 import { CameraController } from './camera.ts';
+import { stepXY } from '../../sim/grid.ts';
 import { H_SCALE, ROW_H, nearestIdx, vx, vz } from './coords.ts';
 import { MapObjectsRenderer } from './mapObjects.ts';
 import { TerrainRenderer } from './terrain.ts';
@@ -19,6 +20,92 @@ export interface GraphicsOptions {
   fpsLimit: number;
 }
 
+/**
+ * Wzory powierzchni modeli (dachowki, deski, bale, papa, twarz) liczone w shaderze z atrybutu `pat` (UV z Blendera,
+ * zob. surface_pattern i face_pattern w art/scripts/lib.py): u = numer * 1000 + polozenie poziome (na glowie:
+ * kat od przodu), v = 1 - wysokosc albo odleglosc od okapu (eksporter glTF odwraca v). Wymiary w metrach modelu.
+ * Gdy wzor robi sie drobniejszy niz kilka pikseli, kontrast gasnie do sredniej - bez migotania z daleka.
+ * Wzor 6 (PLAIN) to brak wzoru i brak koloru gracza w czesciach barwionych instancja (skora, spodnie postaci).
+ */
+const MODEL_PATTERNS = /* glsl */ `
+varying vec2 vPat;
+float patHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float patFade(vec2 g) { vec2 w = fwidth(g); return clamp(1.8 - max(w.x, w.y) * 3.0, 0.0, 1.0); }
+float patternShade(vec2 q) {
+  float id = floor((q.x + 500.0) / 1000.0);
+  if (id < 0.5) return 1.0;
+  float u = q.x - id * 1000.0;
+  float v = 1.0 - q.y;
+  if (id < 1.5) {
+    // Dachowki: rzedy przesuniete o pol dachowki, zaokraglony dolny brzeg, cien pod zakladka wyzszego rzedu.
+    vec2 g = vec2(u / 0.03, v / 0.024);
+    float row = floor(g.y);
+    float cu = g.x + 0.5 * mod(row, 2.0);
+    vec2 t = vec2(fract(cu), fract(g.y));
+    float x = 2.0 * t.x - 1.0;
+    float k = (0.9 + 0.14 * (1.0 - x * x)) * (1.0 - 0.38 * smoothstep(0.55, 1.0, t.y));
+    k *= 0.9 + 0.18 * patHash(vec2(row, floor(cu)));
+    if (t.y < 0.3 * x * x) k = 0.62;
+    k *= mix(0.72, 1.0, smoothstep(0.0, 0.06, min(t.x, 1.0 - t.x)));
+    return mix(0.86, k, patFade(g));
+  }
+  if (id < 2.5) {
+    // Deski: pionowe, ciemne spoiny, kazda deska w nieco innym odcieniu, delikatne sloje.
+    vec2 g = vec2(u / 0.042, v / 0.042);
+    float b = floor(g.x);
+    float t = fract(g.x);
+    float k = (0.88 + 0.22 * patHash(vec2(b, 7.0))) * (1.0 + 0.05 * sin(v * 150.0 + patHash(vec2(b, 3.0)) * 40.0));
+    k *= mix(0.55, 1.0, smoothstep(0.0, 0.08, min(t, 1.0 - t)));
+    return mix(0.95, k, patFade(g));
+  }
+  if (id > 3.5 && id < 4.5) {
+    // Papa: poziome pasy z zakladem (cien pod brzegiem wyzszego pasa) i listwy dociskowe w dol polaci.
+    vec2 g = vec2(u / 0.12, v / 0.075);
+    float t = fract(g.y);
+    float k = (0.93 + 0.12 * patHash(vec2(floor(g.y), 5.0))) * (1.0 - 0.3 * smoothstep(0.84, 1.0, t)) * (1.0 + 0.1 * (1.0 - smoothstep(0.0, 0.1, t)));
+    float bd = abs(fract(g.x) - 0.5);
+    k = bd < 0.05 ? 1.25 - bd * 3.0 : k * mix(0.72, 1.0, smoothstep(0.05, 0.12, bd));
+    return mix(0.95, k, patFade(g));
+  }
+  // Bale: poziome, okragly przekroj (jasny srodek, ciemne styki).
+  vec2 g = vec2(u / 0.3, v / 0.045);
+  float row = floor(g.y);
+  float y = 2.0 * fract(g.y) - 1.0;
+  float k = (0.5 + 0.6 * sqrt(max(0.0, 1.0 - y * y))) * (0.92 + 0.14 * patHash(vec2(row, 1.0)));
+  return mix(0.85, k, patFade(g));
+}
+// Twarz jak na portretach zawodow: duze biale oczy ze zrenicami, brwi, usmiech, rumience.
+// a = kat od przodu glowy (rad), h = wysokosc od srodka glowy (m, promien glowy ~0.056).
+vec3 faceColor(float a, float h, vec3 skin) {
+  float fw = max(fwidth(a), fwidth(h) * 18.0);
+  float soft = max(0.08, fw * 4.0);
+  float aa = abs(a);
+  vec3 c = skin;
+  float cheek = length(vec2((aa - 0.6) / 0.26, (h + 0.012) / 0.014));
+  c = mix(c, vec3(0.8, 0.28, 0.22), 0.35 * (1.0 - smoothstep(0.5, 1.0, cheek)));
+  float hb = 0.021 + 0.003 * (1.0 - pow((aa - 0.34) / 0.2, 2.0));
+  float brow = (1.0 - smoothstep(0.0028, 0.0028 + 0.002 * soft * 10.0, abs(h - hb))) * step(abs(aa - 0.34), 0.2);
+  c = mix(c, vec3(0.22, 0.1, 0.04), brow);
+  float hm = -0.03 + 0.05 * a * a;
+  float mouth = (1.0 - smoothstep(0.0035, 0.0035 + 0.002 * soft * 10.0, abs(h - hm))) * step(aa, 0.28);
+  c = mix(c, vec3(0.4, 0.08, 0.06), mouth);
+  float e = length(vec2((aa - 0.34) / 0.19, (h - 0.006) / 0.012));
+  c = mix(c, vec3(0.3, 0.16, 0.1), 0.45 * (1.0 - smoothstep(1.0, 1.0 + soft, e)));
+  c = mix(c, vec3(0.95), 1.0 - smoothstep(0.92 - soft * 0.5, 0.92, e));
+  float pupil = length(vec2((aa - 0.3) / 0.085, (h - 0.004) / 0.008));
+  c = mix(c, vec3(0.02), 1.0 - smoothstep(1.0 - soft, 1.0, pupil));
+  // Z daleka (twarz na kilka pikseli) zostaja tylko ciemne plamki oczu - bez migotania.
+  vec3 far = mix(skin, vec3(0.05), 0.7 * (1.0 - smoothstep(0.6, 1.3, e)));
+  return mix(far, c, clamp(2.0 - fw * 6.0, 0.0, 1.0));
+}
+vec3 patternColor(vec2 q, vec3 c) {
+  float id = floor((q.x + 500.0) / 1000.0);
+  if (id > 5.5) return c;
+  if (id > 4.5) return faceColor(q.x - id * 1000.0, 1.0 - q.y, c);
+  return c * patternShade(q);
+}
+`;
+
 export class SceneRenderer {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -30,7 +117,9 @@ export class SceneRenderer {
   entities!: EntitiesRenderer;
   overlay = new OverlayRenderer();
   map!: MapData;
-  private cursor: THREE.Mesh;
+  /** Kursor zaznaczenia: kropki wokol pola (jak w pierwowzorze) zamiast obrysu szesciokata. */
+  private cursor = new THREE.Group();
+  private cursorDots: THREE.Mesh[] = [];
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
   private sun: THREE.DirectionalLight;
@@ -61,13 +150,29 @@ export class SceneRenderer {
     this.sun.position.set(-30, 60, 20);
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
-    this.modelMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    // Normalne z modeli: gladkie krzywizny, ostre krawedzie bryl (zastepniki licza normalne plaskie).
+    this.modelMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.modelMaterial.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec2 pat;\nvarying vec2 vPat;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPat = pat;')
+        // Kolor gracza tylko na koszulce: sciany PLAIN (skora, spodnie) zostaja w kolorze wierzcholkow.
+        .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_INSTANCING_COLOR\nif (abs(floor((pat.x + 500.0) / 1000.0) - 6.0) < 0.5) vColor.xyz = color.xyz;\n#endif');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\n' + MODEL_PATTERNS)
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = patternColor(vPat, diffuseColor.rgb);');
+    };
 
-    const ring = new THREE.RingGeometry(0.28, 0.4, 6);
-    ring.rotateX(-Math.PI / 2);
-    ring.rotateY(Math.PI / 6);
-    this.cursor = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false }));
-    this.cursor.renderOrder = 10;
+    const dot = new THREE.CircleGeometry(0.045, 8);
+    dot.rotateX(-Math.PI / 2);
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthTest: false });
+    for (let k = 0; k < 7; k++) {
+      const d = new THREE.Mesh(dot, dotMat);
+      d.renderOrder = 10;
+      if (k === 6) d.scale.setScalar(0.7);
+      this.cursorDots.push(d);
+      this.cursor.add(d);
+    }
     this.cursor.visible = false;
     this.scene.add(this.cursor);
   }
@@ -127,7 +232,15 @@ export class SceneRenderer {
     if (idx < 0) { this.cursor.visible = false; return; }
     const m = this.map;
     const x = idx % m.w, y = (idx / m.w) | 0;
-    this.cursor.position.set(vx(x, y), m.height[idx] * H_SCALE + 0.03, vz(y));
+    // Kropki na szesciu sasiednich wierzcholkach (jak w pierwowzorze) i jedna na samym polu.
+    for (let k = 0; k < 7; k++) {
+      let nx = x, ny = y;
+      if (k < 6) [nx, ny] = stepXY(x, y, k);
+      const dot = this.cursorDots[k];
+      if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) { dot.visible = false; continue; }
+      dot.visible = true;
+      dot.position.set(vx(nx, ny), m.height[ny * m.w + nx] * H_SCALE + 0.02, vz(ny));
+    }
     this.cursor.visible = true;
   }
 
@@ -140,6 +253,7 @@ export class SceneRenderer {
 
   /** Po tickach symulacji: zmiany obiektow mapy, drog, wysokosci terenu. */
   syncState(s: GameState, events: GameEvent[]): void {
+    if (events.length) this.entities.onEvents(events);
     for (const e of events) {
       if (e.type === 'height') {
         this.terrain.markDirty(e.pos);
@@ -165,15 +279,20 @@ export class SceneRenderer {
     return nearestIdx(this.map, this.cam.target.x, this.cam.target.z);
   }
 
-  render(dt: number, s?: GameState, alpha = 0, me = 0): boolean {
+  /**
+   * dt - czas rzeczywisty klatki (s); animScale - tempo gry (0 przy pauzie): w nim plyna animacje postaci
+   * i czasteczki, kamera zawsze w czasie rzeczywistym.
+   */
+  render(dt: number, s?: GameState, alpha = 0, me = 0, animScale = 1): boolean {
     const moved = this.cam.update(dt);
     this.terrain.update();
-    this.objects.update(this.cam.camera, moved);
     if (s) {
-      if (moved) this.entities.setView(this.cam.camera);
-      this.entities.update(s, alpha, dt);
+      if (moved) this.entities.setView(this.cam.camera, this.cam.zoom);
+      this.entities.update(s, alpha, dt, dt * animScale);
+      this.objects.setHidden(this.entities.hidden);
       this.overlay.updateSites(s, me, this.centerIdx(), Math.ceil(14 / this.cam.zoom));
     }
+    this.objects.update(this.cam.camera, moved);
     this.renderer.render(this.scene, this.cam.camera);
     return moved;
   }

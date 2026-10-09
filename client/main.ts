@@ -12,6 +12,8 @@ import { NetClient, NetHost } from '../net/netgame.ts';
 import { SignalClient, signalErrorText } from '../net/signaling.ts';
 import { SIGNAL_URL } from './config.ts';
 import { GameView } from './game/gameView.ts';
+import { createDemoGame, demoBuildingPos, demoDirector } from './game/demo.ts';
+import { DemoTour } from './ui/demoTour.ts';
 import { LocalDriver } from './game/session.ts';
 import { button, el } from './ui/dom.ts';
 import { loadPrefs, savePrefs, showConnecting, showLobby, showMainMenu, showMultiplayer, showOptions, type MenuActions } from './ui/menu.ts';
@@ -80,12 +82,34 @@ function localDriverFor(state: GameState): LocalDriver {
   return driver;
 }
 
-function startLocalState(state: GameState): void {
+function startLocalState(state: GameState, demo = false): void {
   endGame();
   closeMenu();
   app.textContent = '';
-  game = new GameView(app, state, localDriverFor(state), 0, { graphics: graphics(), volume: prefs.volume, network: false, onMenu: () => gameMenu(false) });
+  const driver = localDriverFor(state);
+  if (demo) driver.producers.push(demoDirector());
+  game = new GameView(app, state, driver, 0, { graphics: graphics(), volume: prefs.volume, network: false, onMenu: () => gameMenu(false) });
   app.dataset.ready = '1';
+}
+
+/** Pokaz wszystkich zawodow przy pracy (?demo=1); __game.look(rodzaj, n) pokazuje n-ty budynek danego rodzaju. */
+function startDemo(): void {
+  localStorage.setItem('osadnicy.tutorial', '-1');
+  const state = createDemoGame();
+  startLocalState(state, true);
+  const g = game!;
+  const look = (kind: number, nth = 0, zoom = 8): number => {
+    const pos = demoBuildingPos(g.session.state, kind, nth);
+    if (pos >= 0) {
+      g.view.cam.zoom = zoom;
+      g.view.lookAtIdx(pos);
+    }
+    return pos;
+  };
+  Object.assign((window as unknown as { __game: object }).__game, { look });
+  if (!params.has('notour')) new DemoTour(g);
+  g.view.cam.zoom = 2.6;
+  g.view.lookAtIdx(state.buildings[state.players[0].castle]!.pos);
 }
 
 function saveGame(): boolean {
@@ -274,7 +298,10 @@ loading.appendChild(loadingCard);
 app.appendChild(loading);
 await loadModels((f) => { fill.style.width = `${Math.round(f * 100)}%`; });
 loading.remove();
-if (params.has('map')) {
+if (params.has('demo')) {
+  if (params.has('quality')) prefs.graphics.quality = params.get('quality') === 'low' ? 'low' : 'medium';
+  startDemo();
+} else if (params.has('map')) {
   // Parametry testowe grafiki (nie zapisywane w opcjach).
   if (params.has('fps')) prefs.graphics.fpsLimit = Number(params.get('fps'));
   if (params.has('quality')) prefs.graphics.quality = params.get('quality') === 'low' ? 'low' : 'medium';

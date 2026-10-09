@@ -62,6 +62,12 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 - Budynki przebudowane w stylu pierwszej części serii (terakota, bielone ściany, deski, bale, unikalne
   sylwetki), kamera 44°, postacie z nakryciami głowy i narzędziami zawodów (docs/DECISIONS.md).
 
+### Po M10: sceny pracy zawodów
+- Każdy zawód ma własną sekwencję pracy (`client/render/work/`), szkielet postaci z pełną pozą (`rig.ts`),
+  cząsteczki bez stanu (`fx.ts`), etapy przy chacie w symulacji dla leśnika, kamieniarza i myśliwego
+  (wydajność bez zmian, `tests/sim/workstages.test.ts`), tryb pokazowy `?demo=1` z panelem „Pokaz zawodów”,
+  nagrywanie klatek `scripts/capture.ts` (stały krok czasu `--fixed`).
+
 ## Dalej
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.
 

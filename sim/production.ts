@@ -5,9 +5,9 @@
  * Pola pracownika: home = budynek, target = pole celu (mysliwy: id zwierzecia),
  * road = pole wody (rybak), sub = podstan (WS), timer = czas pracy.
  */
-import { animalsNear, removeAnimalById } from './animalsApi.ts';
+import { animalsNear, pickUpAnimal, shootAnimal } from './animalsApi.ts';
 import { B, BUILDINGS, G, NO_GOOD, O, RES, S, T, TOOLS_COUNT, FIRST_TOOL, isStone, mineResource } from './defs.ts';
-import { DIR_NW, DIR_SE, spiral } from './grid.ts';
+import { DIR_NW, DIR_SE, hexDist, spiral } from './grid.ts';
 import { addTransit, chooseDestination, freeSlot, putGood } from './goods.ts';
 import { findPath } from './pathfind.ts';
 import { randInt } from './rng.ts';
@@ -16,7 +16,33 @@ import { updateCatapult } from './military.ts';
 import { STAGE, type Building, type GameState, type Serf } from './types.ts';
 import { event, isFreeWalkable, nb } from './world.ts';
 
-export const WS = { TO_TARGET: 1, WORKING: 2, RETURN: 3, ENTER: 4, OUT_CARRY: 5 } as const;
+/**
+ * Podstany zbieracza. O czas etapow przy chacie (LIMBING, DRESS, HANG, PREP) krotsza jest praca w terenie
+ * albo odpoczynek w chacie (workTime, restTime) - wydajnosc zawodu wyznacza BUILDINGS[].cycle, nie te etapy.
+ */
+export const WS = {
+  TO_TARGET: 1, WORKING: 2, RETURN: 3, ENTER: 4, OUT_CARRY: 5,
+  /** drwal okrzesuje sciete drzewo na pienku przed chata */
+  LIMBING: 6,
+  /** kamieniarz ociosuje blok na kamiennym stole przed chata */
+  DRESS: 7,
+  /** lesnik bierze sadzonke z grzadki przy chacie, zanim ruszy w teren */
+  PREP: 8,
+  /** mysliwy podchodzi do upolowanego zwierzecia i bierze je na kark */
+  FETCH: 9,
+  /** mysliwy wiesza zdobycz na stojaku przy chacie i bierze mieso */
+  HANG: 10,
+} as const;
+/** Okrzesywanie scietego drzewa na pienku przed chata; o tyle krotsze jest scinanie (wydajnosc drwala bez zmian). */
+export const LIMB_TICKS = 24;
+/** Ociosywanie bloku na kostke przed chata kamieniarza; o tyle krotsze jest lupanie skaly. */
+export const DRESS_TICKS = 24;
+/** Branie sadzonki z grzadki przy chacie lesnika; o tyle krotsze jest sadzenie. */
+export const PREP_TICKS = 14;
+/** Wieszanie zdobyczy na stojaku przy chacie mysliwego; o tyle krotszy jest odpoczynek mysliwego w chacie. */
+export const HANG_TICKS = 14;
+/** Odleglosc strzalu mysliwego (pola): podchodzi na tyle do zwierzecia, strzela, potem idzie po zdobycz. */
+export const SHOT_RANGE = 2;
 
 const REST_TICKS = 20;
 const TRIP_NODES = 600;
@@ -25,6 +51,10 @@ const GATHERERS = new Set<number>([B.WOODCUTTER, B.FORESTER, B.STONECUTTER, B.FI
 
 function flagPos(s: GameState, b: Building): number {
   return s.flags[b.flag]!.pos;
+}
+
+function cellDist(m: GameState['map'], a: number, b: number): number {
+  return hexDist(a % m.w, (a / m.w) | 0, b % m.w, (b / m.w) | 0);
 }
 
 function produced(s: GameState, b: Building, g: number, n = 1): void {
@@ -225,11 +255,19 @@ function startTrip(s: GameState, b: Building, serf: Serf): boolean {
     // Cele sa blisko (promien <= 9), wiec maly limit wezlow: nieudane A* nie moze byc drogie.
     const path = findPath(m, fp, dest, (i) => isFreeWalkable(m, i), TRIP_NODES);
     if (!path) continue;
+    // Mysliwy zatrzymuje sie na odleglosc strzalu.
+    if (b.kind === B.HUNTER) path.length = Math.max(0, path.length - SHOT_RANGE);
     serf.state = SS.WORK_OUT;
     serf.sub = WS.TO_TARGET;
     serf.target = c;
     serf.path = [DIR_SE, ...path];
     serf.anim = 0;
+    if (b.kind === B.FORESTER) {
+      // Najpierw sadzonka z grzadki przy chacie (sciezke w teren liczy od nowa po etapie PREP).
+      serf.sub = WS.PREP;
+      serf.timer = PREP_TICKS;
+      serf.path = [DIR_SE];
+    }
     if (b.kind === B.HUNTER) s.animals[c]!.hunter = serf.id;
     else if (b.kind === B.WOODCUTTER || b.kind === B.STONECUTTER || (b.kind === B.FARM && m.obj[c] === O.FIELD_RIPE)) m.objId[c] = serf.id;
     if (b.kind === B.FISHER) serf.road = shoreFishTarget(s, c);
@@ -270,7 +308,8 @@ function doWork(s: GameState, b: Building, serf: Serf): number {
       return NO_GOOD;
     }
     case B.HUNTER:
-      return removeAnimalById(s, c, serf.id) ? G.MEAT : NO_GOOD;
+      // Strzal: zwierze pada i lezy, az mysliwy po nie podejdzie (etap FETCH).
+      return shootAnimal(s, c, serf.id) ? G.MEAT : NO_GOOD;
     case B.FARM:
       if (m.obj[c] === O.FIELD_RIPE) {
         m.obj[c] = O.NONE;
@@ -290,9 +329,16 @@ function doWork(s: GameState, b: Building, serf: Serf): number {
 function workTime(kind: number): number {
   switch (kind) {
     case B.HUNTER: return 20;
-    case B.FORESTER: return 60;
+    case B.FORESTER: return 60 - PREP_TICKS;
+    case B.WOODCUTTER: return BUILDINGS[kind].cycle - LIMB_TICKS;
+    case B.STONECUTTER: return BUILDINGS[kind].cycle - DRESS_TICKS;
     default: return BUILDINGS[kind].cycle;
   }
+}
+
+/** Odpoczynek w chacie po powrocie (mysliwy krocej - o czas wieszania zdobyczy). */
+function restTime(kind: number): number {
+  return kind === B.HUNTER ? REST_TICKS - HANG_TICKS : REST_TICKS;
 }
 
 /** Oddaje wyrob na flage z wybranym celem. */
@@ -333,16 +379,27 @@ export function updateWorkerOut(s: GameState, serf: Serf): boolean {
     }
     case WS.WORKING: {
       if (b.kind === B.HUNTER) {
-        // Zwierze moglo odejsc o krok przed zamrozeniem - dogon je.
+        // Zwierze moglo odejsc o krok przed zamrozeniem - dogon je na odleglosc strzalu.
         const a = s.animals[serf.target];
-        if (a && a.pos !== serf.pos && serf.timer === workTime(b.kind)) {
+        if (a && serf.timer === workTime(b.kind) && cellDist(m, a.pos, serf.pos) > SHOT_RANGE) {
           const p = findPath(m, serf.pos, a.pos, (i) => isFreeWalkable(m, i), 400);
-          if (p && p.length > 0) { serf.path = p; return true; }
+          if (p && p.length > SHOT_RANGE) { p.length -= SHOT_RANGE; serf.path = p; return true; }
         }
       }
       if (--serf.timer > 0) return true;
       serf.anim = 0;
       const g = doWork(s, b, serf);
+      if (b.kind === B.HUNTER && g !== NO_GOOD) {
+        // Trafione zwierze lezy - mysliwy idzie po nie.
+        const a = s.animals[serf.target]!;
+        serf.sub = WS.FETCH;
+        if (a.pos !== serf.pos) {
+          const p = findPath(m, serf.pos, a.pos, (i) => isFreeWalkable(m, i) || i === a.pos, 400);
+          if (p) serf.path = p;
+          else serf.pos = a.pos;
+        }
+        return true;
+      }
       if (g !== NO_GOOD) {
         serf.carry = g;
         produced(s, b, g);
@@ -363,22 +420,56 @@ export function updateWorkerOut(s: GameState, serf: Serf): boolean {
         if (back && back.length) { serf.path = back; return true; }
         serf.pos = fp;
       }
-      if (serf.carry >= 0) {
-        if (dropAtFlag(s, b, serf.carry)) serf.carry = -1;
-        else {
-          b.out.push(serf.carry);
-          serf.carry = -1;
-        }
+      const stage = serf.carry < 0 ? 0 : b.kind === B.WOODCUTTER ? WS.LIMBING : b.kind === B.STONECUTTER ? WS.DRESS : b.kind === B.HUNTER ? WS.HANG : 0;
+      if (stage) {
+        serf.sub = stage;
+        serf.timer = stage === WS.LIMBING ? LIMB_TICKS : stage === WS.DRESS ? DRESS_TICKS : HANG_TICKS;
+        serf.anim = 4;
+        return true;
       }
-      serf.sub = WS.ENTER;
-      serf.path = [DIR_NW];
+      deliverAndEnter(s, b, serf);
+      return true;
+    }
+    case WS.LIMBING:
+    case WS.DRESS:
+    case WS.HANG: {
+      if (--serf.timer > 0) return true;
+      serf.anim = 0;
+      deliverAndEnter(s, b, serf);
+      return true;
+    }
+    case WS.PREP: {
+      // Lesnik stoi przy grzadce z sadzonka, potem rusza w teren.
+      if (--serf.timer > 0) return true;
+      const p = isFreeWalkable(m, serf.target) ? findPath(m, serf.pos, serf.target, (i) => isFreeWalkable(m, i), TRIP_NODES) : null;
+      if (!p) {
+        releaseTarget(s, serf);
+        serf.sub = WS.ENTER;
+        serf.path = [DIR_NW];
+        return true;
+      }
+      serf.path = p;
+      serf.sub = WS.TO_TARGET;
+      return true;
+    }
+    case WS.FETCH: {
+      // Mysliwy przy upolowanym zwierzeciu: bierze je na kark i wraca.
+      if (pickUpAnimal(s, serf.target, serf.id)) {
+        serf.carry = G.MEAT;
+        produced(s, b, G.MEAT);
+      }
+      releaseTarget(s, serf);
+      const back = findPath(m, serf.pos, fp, (i) => isFreeWalkable(m, i), 3000);
+      serf.sub = WS.RETURN;
+      if (back) serf.path = back;
+      else serf.pos = fp;
       return true;
     }
     case WS.ENTER: {
       serf.state = SS.INSIDE;
       serf.sub = 0;
       serf.anim = 0;
-      b.timer = REST_TICKS;
+      b.timer = restTime(b.kind);
       return true;
     }
     case WS.OUT_CARRY: {
@@ -392,6 +483,16 @@ export function updateWorkerOut(s: GameState, serf: Serf): boolean {
     }
   }
   return true;
+}
+
+/** Oddaje niesiony wyrob na flage (albo do kolejki budynku, gdy flaga pelna) i wraca do budynku. */
+function deliverAndEnter(s: GameState, b: Building, serf: Serf): void {
+  if (serf.carry >= 0) {
+    if (!dropAtFlag(s, b, serf.carry)) b.out.push(serf.carry);
+    serf.carry = -1;
+  }
+  serf.sub = WS.ENTER;
+  serf.path = [DIR_NW];
 }
 
 function releaseTarget(s: GameState, serf: Serf): void {

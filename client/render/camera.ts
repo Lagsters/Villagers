@@ -9,7 +9,7 @@ const PITCH_MIN = THREE.MathUtils.degToRad(22);
 const PITCH_MAX = THREE.MathUtils.degToRad(80);
 const DIST = 80;
 const ZOOM_MIN = 0.35;
-const ZOOM_MAX = 10;
+const ZOOM_MAX = 24;
 
 export class CameraController {
   readonly camera: THREE.OrthographicCamera;

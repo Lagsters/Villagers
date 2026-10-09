@@ -5,7 +5,7 @@ z 1993 roku: gospodarka opiera się na sieci dróg, flag i tragarzy, granice wyz
 a o zwycięstwie decydują pojedynki rycerzy. Wszystkie zasoby (modele, ikony, dźwięki, teksty, mapy)
 są własne.
 
-Wszystkie liczby w tym dokumencie są źródłem prawdy dla `sim/`. Czas podaję w tickach (10 ticków = 1 s).
+Wszystkie liczby w tym dokumencie są źródłem prawdy dla `sim/`. Czas podaję w tickach (przy tempie 1× 5 ticków = 1 s, `TICKS_PER_SECOND`).
 
 ---
 
@@ -123,8 +123,11 @@ Zestaw budynków i łańcuchów odpowiada głębokością drugiej części serii
 smolarnia, katapulta, rozmiar „dom”), przy zachowaniu rdzenia z części pierwszej (drogi, flagi, tragarze,
 rycerze z 5 poziomami). Źródło porównawcze: settlers2.net (lista budynków) i opis gry z 1993 r.
 
-**Rozmiary:** chata (1 pole, różnica wysokości ≤ 4, może stać obok innych), dom (1 pole, różnica ≤ 3,
-bez sąsiednich budynków i obcych flag), duży (4 pola: P, W, NW, NE; wyrównywanie terenu), kopalnia (góry).
+**Rozmiary i zasady stawiania (jak w pierwowzorze, wg reimplementacji freeserf):** każdy budynek stoi na
+jednym polu, flaga na polu SE, pole i 6 sąsiadów muszą być własne. Chata: trawa, bez warunków co do sąsiednich
+budynków i wysokości. Dom i duży budynek: trawa wokół, brak budynków na 6 sąsiednich polach (drzewa i flagi nie
+przeszkadzają), brak innego domu/dużego w drugim pierścieniu, różnica wysokości w drugim pierścieniu < 9;
+teren pod budynek jest wyrównywany (kopacz). Kopalnia: góry. Flagi nie mogą stać na sąsiednich polach.
 
 | Budynek | Rozmiar | Koszt | Pracownik (narzędzie) | Wejście → Wyjście | Cykl | Uwagi |
 |---|---|---|---|---|---|---|
@@ -137,7 +140,7 @@ bez sąsiednich budynków i obcych flag), duży (4 pola: P, W, NW, NE; wyrównyw
 | Myśliwy | chata | 2D | myśliwy (łuk) | zwierzę → mięso | 60 | promień 9 |
 | Studnia | chata | 2D | studniarz | → woda | 50 | |
 | Tartak | dom | 2D 2K | tracz (piła) | pień → deska | 80 | |
-| Młyn | dom | 2D 2K | młynarz | zboże → mąka | 60 | |
+| Młyn | chata | 2D 2K | młynarz | zboże → mąka | 60 | |
 | Piekarnia | dom | 2D 2K | piekarz (wałek) | mąka + woda → chleb | 80 | |
 | Rzeźnia | dom | 2D 2K | rzeźnik (tasak) | świnia → mięso | 60 | |
 | Browar | dom | 2D 2K | piwowar | zboże + woda → piwo | 90 | piwo do rekrutacji |

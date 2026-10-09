@@ -120,7 +120,7 @@ export interface Serf {
   road: number;
   timer: number;
   sub: number;
-  /** wskazowka dla renderera: 0 marsz/stoi, 1 praca, 2 walka, 3 niesie */
+  /** wskazowka dla renderera: 0 marsz/stoi, 1 praca, 2 walka, 3 niesie, 4 praca przy chacie (okrzesywanie, ociosywanie, wieszanie) */
   anim: number;
 }
 
@@ -134,6 +134,8 @@ export interface Animal {
   timer: number;
   /** id mysliwego, ktory je sciga, albo -1 */
   hunter: number;
+  /** trafione strzala - lezy, az mysliwy je zabierze */
+  dead: boolean;
 }
 
 export interface Settings {

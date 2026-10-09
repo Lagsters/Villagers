@@ -31,7 +31,15 @@ function sceneGeometry(scene: THREE.Object3D): THREE.BufferGeometry | null {
     if (!m.isMesh) return;
     const g = m.geometry.clone();
     g.applyMatrix4(m.matrixWorld);
-    parts.push(g.index ? g.toNonIndexed() : g);
+    const flat = g.index ? g.toNonIndexed() : g;
+    if (!flat.getAttribute('normal')) flat.computeVertexNormals();
+    // UV modeli niesie wzor powierzchni (atrybut `pat` w materiale modeli), nie wspolrzedne tekstury.
+    const uv = flat.getAttribute('uv');
+    if (uv) {
+      flat.setAttribute('pat', uv);
+      flat.deleteAttribute('uv');
+    }
+    parts.push(flat);
   });
   if (parts.length === 0) return null;
   const g = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);

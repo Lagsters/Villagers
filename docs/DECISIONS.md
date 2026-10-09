@@ -188,3 +188,136 @@ Drogi wodne z łodziami zostają (część pierwsza).
   22°-80° (przeciąganie w pionie, R/F), Home przywraca widok domyślny (38°). Prawy klik bez przeciągania
   nadal anuluje akcję. Nowy krok samouczka opisuje sterowanie kamerą.
 - **Zoom do 10× (było 3,2×) i przybliżanie kółkiem do punktu pod kursorem** (uwaga: „za mało można przybliżyć”) - z bliska widać postacie i detale budynków.
+- **Drogi na ziemi z fakturą**: wstęga drogi to jedna ciągła taśma przez pola trasy (połączenia na zakrętach
+  bez szpar), każdy wierzchołek na wysokości siatki terenu (interpolacja barycentryczna), faktura ubitej
+  ziemi z koleinami, kamykami i poszarpanym, półprzezroczystym brzegiem generowana w kodzie.
+- **Dwuklik na własnej fladze** zaczyna budowę drogi (jak w pierwowzorze), przycisk w panelu zostaje.
+- **Budynki jak w pierwowzorze względem flagi**: modele w grze skalowane (chata 1,7×, dom 1,55×,
+  kopalnia 1,6×, duży 1,3×) i przesunięte ku fladze (pole SE), tak że drzwi wychodzą prawie na flagę,
+  a budynek sięga w górę i w lewo; wcześniej mały model na środku pola zostawiał ~0,6 pola trawy do flagi.
+  Logika pól (zajętość, zasady stawiania) bez zmian.
+- **Ikony miejsc budowy** (modele z Blendera, `art/scripts/markers.py`): żółty zamek (duży budynek), dom,
+  chata, kilof (kopalnia) i flaga - zamiast kolorowych sześciokątów. **Kursor zaznaczenia z kropek**
+  wokół pola (każda na wysokości terenu) zamiast obrysu sześciokąta.
+  Wydajność: 36,5 FPS przy CPU ×4, 53 wywołania rysowania.
+- **Zasady stawiania budynków z pierwowzoru** (wg reimplementacji freeserf, `src/game.cc`: `can_build_flag`,
+  `can_build_small`, `can_build_large`): każdy budynek - także duży - stoi na jednym polu (wcześniej duży zajmował
+  4 pola: P, W, NW, NE); chata bez warunków co do sąsiadów i wysokości (wcześniej różnica <= 4); dom i duży
+  budynek: brak budynków na 6 sąsiednich polach (drzewa i flagi nie przeszkadzają; wcześniej drzewo i obca flaga
+  blokowały), brak innego domu/dużego w drugim pierścieniu, różnica wysokości w drugim pierścieniu < 9, teren
+  wyrównywany (kopacz) także pod domy. Młyn jest chatą (jak w pierwowzorze). Flagi nadal nie mogą sąsiadować -
+  stąd jedno pole odstępu między budynkami w rzędzie, tak samo jak w pierwowzorze. Test: `tests/sim/rules.test.ts`;
+  20/20 partii botów nadal kończy się zwycięstwem.
+- **Koszt rysowania po zagęszczeniu zabudowy**: drogi dzielone na 2 kawałki na odcinek (było 4) i rysowane bez
+  mieszania (brzeg wycinany progiem alphaTest); czapki i narzędzia postaci rysowane dopiero od przybliżenia 1,6×.
+  Pomiar wydajności w tej sesji był niemiarodajny (obciążona maszyna: ta sama wersja z poprzedniego commita dała
+  27,9 FPS zamiast wcześniejszych 36-39); nowa wersja w tych samych warunkach: 23-30 FPS, 53 wywołania rysowania,
+  70 tys. trójkątów. Próg 30 FPS bez zmian - do potwierdzenia pomiarem na nieobciążonej maszynie.
+- **Budowa drogi krok po kroku** (jak w pierwowzorze), z zachowaniem skrótu: klik na sąsiedniej kropce
+  przedłuża drogę o jedno pole (zielone kropki pokazują możliwe kroki), klik na fladze albo istniejącej drodze
+  kończy, ponowny klik na końcu stawia tam flagę i pozwala prowadzić dalej, klik na polu trasy cofa do niego,
+  prawy przycisk / Backspace cofa krok, klik na dalekim polu dociąga najkrótszą drogę od bieżącego końca.
+  Sama logika w interfejsie - do symulacji trafia jak dotąd jedna komenda `road` z listą kierunków.
+- **Gładkie budynki zamiast poszarpanych**: dachówki (drobne, w rzędach przesuniętych o pół, z zaokrąglonym
+  brzegiem i cieniem pod zakładką), deski i bale (okrągły przekrój; naroża chat gładkie, bez czół bali)
+  rysuje shader materiału modeli (`MODEL_PATTERNS` w `client/render/scene.ts`) z UV zapisanego w Blenderze
+  (`surface_pattern` w `art/scripts/lib.py`: numer wzoru × 1000 + położenie poziome, wysokość albo odległość od
+  okapu); z daleka wzór gaśnie do średniej, bez migotania. Kamienie na bielonych i kamiennych ścianach, wieżach i
+  młynie oraz obręcze beczek są malowane kolorem na płaskich ścianach brył (`Model.block`, `paint`). Zamiast
+  doklejanych listewek i kostek: płaskie ściany, sfazowane naroża, okrągłe kalenice, gęstsze okrągłe bryły
+  (10-16 segmentów); normalne z ostrymi krawędziami powyżej 40° (`SMOOTH_ANGLE`), materiał bez `flatShading`.
+  Podglądy i ikony z Blendera (Workbench) nie pokazują wzorów z shadera. Budżety trójkątów bez zmian
+  (800/1200/2000), modele lżejsze niż wcześniej; wydajność 31,8 FPS przy CPU ×4.
+- **Praca tartaku widoczna**: przed tartakiem stoi kozioł; gdy trwa cykl produkcji, na koźle leży kłoda,
+  a za nim tracz rytmicznie piłuje (`SAW_HORSE` w `client/render/entities.ts`; w symulacji tracz jest w budynku).
+- **Drogi przycięte do trójkątów terenu**: każdy kawałek wstęgi leży w płaszczyźnie jednego trójkąta terenu,
+  więc teren nie przebija drogi na grzbietach i szczytach (`EDGE_FAMILIES` w `client/render/roads.ts`).
+- **Drwal jak w pierwowzorze**: siekiera tkwi w pieńku przed chatą; drwal bierze ją, gdy po wyjściu z chaty
+  stanie na fladze, i odkłada do pieńka w chwili, gdy kładzie pień na flagę (model `woodcutter_axe`). Po ścięciu
+  niesie drzewo z gałęziami na prawym ramieniu (`felled_trunk` + `felled_branches`), kładzie je na pieńku,
+  okrzesuje siekierą (znikają tylko gałęzie, pień ma tę samą grubość) i niesie pień na ramieniu na flagę.
+  W symulacji etap `WS.LIMBING` (`LIMB_TICKS` = 24 ticki), o tyle krótsze jest ścinanie - wydajność drwala
+  bez zmian; 20/20 partii botów kończy się zwycięstwem.
+- **Pokrycie dachu wg ścian**: na ścianach z drewna (bale, deski) papa - ciemne pasy z zakładem i listwy
+  dociskowe w dół połaci (wzór `TARPAPER` w shaderze), na murowanych dachówka. Budynki mieszane mają
+  niższą drewnianą przybudówkę pod papą obok murowanej części pod dachówką (rzeźnia, zbrojownia).
+  Wydajności nie mierzymy na tej maszynie (równolegle renderuje inny projekt - wyniki niemiarodajne).
+- **Postacie gładkie, wg portretów zawodów pierwowzoru** (siedlercommunity.de/die-siedler/berufe/): kształty
+  organiczne zamiast kostek i walców - tunika z paskiem jako bryła obrotowa z profilu (dół, pas, pierś, szerokie
+  barki, szyja domknięta pod głową), ręce do połowy schowane w barkach tuniki (rękaw w kolorze tuniki, niżej gołe
+  przedramię z dłonią), nogi w spodniach, obłe kalosze z płaską podeszwą, okrągła głowa z małym nosem
+  w kolorze skóry i tyłem we włosach, fryzury od czubka do karku, miękkie czapki jako półkule; cieniowanie gładkie
+  (próg 75°, `SMOOTH` w `art/scripts/units.py`). Kolor gracza ma tylko tunika (tułów i rękawy): ściany skóry
+  i paska mają wzór `PLAIN`, dla którego shader cofa barwienie instancji. Oczy (białka ze źrenicami), brwi tuż
+  nad oczami, usta nad podbródkiem i rumieńce rysuje shader (wzór `FACE`, `face_pattern` w `lib.py`); z daleka
+  zostają ciemne plamki oczu.
+  Nakrycia głowy wg portretów: tragarz i narzędziowiec - brązowe włosy, rolnik i świniarz - rude włosy z wąsem,
+  drwal - czerwona czapka i ruda broda, rybak i szkutnik - błękitna czapka, tracz - czarny kapelusz z wąsem,
+  kamieniarz - różowa chusta, kowal - łysy z włosami po bokach, rzeźnik - biała czapka w pas, hutnik - biała
+  maska z wizjerem, górnik - szary hełm z lampką, młynarz - siwy wąs, rycerz - srebrny hełm z pióropuszem.
+  **Budżet postaci podniesiony z 300 do 400 trójkątów** (`UNIT_BUDGET` w `tests/art/models.test.ts`): gładkie,
+  organiczne kształty nie mieszczą się w 300; osadnik z najcięższą czapką i narzędziem ma 399, rycerz 399.
+- **Tempo i przybliżenie**: przy tempie 1× symulacja liczy 5 ticków na sekundę (`TICKS_PER_SECOND` w `sim/defs.ts`,
+  `TICK_MS` = 200 ms) - gra była dwa razy za szybka; reguły w tickach bez zmian, zegar i statystyki liczą czas
+  wg tej stałej. Przyciski tempa: pauza, 1×, 2×, 4×, 8×. Maksymalne przybliżenie kamery 24× (było 10×).
+
+## 2026-10-08 — Sceny pracy zawodów (uwaga właściciela)
+- **Każdy zawód ma krótką, czytelną sekwencję pracy** (jak drwal okrzesujący drzewo na pieńku). Sceny tylko rysują:
+  etap i postęp biorą ze stanu symulacji (podstan osadnika, timer, faza i timer budynku) i z czasu animacji.
+  Pracownicy warsztatów są w symulacji w środku budynku - scena rysuje ich „wirtualnie” przed budynkiem w trakcie
+  cyklu (`b.phase != 0`), gdy prawdziwy pracownik nie wynosi akurat towaru na flagę.
+- **Szkielet postaci z pełną pozą** (`client/render/rig.ts`, `Pose`): pochylenie i przechył tułowia, skręt tułowia
+  względem nóg, przysiad (wykrok z oboma stopami na ziemi), ręce w trzech osiach (wymach, odwiedzenie, obrót
+  w barku), pochylenie i skręt głowy, narzędzie w prawej i przedmiot w lewej ręce. `figure()` zwraca macierze stawów,
+  do których sceny przyczepiają rekwizyty (worek w dłoni, łuk, zwierzyna na karku).
+- **Sceny w osobnych plikach** (`client/render/work/`: `wood.ts`, `field.ts`, `crafts.ts`, `industry.ts`,
+  `people.ts`), rejestr w `index.ts` (każdy zawód i budynek ma jednego właściciela - powtórzenie to błąd przy starcie).
+  API scen (`WorkCtx` w `types.ts`): rekwizyty z puli warstw tworzonych przy pierwszym użyciu (`client/render/props.ts`,
+  pusta warstwa nie kosztuje wywołania rysowania), układ modelu budynku (`at`, `frameOf`), miejsce pracy od strony
+  kamery (`beside` - pracownik przy drzewie czy skale nie chowa się za nim), rytm uderzeń (`beat`, `strike`),
+  ukrywanie statycznego obiektu mapy na czas sceny (`hideObject` - np. padające drzewo, koszone zboże).
+- **Cząsteczki bez stanu** (`client/render/fx.ts`): pozycja każdej cząstki liczona z czasu i ziarna, więc nic nie trzeba
+  pamiętać ani sprzątać; ciągły wypływ (`stream`, `smoke`) i jednorazowy wyrzut w chwili uderzenia (`burst`).
+  Dwa białe modele (`fx_puff`, `fx_bit`, `art/scripts/props.py`) barwione kolorem instancji.
+- **Czas animacji płynie z tempem gry i stoi przy pauzie** (wcześniej postacie machały rękami także w pauzie);
+  kamera zawsze w czasie rzeczywistym.
+- **Etapy przy chacie w symulacji** (`sim/production.ts`, `WS`), każdy kosztem innego etapu tego samego zawodu,
+  więc wydajność się nie zmienia: leśnik bierze sadzonkę z grządki (`PREP`, 14 ticków; o tyle krótsze sadzenie),
+  kamieniarz ociosuje blok na kostkę (`DRESS`, 24; o tyle krótsze łupanie), myśliwy strzela z odległości 2 pól,
+  podchodzi po zdobycz (`FETCH`) i wiesza ją na stojaku (`HANG`, 14; o tyle krótszy odpoczynek w chacie).
+  Upolowane zwierzę leży (`Animal.dead`), aż myśliwy je zabierze; bez myśliwego znika. `SIM_VERSION` = 2
+  (zapisy z wersji 1 nie wczytują się). Test: `tests/sim/workstages.test.ts`.
+- **Bot trzyma rezerwę tygla** (`adjustSettings` w `ai/bot.ts`): bez tygla w magazynach kuźnia narzędzi robi go
+  najpierw. Zakleszczenie istniało wcześniej - wróg spalił jedyną hutę razem z hutnikiem, a tygla nie da się zrobić
+  bez stali; zmiana czasu etapów skierowała jedną z 20 partii testowych (BOT15) na tę ścieżkę i partia nie
+  kończyła się w limicie. Z rezerwą 20/20 partii kończy się zwycięzcą, trudny bot wygrywa 15/20.
+- **Tryb pokazowy `?demo=1`** (`client/game/demo.ts`): mała dolina z jeziorem, skałami, lasem ze zwierzyną i górami
+  ze złożami, wszystkie budynki gotowe, z pracownikami i zapasami, dojrzałe zboże, place budowy na nierównym terenie
+  (kopacz, budowniczy), reżyser wysyła geologa i atakuje sąsiada za frontem (pojedynki, katapulta). Panel
+  „Pokaz zawodów” (`client/ui/demoTour.ts`) przenosi kamerę do wybranego zawodu (pracownika w terenie śledzi)
+  i ma automatyczną wycieczkę. Klatki animacji bez okna: `node scripts/capture.ts`, arkusz: `scripts/sheet.py`.
+- **Sceny zawodów** (szczegóły w nagłówkach plików `client/render/work/*.ts`):
+  - teren (`field.ts`): leśnik klęka przy grządce i wyjmuje sadzonkę (grządka się przerzedza i odrasta), kopie
+    dołek trzema sztychami, sadzi i udeptuje; kamieniarz łupie skałę kilofem (odpryski), ostatnim uderzeniem
+    odłamuje blok, niesie go na ramieniu i ociosuje na stole na kostkę; rybak zarzuca wędkę, spławik drga, ryba
+    szamocze się na żyłce i ląduje w koszu, przy chacie schnie sieć i ryby; myśliwy skrada się, klęka, naciąga łuk,
+    strzała trafia jelenia, który pada, niesie go na karku i wiesza na stojaku; rolnik kosi rząd za rzędem (zostaje
+    ściernisko), wiąże snop, a przy siewie rozrzuca ziarno z worka; jelenie chodzą, pasą się i czujnie podnoszą łeb;
+  - drewno (`wood.ts`): drwal rąbie z boku, drzewo pada, okrzesuje je na pieńku; tracz piłuje i odnosi deskę na stos;
+  - żywność (`crafts.ts`): młynarz wnosi worek zboża i wytrzepuje worek z mąki, skrzydła rozpędzają się i zwalniają;
+    piekarz wałkuje ciasto, wsuwa chleb do pieca (ogień w otworze), wykłada bochenki na stół; rzeźnik rąbie tuszę
+    na pniu; hodowca świń sypie paszę do koryta i świnie podbiegają; hodowca osłów oprowadza oślicę z oślątkiem;
+    studniarz kręci korbą, wiadro wyjeżdża i woda leje się do beczki; piwowar wsypuje słód i miesza w kotle;
+    pracownicy wynoszą wyroby po swojemu (worek na ramieniu, kosz chleba, wiadro, toczona beczka);
+  - metal i drewno (`industry.ts`): koło na wieży szybowej kręci się, górnik wypycha wózek po szynach i wysypuje
+    urobek na kupkę; hutnik wyjmuje tygiel z pieca i przelewa żelazo do formy; kowale grzeją, kują (iskry) i hartują
+    w beczce (para), kuźnia narzędzi pokazuje robione narzędzie; mincerz wybija monety na kowadełku; szkutnik
+    przybija deski, łódź rośnie deska po desce; smolarz obchodzi mielerz z łopatą, dym gęstnieje;
+  - pozostali (`people.ts`): tragarze schylają się po towar i podają go sobie przy fladze, bezczynni przestępują
+    z nogi na nogę i siadają; osły kłusują i skubią trawę; przewoźnik wiosłuje; budowniczy nosi deski i kamienie
+    i przybija/muruje; kopacz rzuca ziemię za siebie (rosną kopczyki); geolog stuka w skałę, przykłada ucho,
+    wbija znak; rycerze na warcie, pojedynki z tarczą i ciosami, pokonany pada, zwycięzca unosi miecz;
+    katapulta wyrzuca kamień łukiem, katapulciarz nakręca ramię kołem zapadkowym i ładuje kamień.
+  Statyczne elementy modeli, które teraz są animowane, zniknęły z modeli budynków (świnie, osioł, kołowrót studni,
+  łódź w stoczni, dym mielerza, ramię katapulty, skrzydła młyna - teraz `crf_sails`); rekwizyty scen w
+  `art/scripts/props_*.py` (prefiksy `fld_`, `crf_`, `ind_`, `ppl_`), każdy w budżecie 300 trójkątów.

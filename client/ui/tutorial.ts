@@ -24,10 +24,10 @@ function has(s: GameState, me: number, kinds: number[], connected = false): bool
 
 const STEPS: Step[] = [
   { text: 'Witaj w dolinie! To twój zamek. Kliknij wolne pole na trawie niedaleko niego i wybierz „Drwal” z listy chat.', done: (s, me) => has(s, me, [B.WOODCUTTER]) },
-  { text: 'Każdy budynek potrzebuje drogi. Kliknij flagę przed budynkiem, wybierz „Buduj drogę” i kliknij flagę zamku.', done: (s, me) => has(s, me, [B.WOODCUTTER], true) },
+  { text: 'Każdy budynek potrzebuje drogi. Kliknij dwukrotnie flagę przed budynkiem (albo kliknij ją i wybierz „Buduj drogę”), a potem kliknij flagę zamku - droga poprowadzi się sama. Możesz też klikać kolejne kropki i prowadzić ją krok po kroku.', done: (s, me) => has(s, me, [B.WOODCUTTER], true) },
   { text: 'Tragarz już idzie na drogę. Teraz postaw „Tartak” (wśród domów) i też połącz go drogą - z pni zrobi deski.', done: (s, me) => has(s, me, [B.SAWMILL], true) },
   { text: 'Leśnik sadzi nowe drzewa, a Kamieniarz obok skał wydobywa kamień. Postaw oba.', done: (s, me) => has(s, me, [B.FORESTER]) && has(s, me, [B.STONECUTTER]) },
-  { text: 'Przycisk „Miejsca budowy” (klawisz B) pokazuje, co się gdzie zmieści: zielone - chata lub dom, niebieskie - duży budynek, brązowe - kopalnia, żółte - flaga.', done: (_s, _me, t) => t > 600 },
+  { text: 'Przycisk „Miejsca budowy” (klawisz B) pokazuje, co się gdzie zmieści: zamek - duży budynek, dom, chata, kilof - kopalnia, sama flaga - tylko flaga.', done: (_s, _me, t) => t > 600 },
   { text: 'Widok jest trójwymiarowy: przeciągnij prawym przyciskiem myszy, żeby obrócić (w bok) i pochylić (w górę/dół) kamerę. Klawisze: Q/E obrót, R/F pochylenie, Home - widok domyślny. Na dotyku: skręć dwoma palcami.', done: (_s, _me, t) => t > 500 },
   { text: 'Granice poszerzasz budynkami wojskowymi. Postaw „Barak” przy granicy - gdy wejdzie rycerz, terytorium urośnie.', done: (s, me) => s.buildings.some((b) => !!b && b.owner === me && isMilitary(b.kind) && b.stage === STAGE.DONE && b.knights.length > 0) },
   { text: 'Kopalnie potrzebują jedzenia: Rybak, Myśliwy albo Farma + Młyn + Piekarnia + Studnia. Zadbaj o jedzenie.', done: (s, me) => has(s, me, [B.FISHER, B.HUNTER, B.BAKERY]) },

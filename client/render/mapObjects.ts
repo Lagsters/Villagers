@@ -13,12 +13,28 @@ import { CHUNK } from './terrain.ts';
 const KINDS = ['tree_pine', 'tree_leaf', 'stump', 'stone', 'field', 'field_ripe', 'sign', 'ruin'] as const;
 type Kind = (typeof KINDS)[number];
 
-interface Inst { k: number; x: number; y: number; z: number; r: number; s: number; sy: number }
+interface Inst { k: number; x: number; y: number; z: number; r: number; s: number; sy: number; i: number }
 
 function hashf(i: number, k: number): number {
   let h = Math.imul(i ^ 0x27d4eb2d, 0x165667b1) ^ k;
   h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
   return ((h >>> 0) % 10000) / 10000;
+}
+
+/** Polozenie obiektu mapy na polu i (drzewo, skala, znak - jak w rendererze obiektow): przesuniecie w polu i obrot. */
+export function objectSpot(map: MapData, i: number): { x: number; y: number; z: number; rot: number } {
+  const x = i % map.w, y = (i / map.w) | 0;
+  return {
+    x: vx(x, y) + (hashf(i, 1) - 0.5) * 0.2,
+    y: map.height[i] * H_SCALE,
+    z: vz(y) + (hashf(i, 2) - 0.5) * 0.2,
+    rot: hashf(i, 3) * Math.PI * 2,
+  };
+}
+
+/** Wyglad drzewa na polu i (jak w rendererze obiektow): polozenie, model i skala doroslego drzewa. */
+export function treeLook(map: MapData, i: number): { model: 'tree_pine' | 'tree_leaf'; x: number; y: number; z: number; rot: number; s: number } {
+  return { ...objectSpot(map, i), model: hashf(i, 4) < 0.55 ? 'tree_pine' : 'tree_leaf', s: 0.62 + hashf(i, 5) * 0.25 };
 }
 
 export class MapObjectsRenderer {
@@ -75,20 +91,20 @@ export class MapObjectsRenderer {
         if (isTree(o)) {
           const k = hashf(i, 4) < 0.55 ? 0 : 1;
           const s = o === O.TREE ? 0.62 + hashf(i, 5) * 0.25 : 0.15 + (o - O.SAPLING1) * 0.11;
-          list.push({ k, x: px, y: py, z: pz, r, s, sy: s });
+          list.push({ k, x: px, y: py, z: pz, r, s, sy: s, i });
         } else if (o === O.STUMP) {
-          list.push({ k: 2, x: px, y: py, z: pz, r, s: 1, sy: 1 });
+          list.push({ k: 2, x: px, y: py, z: pz, r, s: 1, sy: 1, i });
         } else if (isStone(o)) {
           const s = 0.55 + (o - O.STONE1) * 0.12;
-          list.push({ k: 3, x: px, y: py, z: pz, r, s, sy: s });
+          list.push({ k: 3, x: px, y: py, z: pz, r, s, sy: s, i });
         } else if (isField(o)) {
           const ripe = o === O.FIELD_RIPE;
           const stage = o - O.FIELD1;
-          list.push({ k: ripe ? 5 : 4, x: vx(x, y), y: py, z: vz(y), r: 0, s: 1, sy: ripe ? 1 : 0.25 + stage * 0.22 });
+          list.push({ k: ripe ? 5 : 4, x: vx(x, y), y: py, z: vz(y), r: 0, s: 1, sy: ripe ? 1 : 0.25 + stage * 0.22, i });
         } else if (o === O.SIGN) {
-          list.push({ k: 6, x: px, y: py, z: pz, r, s: 1, sy: 1 });
+          list.push({ k: 6, x: px, y: py, z: pz, r, s: 1, sy: 1, i });
         } else if (o === O.RUIN) {
-          list.push({ k: 7, x: vx(x, y), y: py, z: vz(y), r, s: 1, sy: 1 });
+          list.push({ k: 7, x: vx(x, y), y: py, z: vz(y), r, s: 1, sy: 1, i });
         }
       }
     }
@@ -121,6 +137,15 @@ export class MapObjectsRenderer {
     this.dirtyChunks.add(Math.floor(y / CHUNK) * this.cw + Math.floor(x / CHUNK));
   }
 
+  /** Pola ukryte przez sceny pracy w tej klatce (sceny rysuja je same, np. koszone zboze). */
+  private hidden = new Set<number>();
+
+  setHidden(cells: ReadonlySet<number>): void {
+    if (cells.size === this.hidden.size && [...cells].every((c) => this.hidden.has(c))) return;
+    this.hidden = new Set(cells);
+    this.needRebuild = true;
+  }
+
   update(camera: THREE.Camera, cameraMoved: boolean): void {
     if (!cameraMoved && !this.needRebuild) return;
     this.needRebuild = false;
@@ -129,7 +154,11 @@ export class MapObjectsRenderer {
     for (const l of this.layers) l.begin();
     for (let c = 0; c < this.chunkInst.length; c++) {
       if (!this.frustum.intersectsBox(this.chunkBoxes[c])) continue;
-      for (const it of this.chunkInst[c]) this.layers[it.k].push(it.x, it.y, it.z, it.r, it.s, it.sy);
+      const hide = this.hidden.size > 0;
+      for (const it of this.chunkInst[c]) {
+        if (hide && this.hidden.has(it.i)) continue;
+        this.layers[it.k].push(it.x, it.y, it.z, it.r, it.s, it.sy);
+      }
     }
     for (const l of this.layers) l.end();
   }

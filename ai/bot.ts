@@ -4,14 +4,14 @@
  * szybsza rozbudowa, pelny lancuch militarny, atakuje przewaga).
  * Bot ma wlasny PRNG (nie jest czescia stanu gry): w sieci boty liczy tylko host.
  */
-import { B, BUILDINGS, FIRST_TOOL, G, O, RES, S, SERF_TOOLS, SIZE, T, TOOLS_COUNT, isMilitary, isStone } from '../sim/defs.ts';
+import { B, BUILDINGS, FIRST_TOOL, G, O, RES, S, SERF_TOOLS, T, TOOLS_COUNT, isMilitary, isStone } from '../sim/defs.ts';
 import type { Command } from '../sim/commands.ts';
 import { DIR_SE, hexDist, spiral } from '../sim/grid.ts';
 import { attackPreview, attackersAvailable, defenderLevels, isAttackTarget } from '../sim/military.ts';
 import { findRoadPath } from '../sim/roads.ts';
 import { UNREACHABLE, flagDist } from '../sim/routing.ts';
 import { STAGE, type Building, type GameState } from '../sim/types.ts';
-import { buildingCells, canBuild, neighbor } from '../sim/world.ts';
+import { buildingCells, canBuild, isBigSize, neighbor } from '../sim/world.ts';
 
 export const AI_EASY = 1;
 export const AI_HARD = 2;
@@ -143,7 +143,7 @@ export class Bot {
     const def = BUILDINGS[kind];
     const has = (type: number) => this.idle(s, type) > 0 || SERF_TOOLS[type].every((g) => this.stock(s, g) > 0);
     if (!has(S.BUILDER)) return false;
-    if (def.size === SIZE.LARGE && !has(S.DIGGER)) return false;
+    if (isBigSize(def.size) && !has(S.DIGGER)) return false;
     if (def.worker >= 0 && !has(def.worker)) return false;
     return true;
   }
@@ -388,6 +388,19 @@ export class Bot {
   // ---------- Ustawienia w trakcie gry ----------
 
   private adjustSettings(s: GameState, cmds: Command[]): void {
+    // Rezerwa tygla: hutnik bez tygla nie powstanie, a tygla nie da sie zrobic bez stali - utrata jedynej huty
+    // razem z hutnikiem (spalona przez wroga) zamykalaby lancuch broni na zawsze. Bez tygla w magazynach
+    // kuznia narzedzi robi go w pierwszej kolejnosci.
+    if (s.tick % 500 < this.period) {
+      const prio = s.players[this.player].settings.toolPrio;
+      const k = G.CRUCIBLE - FIRST_TOOL;
+      const want = this.stock(s, G.CRUCIBLE) < 1 ? 8 : 3;
+      if (prio[k] !== want) {
+        const tools = prio.slice();
+        tools[k] = want;
+        cmds.push({ type: 'setting', player: this.player, key: 'toolPrio', value: tools });
+      }
+    }
     // Wstrzymanie produkcji przy duzym zapasie (studnie, kamieniolomy, kopalnie granitu).
     if (s.tick % 300 < this.period) {
       const caps: [number, number, number][] = [[B.WELL, G.WATER, 30], [B.STONEMINE, G.STONE, 60], [B.CHARBURNER, G.COAL, 40]];

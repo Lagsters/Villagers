@@ -1,4 +1,5 @@
 /** Przeliczenia pole mapy -> wspolrzedne swiata three.js. */
+import { DIRS, stepXY } from '../../sim/grid.ts';
 import type { MapData } from '../../sim/mapgen.ts';
 
 export const ROW_H = Math.sqrt(3) / 2;
@@ -42,9 +43,27 @@ export function nearestIdx(map: MapData, wx: number, wz: number): number {
   return best;
 }
 
-/** Wysokosc terenu w punkcie (interpolacja barycentryczna w trojkacie). */
+/**
+ * Wysokosc terenu w punkcie (wx, wz) - dokladnie na siatce terenu: interpolacja barycentryczna
+ * w trojkacie miedzy najblizszym polem a dwoma kolejnymi sasiadami.
+ */
 export function groundHeight(map: MapData, wx: number, wz: number): number {
   const i = nearestIdx(map, wx, wz);
   if (i < 0) return 0;
-  return map.height[i] * H_SCALE;
+  const x = i % map.w, y = (i / map.w) | 0;
+  const ax = vx(x, y), az = vz(y), ah = map.height[i] * H_SCALE;
+  for (let d = 0; d < DIRS; d++) {
+    const [bx0, by0] = stepXY(x, y, d);
+    const [cx0, cy0] = stepXY(x, y, (d + 1) % DIRS);
+    if (bx0 < 0 || by0 < 0 || cx0 < 0 || cy0 < 0 || bx0 >= map.w || by0 >= map.h || cx0 >= map.w || cy0 >= map.h) continue;
+    const bx = vx(bx0, by0), bz = vz(by0), cx = vx(cx0, cy0), cz = vz(cy0);
+    const det = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+    if (Math.abs(det) < 1e-9) continue;
+    const l1 = ((bz - cz) * (wx - cx) + (cx - bx) * (wz - cz)) / det;
+    const l2 = ((cz - az) * (wx - cx) + (ax - cx) * (wz - cz)) / det;
+    const l3 = 1 - l1 - l2;
+    const bh = map.height[by0 * map.w + bx0] * H_SCALE, ch = map.height[cy0 * map.w + cx0] * H_SCALE;
+    if (l1 >= -1e-6 && l2 >= -1e-6 && l3 >= -1e-6) return l1 * ah + l2 * bh + l3 * ch;
+  }
+  return ah;
 }

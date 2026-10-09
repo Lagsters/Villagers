@@ -40,6 +40,7 @@ PALETTE = {
     'brick': '#a2553f', 'brick_dark': '#7c3f2f',
     'terracotta': '#b8532c', 'terracotta_dark': '#86391c', 'whitewash': '#ece7dc', 'plank': '#b35a2b', 'plank_dark': '#7a3a1b',
     'log_o': '#a55a2f', 'rock': '#8d8a84',
+    'tile_dark': '#94401f', 'stone_pale': '#c9ced6', 'tarpaper': '#4f4b47', 'tarpaper_dark': '#36322f',
     'bread': '#c98a3d', 'fish': '#8fb3cc', 'meat': '#b5483c', 'flour': '#f5f1e6', 'beer': '#d9a441',
 }
 
@@ -55,6 +56,65 @@ def color(name):
     return (srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b), 1.0)
 
 
+# Krawedzie o kacie miedzy scianami ponizej tego progu cieniujemy gladko (walce >= 10 segmentow).
+# Musi zostac ponizej 45 stopni: fazy narozy cieniowane gladko daja gradient na calej scianie.
+SMOOTH_ANGLE = 40.0
+
+# Wzory powierzchni rysowane w grze shaderem (client/render/scene.ts, MODEL_PATTERNS): drobne i ostre
+# przy kazdym przyblizeniu, bez dodatkowych trojkatow. Numer wzoru i wspolrzedne na powierzchni (w metrach
+# modelu) ida w UV: u = numer * PATTERN_STRIDE + polozenie poziome, v = wysokosc albo odleglosc od okapu.
+TILES, PLANKS, LOGS, TARPAPER, FACE = 1, 2, 3, 4, 5
+# Sciany bez koloru gracza w czesciach barwionych instancja (tulow, rece): skora, spodnie, pasek.
+PLAIN = 6
+PATTERN_STRIDE = 1000.0
+
+
+def surface_pattern(bm, slope=0, wall=0):
+    """UV wzoru: slope - sciany skierowane w gore (polacie: u wzdluz okapu, v od okapu w gore polaci),
+    wall - sciany pionowe (u poziomo wzdluz sciany, v = wysokosc, wspolna dla wszystkich scian - bale sie schodza)."""
+    uvl = bm.loops.layers.uv.get('UVMap') or bm.loops.layers.uv.new('UVMap')
+    up = Vector((0, 0, 1))
+    for f in bm.faces:
+        n = f.normal
+        if slope and n.z > 0.3:
+            pid = slope
+        elif wall and abs(n.z) < 0.1:
+            pid = wall
+        else:
+            continue
+        t = up.cross(n)
+        t = t.normalized() if t.length > 1e-6 else Vector((1, 0, 0))
+        if pid == slope and n.z > 0.3:
+            d = (up - n * n.z).normalized()
+            v0 = min(lp.vert.co.dot(d) for lp in f.loops)
+            for lp in f.loops:
+                lp[uvl].uv = (pid * PATTERN_STRIDE + lp.vert.co.dot(t), lp.vert.co.dot(d) - v0)
+        else:
+            for lp in f.loops:
+                lp[uvl].uv = (pid * PATTERN_STRIDE + lp.vert.co.dot(t), lp.vert.co.z)
+
+
+def face_pattern(bm):
+    """UV twarzy na glowie o srodku w poczatku ukladu: u = kat od przodu (-Y), v = wysokosc od srodka.
+    Tylko sciany z przodu i z bokow - na szwie z tylu glowy (kat +-pi) interpolacja przeszlaby przez twarz."""
+    uvl = bm.loops.layers.uv.get('UVMap') or bm.loops.layers.uv.new('UVMap')
+    for f in bm.faces:
+        c = f.calc_center_median()
+        if abs(math.atan2(c.x, -c.y)) > 2.0:
+            continue
+        for lp in f.loops:
+            co = lp.vert.co
+            lp[uvl].uv = (FACE * PATTERN_STRIDE + math.atan2(co.x, -co.y), co.z)
+
+
+def mark_plain(bm, faces):
+    """Sciany bez koloru gracza (wzor PLAIN) w czesci, ktora gra barwi kolorem gracza."""
+    uvl = bm.loops.layers.uv.get('UVMap') or bm.loops.layers.uv.new('UVMap')
+    for f in faces:
+        for lp in f.loops:
+            lp[uvl].uv = (PLAIN * PATTERN_STRIDE, 0.0)
+
+
 # ---------- Scena ----------
 
 def reset():
@@ -68,13 +128,15 @@ class Model:
         self.name = name
         self.parts = []
 
-    def _add(self, bm, col, jitter=0.04):
+    def _add(self, bm, col, jitter=0.04, cols=None):
+        """Czesc z bmesha; cols = kolory wg material_index scian (malowany wzor), cols[0] to kolor bazowy."""
         me = bpy.data.meshes.new(f'{self.name}_part{len(self.parts)}')
         bm.to_mesh(me)
         bm.free()
         attr = me.color_attributes.new(name='Col', type='FLOAT_COLOR', domain='CORNER')
-        base = color(col)
+        bases = [color(c) for c in (cols or [col])]
         for poly in me.polygons:
+            base = bases[min(poly.material_index, len(bases) - 1)]
             # Lekka zmiana jasnosci sciany (deterministyczna) - ozywia low-poly.
             k = 1.0 + ((poly.index * 2654435761) % 1000 / 1000 - 0.5) * jitter
             c = (min(1, base[0] * k), min(1, base[1] * k), min(1, base[2] * k), 1.0)
@@ -99,16 +161,114 @@ class Model:
         self._xf(bm, x, y, z, rz, rx, ry)
         return self._add(bm, col, jitter)
 
-    def cyl(self, r, h, seg=6, x=0.0, y=0.0, z=0.0, col='wood', r_top=None, rz=0.0, rx=0.0, ry=0.0, jitter=0.04):
-        """Walec/stozek sciety (r_top) o podstawie na z."""
+    def cyl(self, r, h, seg=6, x=0.0, y=0.0, z=0.0, col='wood', r_top=None, rz=0.0, rx=0.0, ry=0.0, jitter=0.04, bands=None, paint=None, bottom=True, slope=0, top=True):
+        """Walec/stozek sciety (r_top) o podstawie na z. bands = wysokosci ciec (od podstawy),
+        paint(segment, pas) -> kolor albo None maluje sciany boczne (kamienie wiezy, rzedy dachowek).
+        bottom=False / top=False - bez dolnej / gornej podstawy (bryla stojaca na ziemi, schowana w innej)."""
         bm = bmesh.new()
         bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=seg, radius1=r, radius2=r if r_top is None else r_top, depth=h)
         bmesh.ops.translate(bm, vec=(0, 0, h / 2), verts=bm.verts)
+        if not bottom:
+            bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.normal.z < -0.99], context='FACES_ONLY')
+        if not top:
+            bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.normal.z > 0.99], context='FACES_ONLY')
+        cols = None
+        if bands:
+            for c in bands:
+                bmesh.ops.bisect_plane(bm, geom=list(bm.faces) + list(bm.edges) + list(bm.verts), dist=1e-6, plane_co=(0, 0, c), plane_no=(0, 0, 1))
+        if paint:
+            cols = [col]
+            for f in bm.faces:
+                if abs(f.normal.z) > 0.99 and r_top != 0.0:
+                    continue
+                cen = f.calc_center_median()
+                k = int(((math.atan2(cen.y, cen.x) / (2 * math.pi)) % 1.0) * seg)
+                j = sum(1 for c in (bands or ()) if cen.z > c)
+                name = paint(k, j)
+                if name:
+                    if name not in cols:
+                        cols.append(name)
+                    f.material_index = cols.index(name)
+            jitter = 0.0
         self._xf(bm, x, y, z, rz, rx, ry)
-        return self._add(bm, col, jitter)
+        if slope:
+            surface_pattern(bm, slope=slope)
+            jitter = 0.0
+        return self._add(bm, col, jitter, cols)
 
-    def cone(self, r, h, seg=6, x=0.0, y=0.0, z=0.0, col='roof_red', rz=0.0, rx=0.0, ry=0.0):
-        return self.cyl(r, h, seg, x, y, z, col, r_top=0.0, rz=rz, rx=rx, ry=ry)
+    def cone(self, r, h, seg=6, x=0.0, y=0.0, z=0.0, col='roof_red', rz=0.0, rx=0.0, ry=0.0, bands=None, paint=None, bottom=True, slope=0):
+        return self.cyl(r, h, seg, x, y, z, col, r_top=0.0, rz=rz, rx=rx, ry=ry, bands=bands, paint=paint, bottom=bottom, slope=slope)
+
+    def sphere(self, r, seg=8, rings=5, x=0.0, y=0.0, z=0.0, col='skin', sx=1.0, sy=1.0, sz=1.0, face=False, rx=0.0, paint=None,
+               half=False, plain=None, keep=None):
+        """Kula UV (seg x rings; seg=4, rings=2 to osmioscian - przy gladkim cieniowaniu okragla grudka).
+        face=True - twarz rysowana w grze (wzor FACE): przod kuli patrzy na -Y.
+        paint(srodek sciany wzgledem srodka kuli, po skalowaniu) -> kolor albo None (np. dlon na koncu reki).
+        half=True - sama gorna polkula (czasza: wlosy, czapka); rings parzyste, zeby byl rownik;
+        half='flat' - polkula z plaskim dnem (np. but z plaska podeszwa).
+        plain(srodek sciany) -> True: sciana bez koloru gracza (np. naga reka pod rekawem);
+        keep(srodek sciany) -> False: sciany do usuniecia (np. wlosy bez czesci zaslaniajacej twarz)."""
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=rings, radius=r)
+        if half:
+            bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_center_median().z < 0], context='FACES')
+            if half == 'flat':
+                bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=0)
+        if keep:
+            bmesh.ops.delete(bm, geom=[f for f in bm.faces if not keep(f.calc_center_median())], context='FACES_ONLY')
+        bmesh.ops.scale(bm, vec=(sx, sy, sz), verts=bm.verts)
+        if face:
+            face_pattern(bm)
+        cols = None
+        if paint:
+            cols = [col]
+            for f in bm.faces:
+                name = paint(f.calc_center_median())
+                if name:
+                    if name not in cols:
+                        cols.append(name)
+                    f.material_index = cols.index(name)
+        if plain:
+            mark_plain(bm, [f for f in bm.faces if plain(f.calc_center_median())])
+        self._xf(bm, x, y, z, rx=rx)
+        return self._add(bm, col, 0.0, cols)
+
+    def lathe(self, profile, seg=8, x=0.0, y=0.0, z=0.0, col='cloth', paint=None, plain=None):
+        """Bryla obrotowa z profilu [(promien, wysokosc), ...] od dolu do gory, bez dna; gora domknieta stozkiem.
+        paint(numer pasa miedzy kolejnymi punktami profilu) -> kolor albo None; plain(numer pasa) -> True:
+        pas bez koloru gracza."""
+        bm = bmesh.new()
+        rings = []
+        for (r, h) in profile:
+            rings.append([bm.verts.new((r * math.cos(2 * math.pi * k / seg), r * math.sin(2 * math.pi * k / seg), h)) for k in range(seg)])
+        cols = [col]
+
+        def color_of(i):
+            name = paint(i) if paint else None
+            if not name:
+                return 0
+            if name not in cols:
+                cols.append(name)
+            return cols.index(name)
+
+        flat = []
+        for i in range(len(rings) - 1):
+            mi = color_of(i)
+            for k in range(seg):
+                f = bm.faces.new((rings[i][k], rings[i][(k + 1) % seg], rings[i + 1][(k + 1) % seg], rings[i + 1][k]))
+                f.material_index = mi
+                if plain and plain(i):
+                    flat.append(f)
+        top = bm.verts.new((0, 0, profile[-1][1] + profile[-1][0] * 0.3))
+        mi = color_of(len(rings) - 1)
+        for k in range(seg):
+            f = bm.faces.new((rings[-1][k], rings[-1][(k + 1) % seg], top))
+            f.material_index = mi
+        bm.normal_update()
+        if flat:
+            mark_plain(bm, flat)
+        self._xf(bm, x, y, z)
+        return self._add(bm, col, 0.0, cols)
 
     def ico(self, r, x=0.0, y=0.0, z=0.0, col='leaf', sub=1, sx=1.0, sy=1.0, sz=1.0):
         bm = bmesh.new()
@@ -117,7 +277,7 @@ class Model:
         self._xf(bm, x, y, z)
         return self._add(bm, col)
 
-    def gable(self, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', rz=0.0, overhang=0.06):
+    def gable(self, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', rz=0.0, overhang=0.06, wall=0):
         """Dach dwuspadowy: kalenica wzdluz osi X, szerokosc w (X), glebokosc d (Y), wysokosc h."""
         bm = bmesh.new()
         hw, hd = w / 2 + overhang, d / 2 + overhang
@@ -126,18 +286,37 @@ class Model:
             bm.faces.new([v[i] for i in f])
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         self._xf(bm, x, y, z, rz)
+        if wall:
+            surface_pattern(bm, wall=wall)
         return self._add(bm, col)
 
-    def hip(self, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', overhang=0.06):
-        """Dach czterospadowy (piramida na prostokacie)."""
+    def hip(self, w, d, h, x=0.0, y=0.0, z=0.0, col='roof_red', overhang=0.06, rows=0, slope=0):
+        """Dach czterospadowy (piramida na prostokacie); rows > 0 - rzedy dachowek malowane pasami,
+        slope - wzor polaci (np. TILES, TARPAPER)."""
         bm = bmesh.new()
         hw, hd = w / 2 + overhang, d / 2 + overhang
         v = [bm.verts.new(p) for p in [(-hw, -hd, 0), (hw, -hd, 0), (hw, hd, 0), (-hw, hd, 0), (0, 0, h)]]
         for f in [(0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4), (0, 3, 2, 1)]:
             bm.faces.new([v[i] for i in f])
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        cols = None
+        if rows:
+            # Kazdy rzad: dachowka i ciemniejszy cien przy dolnej krawedzi rzedu.
+            cuts = []
+            for k in range(rows):
+                cuts += [h * k / rows, h * (k + 0.28) / rows]
+            for c in cuts[1:]:
+                bmesh.ops.bisect_plane(bm, geom=list(bm.faces) + list(bm.edges) + list(bm.verts), dist=1e-6, plane_co=(0, 0, c), plane_no=(0, 0, 1))
+            cols = [col, 'tile_dark' if col == 'terracotta' else col + '_dark']
+            for f in bm.faces:
+                if f.normal.z < -0.99:
+                    continue
+                j = sum(1 for c in cuts if f.calc_center_median().z > c)
+                f.material_index = 1 if j % 2 == 1 else 0
         self._xf(bm, x, y, z)
-        return self._add(bm, col)
+        if slope:
+            surface_pattern(bm, slope=slope)
+        return self._add(bm, col, 0.0 if rows or slope else 0.04, cols)
 
     def cbox(self, w, d, h, x=0.0, y=0.0, z=0.0, col='wall', rx=0.0, ry=0.0, rz=0.0, jitter=0.04):
         """Prostopadloscian ze srodkiem w (x, y, z) - wygodny do obracanych plyt (polacie dachu, belki)."""
@@ -146,6 +325,68 @@ class Model:
         bmesh.ops.scale(bm, vec=(w, d, h), verts=bm.verts)
         self._xf(bm, x, y, z, rz, rx, ry)
         return self._add(bm, col, jitter)
+
+    def block(self, w, d, h, x=0.0, y=0.0, z=0.0, col='wall', rx=0.0, ry=0.0, rz=0.0, bevel=0.008, paint=None, center=False, open_sides=(), slope=0, wall=0):
+        """
+        Prostopadloscian ze sfazowanymi krawedziami i wzorem (spoiny, dachowki, bale) malowanym kolorem
+        na plaskich scianach - bez drobnych wystajacych bryl, ktore z kamery szarpia sylwetke i migocza.
+        paint = {strona: (ciecia_u, ciecia_v, f(i, j) -> kolor albo None)}; strona to '-y', '+y', '-x', '+x',
+        '+z' albo '-z'; u, v to wspolrzedne lokalne sciany: dla scian Y (x, z), dla X (y, z), dla Z (x, y).
+        Ciecia sa we wspolrzednych lokalnych (srodek bryly w x = y = 0, z od 0 do h; center=True - z od -h/2).
+        open_sides = strony bez sciany (niewidoczne: spod na ziemi, gora sciany pod dachem).
+        slope, wall = wzor rysowany w grze na scianach skierowanych w gore / pionowych (TILES, PLANKS, LOGS, TARPAPER).
+        """
+        z0 = -h / 2 if center else 0.0
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.scale(bm, vec=(w, d, h), verts=bm.verts)
+        bmesh.ops.translate(bm, vec=(0, 0, z0 + h / 2), verts=bm.verts)
+        paint = paint or {}
+        axes = {'x': (0, 1, 2), 'y': (1, 0, 2), 'z': (2, 0, 1)}  # os normalnej, os u, os v
+
+        def side_faces(side):
+            ax = axes[side[1]][0]
+            sg = 1 if side[0] == '+' else -1
+            return [f for f in bm.faces if f.normal[ax] * sg > 0.99]
+
+        for side in open_sides:
+            bmesh.ops.delete(bm, geom=side_faces(side), context='FACES_ONLY')
+
+        for side, (ucuts, vcuts, _fn) in paint.items():
+            _, au, av = axes[side[1]]
+            for (axis, cuts) in ((au, ucuts), (av, vcuts)):
+                for c in cuts:
+                    faces = side_faces(side)
+                    geom = list(faces) + list({e for f in faces for e in f.edges}) + list({v for f in faces for v in f.verts})
+                    no = [0.0, 0.0, 0.0]
+                    no[axis] = 1.0
+                    co = [0.0, 0.0, 0.0]
+                    co[axis] = c
+                    bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-6, plane_co=co, plane_no=no)
+        if bevel > 0:
+            edges = [e for e in bm.edges if len(e.link_faces) == 2 and e.calc_face_angle(0) > 1.0]
+            verts = list({v for e in edges for v in e.verts})
+            bmesh.ops.bevel(bm, geom=edges + verts, offset=min(bevel, w / 3, d / 3, h / 3), offset_type='OFFSET',
+                            segments=1, profile=0.5, affect='EDGES', clamp_overlap=True, material=-1)
+        cols = [col]
+        for side, (ucuts, vcuts, fn) in paint.items():
+            ax, au, av = axes[side[1]]
+            sg = 1 if side[0] == '+' else -1
+            for f in bm.faces:
+                if f.normal[ax] * sg <= 0.99:
+                    continue
+                cen = f.calc_center_median()
+                i = sum(1 for c in ucuts if cen[au] > c)
+                j = sum(1 for c in vcuts if cen[av] > c)
+                name = fn(i, j)
+                if name:
+                    if name not in cols:
+                        cols.append(name)
+                    f.material_index = cols.index(name)
+        self._xf(bm, x, y, z, rz, rx, ry)
+        if slope or wall:
+            surface_pattern(bm, slope, wall)
+        return self._add(bm, col, 0.0, cols)
 
     def beam(self, p0, p1, t=0.03, col='wood_dark'):
         """Belka o przekroju t x t miedzy punktami p0 i p1 (krotki od zera do dowolnego kierunku)."""
@@ -173,11 +414,18 @@ class Model:
         self._xf(bm, x, y, z, rz)
         return self._add(bm, col)
 
-    def finish(self, rotate_deg=0.0, ao=0.0, ao_height=0.35):
+    def finish(self, rotate_deg=0.0, ao=0.0, ao_height=0.35, smooth=SMOOTH_ANGLE):
         """
         Laczy czesci w jeden obiekt, trianguluje i obraca. Zwraca obiekt.
         ao > 0 przyciemnia wierzcholki przy ziemi (tani odpowiednik ambient occlusion w kolorach).
         """
+        if any(p.data.uv_layers for p in self.parts):
+            # Laczenie gubi UV czesci bez warstwy: kazda czesc dostaje UVMap, bez wzoru (u = 0).
+            for p in self.parts:
+                if not p.data.uv_layers:
+                    lay = p.data.uv_layers.new(name='UVMap')
+                    for d in lay.data:
+                        d.uv = (0.0, 0.0)
         bpy.ops.object.select_all(action='DESELECT')
         for p in self.parts:
             p.select_set(True)
@@ -195,6 +443,8 @@ class Model:
         bmesh.ops.triangulate(bm, faces=bm.faces)
         bm.to_mesh(ob.data)
         bm.free()
+        ob.data.shade_smooth()
+        ob.data.set_sharp_from_angle(angle=math.radians(smooth))
         if ao > 0:
             me = ob.data
             attr = me.color_attributes['Col']
@@ -224,7 +474,7 @@ def export(ob, name=None):
         use_selection=True,
         export_apply=True,
         export_yup=True,
-        export_normals=False,
+        export_normals=True,
         export_materials='NONE',
         export_vertex_color='ACTIVE',
         export_active_vertex_color_when_no_material=True,
@@ -283,13 +533,14 @@ def selected_names(all_names):
     return [n for n in all_names if not names or n in names]
 
 
-def build(builders, icons=True, ao=0.0):
-    """Buduje wybrane modele: builders = {nazwa: funkcja(Model)->rotacja}. Wypisuje liczbe trojkatow."""
+def build(builders, icons=True, ao=0.0, smooth=SMOOTH_ANGLE):
+    """Buduje wybrane modele: builders = {nazwa: funkcja(Model)->rotacja}. Wypisuje liczbe trojkatow.
+    smooth = prog gladkiego cieniowania (postacie bez faz moga wygladzac mocniej niz budynki)."""
     for name in selected_names(list(builders)):
         reset()
         m = Model(name)
         rot = builders[name](m) or 0.0
-        ob = m.finish(rot, ao=ao)
+        ob = m.finish(rot, ao=ao, smooth=smooth)
         export(ob)
         render_preview(ob, icon=96 if icons else 0)
         print(f'MODEL {name} tris={tri_count(ob)}')

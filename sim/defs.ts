@@ -3,7 +3,8 @@
  * Uzywamy obiektow `as const` zamiast enum (erasableSyntaxOnly).
  */
 
-export const TICKS_PER_SECOND = 10;
+/** Ticki symulacji na sekunde czasu rzeczywistego przy tempie 1x (zegar gry liczy czas wg tej stalej). */
+export const TICKS_PER_SECOND = 5;
 
 // ---------- Teren ----------
 export const T = { WATER: 0, GRASS: 1, DESERT: 2, MOUNTAIN: 3, SNOW: 4 } as const;
@@ -130,7 +131,7 @@ export const B = {
 } as const;
 export const BUILDING_TYPES = 31;
 
-/** Rozmiary: chata (maly), dom (sredni), zamek (duzy, 4 pola), kopalnia. */
+/** Rozmiary: chata (maly), dom (sredni), duzy, kopalnia - kazdy budynek stoi na jednym polu (zob. world.canBuild). */
 export const SIZE = { SMALL: 1, LARGE: 2, MINE: 3, MEDIUM: 4 } as const;
 
 export interface BuildingDef {
@@ -170,7 +171,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
   def('Rybak', SM, 2, 0, S.FISHER, [], G.FISH, 100, 7),
   def('Myśliwy', SM, 2, 0, S.HUNTER, [], G.MEAT, 60, 9),
   def('Farma', LG, 3, 3, S.FARMER, [], G.WHEAT, 80, 3),
-  def('Młyn', MD, 2, 2, S.MILLER, [G.WHEAT], G.FLOUR, 60),
+  def('Młyn', SM, 2, 2, S.MILLER, [G.WHEAT], G.FLOUR, 60),
   def('Piekarnia', MD, 2, 2, S.BAKER, [G.FLOUR, G.WATER], G.BREAD, 80),
   def('Chlewnia', LG, 3, 3, S.PIGFARMER, [G.WHEAT, G.WATER], G.PIG, 120),
   def('Rzeźnia', MD, 2, 2, S.BUTCHER, [G.PIG], G.MEAT, 60),

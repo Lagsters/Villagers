@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { runBotGame, type GameResult } from '../../ai/harness.ts';
 
-/** 3 godziny gry (10 tickow/s) - gorny limit "rozsadnej" dlugosci partii 1 na 1 na mapie 64. */
+/** 108 tys. tickow (6 godzin przy tempie 1x) - gorny limit "rozsadnej" dlugosci partii 1 na 1 na mapie 64. */
 const MAX_TICKS = 108000;
 const GAMES = 20;
 

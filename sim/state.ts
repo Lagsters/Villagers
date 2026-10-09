@@ -3,7 +3,7 @@
  */
 import { B, G, GOODS_COUNT, MAP_SIZES, MAX_PLAYERS, S, TOOLS_COUNT } from './defs.ts';
 import { finishBuilding, placeBuilding } from './construction.ts';
-import { generateMap, normalizeMapCode } from './mapgen.ts';
+import { generateMap, normalizeMapCode, type GeneratedMap } from './mapgen.ts';
 import { seedRng } from './rng.ts';
 import { defaultSettings } from './settings.ts';
 import type { GameConfig, GameState, PlayerState } from './types.ts';
@@ -31,9 +31,10 @@ export const START_SERFS = 30;
 export const START_KNIGHTS: readonly number[] = [4, 2, 1, 0, 0];
 export const START_DONKEYS = 3;
 
-export function createGame(input: GameConfig): GameState {
+/** Nowa gra; `prepared` - gotowa mapa ze startami (scenariusz pokazowy) zamiast generowanej z kodu. */
+export function createGame(input: GameConfig, prepared?: GeneratedMap): GameState {
   const cfg = validateConfig(input);
-  const { map, starts } = generateMap(cfg.mapCode, cfg.mapSize, cfg.players.length);
+  const { map, starts } = prepared ?? generateMap(cfg.mapCode, cfg.mapSize, cfg.players.length);
   const players: PlayerState[] = cfg.players.map((p, i) => ({
     id: i,
     name: p.name,

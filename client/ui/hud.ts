@@ -2,9 +2,10 @@
  * Interfejs gry w DOM: gorny pasek, panel kontekstowy wybranego pola, tryb budowy drogi,
  * komunikaty. Nie zmienia stanu gry bezposrednio - wysyla komendy przez sesje.
  */
-import { BUILDINGS, B, FIRST_TOOL, G, GOOD_NAMES_PL, GOODS_COUNT, O, S, SERF_NAMES_PL, SIZE, TOOLS_COUNT, isMilitary } from '../../sim/defs.ts';
+import { BUILDINGS, B, FIRST_TOOL, G, GOOD_NAMES_PL, GOODS_COUNT, O, S, SERF_NAMES_PL, SIZE, T, TICKS_PER_SECOND, TOOLS_COUNT, isMilitary } from '../../sim/defs.ts';
 import { DIR_SE } from '../../sim/grid.ts';
-import { findRoadPath, roadAt } from '../../sim/roads.ts';
+import { findPath } from '../../sim/pathfind.ts';
+import { MAX_ROAD_LEN, findRoadPath, roadAt, validateRoad } from '../../sim/roads.ts';
 import { STAGE, type Building, type GameEvent, type GameState } from '../../sim/types.ts';
 import { attackersAvailable } from '../../sim/military.ts';
 import { iconUrl } from '../render/assets.ts';
@@ -33,12 +34,19 @@ const STAGE_PL = ['Wyrównywanie terenu', 'W budowie', 'Gotowy', 'Płonie'];
 
 export interface HudCallbacks {
   setPreview(cells: number[] | null, ok: boolean): void;
+  /** Pola, na ktore mozna przedluzyc budowana droge o jeden krok (zielone kropki). */
+  setSteps(cells: number[]): void;
   setCursor(idx: number): void;
   lookAt(idx: number): void;
   toggleSites(on: boolean): void;
   openMenu(): void;
   openPanel(name: 'settings' | 'stats'): void;
 }
+
+/** Odstep miedzy kliknieciami uznawanymi za dwuklik. */
+const DOUBLE_TAP_MS = 400;
+/** Przyciski tempa: etykieta i mnoznik (0 - pauza). */
+const SPEEDS = [['❚❚', 0], ['1×', 1], ['2×', 2], ['4×', 4], ['8×', 8]] as const;
 
 export class Hud {
   readonly root: HTMLElement;
@@ -51,7 +59,11 @@ export class Hud {
   selected = -1;
   mode: 'select' | 'road' = 'select';
   roadStart = -1;
+  /** Budowana droga: pola od flagi startowej do biezacego konca (prowadzenie krok po kroku). */
+  private roadPath: number[] = [];
   private hover = -1;
+  /** Ostatnie klikniecie lewym w trybie wyboru (do wykrycia dwukliku na fladze). */
+  private lastTap = { idx: -1, t: 0 };
   private lastPanelKey = '';
   sitesOn = false;
   private session: GameSession;
@@ -75,7 +87,7 @@ export class Hud {
     this.timeEl = el('span', 'time', '0:00');
     this.top.appendChild(this.timeEl);
     const speeds = el('span', 'speeds');
-    for (const [label, v] of [['❚❚', 0], ['1×', 1], ['2×', 2], ['4×', 4]] as const) {
+    for (const [label, v] of SPEEDS) {
       const b = button(label, () => this.setSpeed(v), v === 0 ? 'Pauza' : `Tempo ${label}`);
       b.classList.add('speed');
       this.speedEls.push(b);
@@ -127,7 +139,7 @@ export class Hud {
       this.session.speed = v;
     }
     const cur = this.session.paused ? 0 : this.session.speed;
-    [0, 1, 2, 4].forEach((sp, i) => this.speedEls[i].classList.toggle('active', sp === cur));
+    SPEEDS.forEach(([, sp], i) => this.speedEls[i].classList.toggle('active', sp === cur));
   }
 
   /** Czy gra lokalna pozwala zmieniac tempo (w sieci nie). */
@@ -147,14 +159,28 @@ export class Hud {
 
   onTap(idx: number, button: number): void {
     if (button === 2) {
-      this.cancel();
+      if (this.mode === 'road' && this.roadPath.length > 1) this.roadUndo();
+      else this.cancel();
       return;
     }
     if (this.mode === 'road') {
       this.tryRoad(idx);
       return;
     }
+    // Dwuklik na wlasnej fladze od razu zaczyna budowe drogi.
+    const now = performance.now();
+    const dbl = idx >= 0 && idx === this.lastTap.idx && now - this.lastTap.t < DOUBLE_TAP_MS;
+    this.lastTap = { idx: dbl ? -1 : idx, t: now };
+    if (dbl && this.isOwnFlag(idx)) {
+      this.startRoad(idx);
+      return;
+    }
     this.select(idx);
+  }
+
+  private isOwnFlag(idx: number): boolean {
+    const map = this.state.map;
+    return map.obj[idx] === O.FLAG && this.state.flags[map.objId[idx]]?.owner === this.me;
   }
 
   onHover(idx: number): void {
@@ -165,6 +191,11 @@ export class Hud {
   onKey(e: KeyboardEvent): boolean {
     if (e.key === 'Escape') {
       this.cancel();
+      return true;
+    }
+    if (e.key === 'Backspace' && this.mode === 'road') {
+      if (this.roadPath.length > 1) this.roadUndo();
+      else this.cancel();
       return true;
     }
     if (e.key === 'b' || e.key === 'B') {
@@ -183,7 +214,9 @@ export class Hud {
   cancel(): void {
     if (this.mode === 'road') {
       this.mode = 'select';
+      this.roadPath = [];
       this.cb.setPreview(null, false);
+      this.cb.setSteps([]);
       this.lastPanelKey = '';
       this.refreshPanel();
       return;
@@ -201,53 +234,152 @@ export class Hud {
   startRoad(flagPos: number): void {
     this.mode = 'road';
     this.roadStart = flagPos;
+    this.roadPath = [flagPos];
     this.lastPanelKey = '';
     this.refreshPanel();
     this.updateRoadPreview();
   }
 
-  private updateRoadPreview(): void {
-    const s = this.state;
-    if (this.hover < 0 || this.roadStart < 0 || s.map.obj[this.roadStart] !== O.FLAG) {
-      this.cb.setPreview(null, false);
-      return;
+  /** Kierunki miedzy kolejnymi polami trasy (6 = pola nie sa sasiednie). */
+  private dirsOf(cells: number[]): number[] {
+    const map = this.state.map;
+    const out: number[] = [];
+    for (let i = 1; i < cells.length; i++) {
+      let d = 0;
+      while (d < 6 && neighbor(map, cells[i - 1], d) !== cells[i]) d++;
+      out.push(d);
     }
-    const path = findRoadPath(s, this.me, this.roadStart, this.hover);
-    if (!path) {
-      this.cb.setPreview([this.roadStart, this.hover], false);
-      return;
-    }
-    const cells = [this.roadStart];
-    let c = this.roadStart;
-    for (const d of path) {
-      c = neighbor(s.map, c, d);
-      cells.push(c);
-    }
-    this.cb.setPreview(cells, true);
+    return out;
   }
 
+  private roadTail(): number {
+    return this.roadPath[this.roadPath.length - 1];
+  }
+
+  /** Czy budowana droga moze przejsc przez sasiednie pole `n` (jako pole posrednie). */
+  private canStep(n: number): boolean {
+    const s = this.state;
+    const map = s.map;
+    const tail = this.roadTail();
+    if (n < 0 || this.roadPath.includes(n) || this.roadPath.length > MAX_ROAD_LEN) return false;
+    if (map.owner[n] !== this.me + 1 || map.roads[n] !== 0 || (map.obj[n] !== O.NONE && map.obj[n] !== O.SIGN)) return false;
+    if (map.terrain[n] === T.WATER || map.terrain[n] === T.SNOW) return false;
+    if (this.roadPath.length === 1) {
+      const f = s.flags[map.objId[tail]];
+      const d = this.dirsOf([tail, n])[0];
+      if (!f || f.roads[d] >= 0 || (f.building >= 0 && d === 4)) return false;
+    }
+    return true;
+  }
+
+  /** Trasa zakonczona na polu `end` (sasiednim albo dociagnietym najkrotsza droga), jesli poprawna. */
+  private routeTo(end: number): number[] | null {
+    const s = this.state;
+    const map = s.map;
+    const tail = this.roadTail();
+    if (end === tail) {
+      if (this.roadPath.length < 2) return null;
+      return validateRoad(s, this.me, this.roadPath[0], this.dirsOf(this.roadPath)) ? this.roadPath.slice() : null;
+    }
+    let cells: number[];
+    if (this.roadPath.length === 1) {
+      const dirs = findRoadPath(s, this.me, tail, end);
+      if (!dirs) return null;
+      cells = [tail];
+      for (const d of dirs) cells.push(neighbor(map, cells[cells.length - 1], d));
+    } else {
+      const used = new Set(this.roadPath);
+      const me = this.me + 1;
+      const dirs = findPath(map, tail, end, (i) => !used.has(i) && map.owner[i] === me && map.roads[i] === 0
+        && (map.obj[i] === O.NONE || map.obj[i] === O.SIGN) && map.terrain[i] !== T.WATER && map.terrain[i] !== T.SNOW, 4000);
+      if (!dirs) return null;
+      cells = this.roadPath.slice();
+      for (const d of dirs) cells.push(neighbor(map, cells[cells.length - 1], d));
+    }
+    return validateRoad(s, this.me, cells[0], this.dirsOf(cells)) ? cells : null;
+  }
+
+  private roadUndo(): void {
+    this.roadPath.pop();
+    this.updateRoadPreview();
+  }
+
+  private updateRoadPreview(): void {
+    const s = this.state;
+    if (this.roadStart < 0 || s.map.obj[this.roadStart] !== O.FLAG || this.roadPath.length === 0) {
+      this.cb.setPreview(null, false);
+      this.cb.setSteps([]);
+      return;
+    }
+    const tail = this.roadTail();
+    const steps: number[] = [];
+    for (let d = 0; d < 6; d++) {
+      const n = neighbor(s.map, tail, d);
+      if (n < 0 || this.roadPath.includes(n)) continue;
+      const end = s.map.obj[n] === O.FLAG || s.map.roads[n] !== 0;
+      if (end ? this.routeTo(n) : this.canStep(n)) steps.push(n);
+    }
+    this.cb.setSteps(steps);
+    const h = this.hover;
+    if (h < 0 || h === tail) {
+      this.cb.setPreview(this.roadPath.length > 1 ? this.roadPath : null, true);
+      return;
+    }
+    const k = this.roadPath.indexOf(h);
+    if (k >= 0) {
+      this.cb.setPreview(this.roadPath.slice(0, k + 1), true);
+      return;
+    }
+    if (steps.includes(h) && this.canStep(h)) {
+      this.cb.setPreview([...this.roadPath, h], true);
+      return;
+    }
+    const route = this.routeTo(h);
+    this.cb.setPreview(route ?? [tail, h], !!route);
+  }
+
+  /**
+   * Klikniecie w trybie drogi (jak w pierwowzorze): sasiednie pole przedluza droge o krok, flaga albo
+   * istniejaca droga ja konczy, ponowny klik na koncu stawia tam flage, pole na trasie cofa do niego,
+   * odlegle pole dociaga najkrotsza droge od biezacego konca.
+   */
   private tryRoad(idx: number): void {
     const s = this.state;
-    if (this.roadStart < 0 || s.map.obj[this.roadStart] !== O.FLAG) return;
-    if (idx === this.roadStart) {
+    if (this.roadStart < 0 || s.map.obj[this.roadStart] !== O.FLAG || idx < 0) return;
+    const tail = this.roadTail();
+    const k = this.roadPath.indexOf(idx);
+    if (k >= 0 && idx !== tail) {
+      this.roadPath = this.roadPath.slice(0, k + 1);
+      this.updateRoadPreview();
+      return;
+    }
+    if (idx === this.roadStart && this.roadPath.length === 1) {
       this.cancel();
       return;
     }
-    const path = findRoadPath(s, this.me, this.roadStart, idx);
-    if (!path) {
+    const adjacent = idx !== tail && this.dirsOf([tail, idx])[0] < 6;
+    const endsHere = s.map.obj[idx] === O.FLAG || s.map.roads[idx] !== 0;
+    if (adjacent && !endsHere && this.canStep(idx)) {
+      this.roadPath.push(idx);
+      this.updateRoadPreview();
+      return;
+    }
+    const cells = this.routeTo(idx);
+    if (!cells) {
       this.toast('Tu nie da się poprowadzić drogi', 'warn');
       return;
     }
-    this.session.submit({ type: 'road', player: this.me, pos: this.roadStart, dirs: path });
-    const endIsFlag = s.map.obj[idx] === O.FLAG;
-    if (endIsFlag) {
+    this.session.submit({ type: 'road', player: this.me, pos: cells[0], dirs: this.dirsOf(cells) });
+    this.cb.setPreview(null, false);
+    this.cb.setSteps([]);
+    if (s.map.obj[idx] === O.FLAG) {
       this.mode = 'select';
-      this.cb.setPreview(null, false);
+      this.roadPath = [];
       this.select(idx);
     } else {
-      // Kontynuuj budowe od nowej flagi (pojawi sie po nastepnym ticku).
+      // Kontynuuj budowe od nowej flagi na koncu (pojawi sie po nastepnym ticku).
       this.roadStart = idx;
-      this.cb.setPreview(null, false);
+      this.roadPath = [idx];
     }
   }
 
@@ -282,7 +414,7 @@ export class Hud {
     this.resEls.get('gold')!.textContent = String(tot[G.GOLD]);
     this.resEls.get('serfs')!.textContent = String(serfs);
     this.resEls.get('knights')!.textContent = String(knights);
-    const sec = Math.floor(s.tick / 10);
+    const sec = Math.floor(s.tick / TICKS_PER_SECOND);
     this.timeEl.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
     this.refreshPanel();
     if (this.mode === 'road' && s.map.obj[this.roadStart] === O.FLAG) this.updateRoadPreview();
@@ -297,7 +429,7 @@ export class Hud {
       this.show();
       clear(this.panel);
       this.panel.appendChild(el('h3', '', 'Budowa drogi'));
-      this.panel.appendChild(el('p', 'hint', 'Kliknij pole docelowe: istniejącą flagę albo wolne miejsce (powstanie nowa flaga). Esc lub prawy przycisk kończy.'));
+      this.panel.appendChild(el('p', 'hint', 'Klikaj kolejne kropki (zielone), żeby prowadzić drogę krok po kroku, albo od razu kliknij dalekie pole - droga dociągnie się najkrótszą trasą. Flaga lub droga kończy budowę, ponowny klik na końcu stawia tam flagę. Prawy przycisk / Backspace cofa krok, Esc kończy.'));
       this.panel.appendChild(button('Zakończ', () => this.cancel()));
       return;
     }
@@ -329,7 +461,7 @@ export class Hud {
       if (f.owner === this.me) {
         const goods = f.slotGood.filter((g) => g >= 0).map((g) => GOOD_NAMES_PL[g]);
         this.panel.appendChild(el('p', '', goods.length ? `Towary: ${goods.join(', ')}` : 'Brak towarów'));
-        this.panel.appendChild(button('Buduj drogę', () => this.startRoad(idx), 'Poprowadź drogę z tej flagi'));
+        this.panel.appendChild(button('Buduj drogę', () => this.startRoad(idx), 'Poprowadź drogę z tej flagi (albo kliknij flagę dwukrotnie)'));
         this.panel.appendChild(button('Wyślij geologa', () => {
           this.session.submit({ type: 'geologist', player: this.me, pos: idx });
           this.toast('Geolog wyrusza');

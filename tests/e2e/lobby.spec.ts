@@ -53,8 +53,8 @@ test('lobby: dwie karty lacza sie przez serwer sygnalizacyjny i graja razem', as
   expect(pos).toBeGreaterThan(0);
   await a.waitForFunction((p) => (window as any).__game.session.state.map.obj[p] === 19, pos, { timeout: 15_000 });
   // Oba peery tykaja i nie ma desynchronizacji.
-  await a.waitForFunction(() => (window as any).__game.session.state.tick > 120, null, { timeout: 30_000 });
-  await b.waitForFunction(() => (window as any).__game.session.state.tick > 120, null, { timeout: 30_000 });
+  await a.waitForFunction(() => (window as any).__game.session.state.tick > 60, null, { timeout: 30_000 });
+  await b.waitForFunction(() => (window as any).__game.session.state.tick > 60, null, { timeout: 30_000 });
   const desync = await Promise.all([a, b].map((p) => p.evaluate(() => !!(window as any).__game.session.driver.desync)));
   expect(desync).toEqual([false, false]);
   await b.screenshot({ path: `test-results/m7-game-${info.project.name}.png` });

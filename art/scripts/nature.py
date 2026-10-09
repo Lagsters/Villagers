@@ -23,6 +23,21 @@ def tree_leaf(m):
     m.ico(0.22, x=0.14, y=-0.08, z=0.62, col='leaf_dark', sub=1)
 
 
+def felled_trunk(m):
+    """Pien scietego drzewa lezacy wzdluz X (srodek w osi): niesiony przez drwala, po okrzesaniu ten sam -
+    grubosc jak towar drewno (good_8) niesiony przez postac."""
+    m.cyl(0.04, 0.42, 8, x=-0.21, col='bark', r_top=0.03, ry=math.pi / 2)
+
+
+def felled_branches(m):
+    """Galezie z liscmi scietego drzewa (w ukladzie felled_trunk) - znikaja po okrzesaniu."""
+    for (x0, x1, y1, z1, col) in ((0.04, 0.13, 0.07, 0.05, 'leaf'), (0.09, 0.17, -0.07, 0.04, 'leaf_dark'),
+                                  (0.14, 0.22, 0.05, -0.04, 'leaf'), (0.17, 0.27, -0.03, 0.06, 'leaf_dark')):
+        m.beam((x0, 0, 0), (x1, y1, z1), 0.012, 'bark')
+        m.ico(0.045, x=x1, y=y1, z=z1, col=col, sub=0)
+    m.ico(0.06, x=0.25, col='leaf', sub=0)
+
+
 def stump(m):
     m.cyl(0.08, 0.12, 6, col='bark', r_top=0.07)
     m.cyl(0.066, 0.01, 6, z=0.12, col='wood_light')
@@ -92,7 +107,7 @@ def animal(m):
 BUILDERS = {
     'tree_pine': tree_pine, 'tree_leaf': tree_leaf, 'stump': stump, 'stone': stone, 'field': field,
     'field_ripe': field_ripe, 'sign': sign, 'ruin': ruin, 'fire': fire, 'border': border, 'flag': flag,
-    'flag_cloth': flag_cloth, 'animal': animal,
+    'flag_cloth': flag_cloth, 'animal': animal, 'felled_trunk': felled_trunk, 'felled_branches': felled_branches,
 }
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
  * Wspolne operacje na swiecie: alokacja encji, zapytania o pola, koszt marszu, terytorium.
  */
 import { BUILDINGS, O, SIZE, T, isInventory, isMilitary } from './defs.ts';
-import { DIR_NE, DIR_NW, DIR_SE, DIR_W, hexDist, neighborTable, spiral } from './grid.ts';
+import { DIR_SE, hexDist, neighborTable, spiral } from './grid.ts';
 import { isBorder, type MapData } from './mapgen.ts';
 import { STAGE, type Building, type GameEvent, type GameState } from './types.ts';
 
@@ -73,19 +73,26 @@ export function canPlaceFlag(s: GameState, p: number, pos: number): boolean {
   return true;
 }
 
-/** Pola zajmowane przez budynek (glowne + dodatkowe dla duzych). */
-export function buildingCells(map: MapData, pos: number, size: number): number[] {
-  const out = [pos];
-  if (size === SIZE.LARGE) {
-    const t = nb(map);
-    out.push(t[pos * 6 + DIR_W], t[pos * 6 + DIR_NW], t[pos * 6 + DIR_NE]);
-  }
-  return out;
+/** Pola zajmowane przez budynek. Jak w pierwowzorze kazdy budynek (takze duzy) stoi na jednym polu. */
+export function buildingCells(_map: MapData, pos: number, _size: number): number[] {
+  return [pos];
 }
 
+/** Budynki "duze" w sensie zasad stawiania (wymagaja wolnych sasiadow i wyrownania terenu). */
+export function isBigSize(size: number): boolean {
+  return size === SIZE.LARGE || size === SIZE.MEDIUM;
+}
+
+/** Najwieksza dopuszczalna roznica wysokosci w drugim pierscieniu pod duzy budynek (jak w pierwowzorze). */
+const BIG_HEIGHT_SPAN = 9;
+
 /**
- * Czy mozna postawic budynek danego rodzaju. Zwraca true/false.
- * Flaga na SE(pos) musi juz stac (wlasna) albo dac sie postawic.
+ * Czy mozna postawic budynek danego rodzaju (zasady pierwowzoru):
+ * - pole i 6 sasiadow wlasne, na polu brak drogi i przeszkod, flaga na SE stoi (wlasna, wolna) albo da sie ja postawic;
+ * - chata: trawa na polu, sasiedzi nie w wodzie - bez warunkow co do sasiednich budynkow i wysokosci;
+ * - kopalnia: gory na polu;
+ * - dom i duzy budynek: trawa wokol, na 6 sasiednich polach brak budynkow (drzewa i flagi nie przeszkadzaja),
+ *   w drugim pierscieniu brak innego domu/duzego budynku i roznica wysokosci < 9 (teren zostanie wyrownany).
  */
 export function canBuild(s: GameState, p: number, pos: number, kind: number): boolean {
   const map = s.map;
@@ -94,47 +101,46 @@ export function canBuild(s: GameState, p: number, pos: number, kind: number): bo
   const t = nb(map);
   const flagPos = t[pos * 6 + DIR_SE];
   if (flagPos < 0) return false;
-  if (map.roads[pos] !== 0) return false;
+  if (map.roads[pos] !== 0 || isBorder(map, pos) || !ownedBy(map, pos, p) || !isClearObj(map.obj[pos])) return false;
   const terrain = map.terrain[pos];
   if (def.size === SIZE.MINE) {
     if (terrain !== T.MOUNTAIN) return false;
   } else if (terrain !== T.GRASS) return false;
-  const cells = buildingCells(map, pos, def.size);
-  for (const c of cells) {
-    if (c < 0 || isBorder(map, c)) return false;
-    if (!ownedBy(map, c, p)) return false;
-    if (!isClearObj(map.obj[c])) return false;
-    if (c !== pos && map.roads[c] !== 0) return false;
-    const tc = map.terrain[c];
-    if (tc === T.WATER || tc === T.SNOW) return false;
-  }
-  // Wszyscy sasiedzi glownego pola: wlasni, bez flag (poza nasza SE) i budynkow.
-  const h0 = map.height[pos];
-  // Chata: roznica wysokosci 4, sasiedzi dowolni. Dom: 3, bez sasiednich budynkow i obcych flag.
-  const strict = def.size === SIZE.LARGE || def.size === SIZE.MEDIUM;
-  const maxDiff = strict ? 3 : 4;
+  const big = isBigSize(def.size);
   for (let d = 0; d < 6; d++) {
     const j = t[pos * 6 + d];
     if (j < 0 || !ownedBy(map, j, p)) return false;
-    if (Math.abs(map.height[j] - h0) > maxDiff) return false;
-    const o = map.obj[j];
-    if (d !== DIR_SE && (o === O.BUILDING || o === O.BUILDING_PART) && !cells.includes(j)) {
-      // Sasiednie budynki blokuja domy i duze budynki (chaty moga stac obok siebie).
-      if (strict) return false;
+    const tj = map.terrain[j];
+    if (tj === T.WATER || tj === T.SNOW) return false;
+    if (big) {
+      if (tj !== T.GRASS && d !== DIR_SE) return false;
+      const o = map.obj[j];
+      if (o === O.BUILDING || o === O.BUILDING_PART) return false;
     }
-    if (d !== DIR_SE && o === O.FLAG && !cells.includes(j)) {
-      // Flaga obok (inna niz nasza) nie przeszkadza chatom.
-      if (strict) return false;
+  }
+  if (big) {
+    // Drugi pierscien (12 pol): dla kazdego kierunku dwa kroki prosto oraz krok prosto i krok w kolejnym kierunku.
+    let hMin = 99, hMax = -1;
+    for (let k = 0; k < 12; k++) {
+      const d = k >> 1;
+      const a = t[pos * 6 + d];
+      const v = a < 0 ? -1 : t[a * 6 + (k & 1 ? (d + 1) % 6 : d)];
+      if (v < 0) continue;
+      const h = map.height[v];
+      if (h < hMin) hMin = h;
+      if (h > hMax) hMax = h;
+      if (map.obj[v] === O.BUILDING) {
+        const other = s.buildings[map.objId[v]];
+        if (other && isBigSize(BUILDINGS[other.kind].size)) return false;
+      }
     }
+    if (hMax - hMin >= BIG_HEIGHT_SPAN) return false;
   }
   if (map.obj[flagPos] === O.FLAG) {
     const f = s.flags[map.objId[flagPos]];
-    if (!f || f.owner !== p || f.building >= 0) return false;
-    return true;
+    return !!f && f.owner === p && f.building < 0;
   }
-  // Flage trzeba postawic: pole flagi nie moze byc jednym z pol budynku.
-  if (!canPlaceFlag(s, p, flagPos)) return false;
-  return true;
+  return canPlaceFlag(s, p, flagPos);
 }
 
 // ---------- Terytorium ----------

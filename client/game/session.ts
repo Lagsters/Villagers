@@ -1,12 +1,13 @@
 /**
- * Sesja gry: stan symulacji + zrodlo komend (lokalne albo lockstep sieciowy) + stale tempo 10 tickow/s.
+ * Sesja gry: stan symulacji + zrodlo komend (lokalne albo lockstep sieciowy) + stale tempo TICKS_PER_SECOND przy 1x.
  * Renderer dostaje alpha (0..1) do interpolacji miedzy tickami.
  */
 import type { Command } from '../../sim/commands.ts';
+import { TICKS_PER_SECOND } from '../../sim/defs.ts';
 import { step } from '../../sim/step.ts';
 import type { GameEvent, GameState } from '../../sim/types.ts';
 
-export const TICK_MS = 100;
+export const TICK_MS = 1000 / TICKS_PER_SECOND;
 
 export interface TickDriver {
   /** Komendy dla ticku albo null, jesli jeszcze niedostepne (czekamy na siec). */

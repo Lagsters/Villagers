@@ -7,23 +7,33 @@ import type { GameState } from '../../sim/types.ts';
 import { canBuild, canPlaceFlag } from '../../sim/world.ts';
 import { H_SCALE, vx, vz } from './coords.ts';
 import { InstancedLayer } from './instanced.ts';
+import { getModel } from './models.ts';
 
 export class OverlayRenderer {
   readonly group = new THREE.Group();
   private preview: THREE.Mesh;
-  private markers: InstancedLayer;
-  private markerMat: THREE.MeshBasicMaterial;
+  /** Ikony miejsc budowy (modele z Blendera): flaga, chata, dom, duzy budynek, kopalnia. */
+  private markers: Record<'flag' | 'small' | 'medium' | 'large' | 'mine', InstancedLayer>;
   enabledSites = false;
   private sitesTick = -1;
+  /** Zielone kropki na polach, na ktore mozna przedluzyc budowana droge. */
+  private steps: InstancedLayer;
 
   constructor() {
     this.preview = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0x66ff66, transparent: true, opacity: 0.75, depthTest: false, side: THREE.DoubleSide }));
     this.preview.renderOrder = 5;
     this.preview.frustumCulled = false;
     this.group.add(this.preview);
-    const g = new THREE.CylinderGeometry(0.1, 0.1, 0.02, 6);
-    this.markerMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: true });
-    this.markers = new InstancedLayer(this.group, g, this.markerMat, 256, true);
+    const dot = new THREE.CircleGeometry(0.07, 10);
+    dot.rotateX(-Math.PI / 2);
+    this.steps = new InstancedLayer(this.group, dot, new THREE.MeshBasicMaterial({ color: 0x7dff6a, depthTest: false }), 8);
+    this.steps.mesh.renderOrder = 11; // nad kropkami kursora (te same wierzcholki)
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    const layer = (name: string) => new InstancedLayer(this.group, getModel(name), mat, 128);
+    this.markers = {
+      flag: layer('mark_flag'), small: layer('mark_small'), medium: layer('mark_medium'),
+      large: layer('mark_large'), mine: layer('mark_mine'),
+    };
   }
 
   setPreview(s: GameState, cells: number[] | null, ok: boolean): void {
@@ -54,33 +64,40 @@ export class OverlayRenderer {
   }
 
   /** Znaczniki miejsc budowy na terytorium gracza w poblizu punktu (co kilka tickow). */
+  setSteps(s: GameState, cells: number[]): void {
+    const m = s.map;
+    this.steps.begin();
+    for (const i of cells) {
+      const x = i % m.w, y = (i / m.w) | 0;
+      this.steps.push(vx(x, y), m.height[i] * H_SCALE + 0.03, vz(y));
+    }
+    this.steps.end();
+  }
+
   updateSites(s: GameState, me: number, center: number, radius: number): void {
+    const layers = Object.values(this.markers);
     if (!this.enabledSites) {
-      if (this.markers.count > 0) { this.markers.begin(); this.markers.end(); }
+      for (const l of layers) if (l.count > 0) { l.begin(); l.end(); }
       return;
     }
     if (s.tick === this.sitesTick) return;
     this.sitesTick = s.tick;
     const m = s.map;
     const cx = center % m.w, cy = (center / m.w) | 0;
-    this.markers.begin();
+    for (const l of layers) l.begin();
     for (let y = Math.max(1, cy - radius); y < Math.min(m.h - 1, cy + radius); y++) {
       for (let x = Math.max(1, cx - radius); x < Math.min(m.w - 1, cx + radius); x++) {
         const i = y * m.w + x;
         if (m.owner[i] !== me + 1) continue;
-        // Reprezentatywne rodzaje: duzy (farma), maly (drwal), kopalnia (wegiel).
-        const size = canBuild(s, me, i, B.FARM) ? 2 : canBuild(s, me, i, B.WOODCUTTER) ? 1 : canBuild(s, me, i, B.COALMINE) ? 3 : 0;
-        const flag = size === 0 && canPlaceFlag(s, me, i);
-        if (!size && !flag) continue;
-        const px = vx(x, y), pz = vz(y), py = m.height[i] * H_SCALE + 0.03;
-        const sc = size === 2 ? 1.6 : size === 1 ? 1.15 : size === 3 ? 1.15 : 0.6;
-        const k = this.markers.push(px, py, pz, 0, sc, 1);
-        if (size === 2) this.markers.color(k, 0.25, 0.55, 1);
-        else if (size === 1) this.markers.color(k, 0.35, 0.9, 0.35);
-        else if (size === 3) this.markers.color(k, 0.75, 0.6, 0.45);
-        else this.markers.color(k, 1, 0.9, 0.3);
+        // Reprezentatywne rodzaje: duzy (farma), dom (magazyn), chata (drwal), kopalnia (wegiel).
+        const kind = canBuild(s, me, i, B.FARM) ? 'large' : canBuild(s, me, i, B.WAREHOUSE) ? 'medium'
+          : canBuild(s, me, i, B.WOODCUTTER) ? 'small' : canBuild(s, me, i, B.COALMINE) ? 'mine'
+            : canPlaceFlag(s, me, i) ? 'flag' : null;
+        if (!kind) continue;
+        // Ikona odwrocona jak budynki (drzwi ku fladze).
+        this.markers[kind].push(vx(x, y), m.height[i] * H_SCALE + 0.01, vz(y), Math.PI / 6, kind === 'flag' ? 1.5 : 1.9);
       }
     }
-    this.markers.end();
+    for (const l of layers) l.end();
   }
 }

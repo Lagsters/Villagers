@@ -149,7 +149,7 @@ describe('M4: jedzenie', () => {
     for (const i of spiral(s.map.w, s.map.h, castle.pos % s.map.w, (castle.pos / s.map.w) | 0, 8)) {
       if (placed >= 4) break;
       if (s.map.obj[i] === O.NONE && s.map.terrain[i] === T.GRASS && s.map.roads[i] === 0 && (i % 7) === 0) {
-        s.animals.push({ id: s.animals.length, pos: i, to: -1, t: 0, dur: 0, timer: 1000, hunter: -1 });
+        s.animals.push({ id: s.animals.length, pos: i, to: -1, t: 0, dur: 0, timer: 1000, hunter: -1, dead: false });
         placed++;
       }
     }

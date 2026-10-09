@@ -17,10 +17,20 @@ export function animalsNear(s: GameState, pos: number, r: number): number[] {
   return out.map((x) => x[1]);
 }
 
-/** Mysliwy upolowal zwierze (jesli nadal na nie polowal). */
-export function removeAnimalById(s: GameState, id: number, hunter: number): boolean {
+/** Strzal mysliwego: zwierze pada (lezy, az mysliwy je zabierze), jesli nadal na nie polowal. */
+export function shootAnimal(s: GameState, id: number, hunter: number): boolean {
   const a = id >= 0 ? s.animals[id] : null;
-  if (!a || a.hunter !== hunter) return false;
+  if (!a || a.hunter !== hunter || a.dead) return false;
+  a.dead = true;
+  a.to = -1;
+  a.t = 0;
+  return true;
+}
+
+/** Mysliwy zabiera upolowane zwierze (jesli to jego zdobycz). */
+export function pickUpAnimal(s: GameState, id: number, hunter: number): boolean {
+  const a = id >= 0 ? s.animals[id] : null;
+  if (!a || a.hunter !== hunter || !a.dead) return false;
   removeAnimal(s, a);
   return true;
 }

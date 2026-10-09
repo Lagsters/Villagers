@@ -35,7 +35,10 @@ przez budynki wojskowe i pojedynki rycerzy. Gra z botami albo **multiplayer P2P 
   (w górę/dół); **Q / E** — obrót o 60°; **R / F** — pochylenie; **Home** — widok domyślny;
   na dotyku **skręt dwoma palcami** obraca widok.
 - **B** — pokaż miejsca pod budowę; **spacja** — pauza (gra z botami); **Esc** — anuluj.
-- Budowa drogi: kliknij flagę → „Buduj drogę” → kliknij cel (flagę albo wolne pole).
+- Budowa drogi: kliknij dwukrotnie flagę (albo flaga → „Buduj drogę”), potem klikaj kolejne kropki,
+  żeby prowadzić drogę krok po kroku (zielone kropki pokazują możliwe kroki), albo od razu kliknij dalekie
+  pole lub flagę - droga dociągnie się najkrótszą trasą. Klik na fladze lub drodze kończy, ponowny klik na
+  końcu stawia tam flagę; prawy przycisk / Backspace cofa krok, Esc przerywa.
 
 ## Uruchomienie lokalne
 

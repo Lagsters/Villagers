@@ -59,6 +59,7 @@ export class GameView {
     this.sound.ambient(true);
     this.hud = new Hud(app, this.session, {
       setPreview: (cells, ok) => this.view.overlay.setPreview(this.session.state, cells, ok),
+      setSteps: (cells) => this.view.overlay.setSteps(this.session.state, cells),
       setCursor: (i) => this.view.setCursor(i),
       lookAt: (i) => this.view.lookAtIdx(i),
       toggleSites: (on) => { this.view.overlay.enabledSites = on; },
@@ -124,7 +125,7 @@ export class GameView {
         }
       }
       const r0 = performance.now();
-      this.view.render(dtMs / 1000, this.session.state, this.session.alpha, this.session.localPlayer);
+      this.view.render(dtMs / 1000, this.session.state, this.session.alpha, this.session.localPlayer, this.session.paused ? 0 : this.session.speed);
       this.perf.frames++;
       this.perf.frameMs += performance.now() - r0;
       if (this.session.state.tick !== t0) {
