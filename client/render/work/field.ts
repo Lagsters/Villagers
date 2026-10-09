@@ -357,7 +357,7 @@ function slotModel(b: Building, k: number): 'tree_pine' | 'tree_leaf' {
 function pickSlot(c: WorkCtx, bed: Bed, b: Building, model: string): number {
   let best = -1, bestG = 0.25;
   for (let k = 0; k < 8; k++) {
-    const g = growth(c, bed, k) + (slotModel(b, k) === model ? 1 : 0);
+    const g = growth(c, bed, k) + (slotModel(b, k).startsWith('tree_leaf') === model.startsWith('tree_leaf') ? 1 : 0);
     if (g > bestG) { bestG = g; best = k; }
   }
   return best < 0 ? 0 : best;
@@ -436,7 +436,7 @@ function foresterPrep(c: WorkCtx, serf: Serf, at: SerfAt): void {
     pose.armLYaw = 0.2 * kk;
     const age = (p - PULL) * PREP_TICKS * TICK_S;
     c.fx.burst(serf.id * 17 + 3, age, seed.x, seed.y + 0.01, seed.z,
-      { kind: 'bit', n: 5, life: 0.5, vy: 0.45, spread: 0.25, gravity: 2.4, size: 0.014, sizeEnd: 0.01, color: SOIL, floor: o.y + 0.012 });
+      { kind: 'bit', n: 5, life: 0.5, vy: 0.45, spread: 0.25, gravity: 2.4, size: 0.014, sizeEnd: 0.01, color: SOIL, floor: stationY(c, o, SEEDBED.x, SEEDBED.y) + 0.012 });
   }
   const f = c.figure(pose);
   if (p >= PULL) saplingInHand(c, f, model, pose.armL ?? 0);
@@ -832,7 +832,7 @@ function dressing(c: WorkCtx, serf: Serf, at: SerfAt): void {
       pose.lean = 0.32 - up * 0.08;
       const secPer = ((H1 - H0) * DRESS_TICKS * TICK_S) / N;
       c.fx.burst(serf.id * 53 + n, fBeat * secPer, table.x, table.y + 0.06, table.z,
-        { kind: 'bit', n: 5, life: 0.45, vy: 0.55, spread: 0.4, gravity: 2.8, size: 0.017, sizeEnd: 0.012, color: n % 2 ? STONE_CHIP : 0x9a968f, floor: o.y + 0.006 });
+        { kind: 'bit', n: 5, life: 0.45, vy: 0.55, spread: 0.4, gravity: 2.8, size: 0.017, sizeEnd: 0.012, color: n % 2 ? STONE_CHIP : 0x9a968f, floor: stationY(c, o, STONE_TABLE.x, STONE_TABLE.y) + 0.006 });
     } else {
       // Ogladanie kostki i branie jej w obie rece.
       const k = smooth(span(p, 0.84, 0.9));
@@ -1641,11 +1641,14 @@ function mowDir(c: WorkCtx): number {
   return Math.cos(c.toCamera) > 0 ? -1 : 1;
 }
 
-/** Rzad pola od z0 do z1 (wzgledem srodka pola) modelem `name` (rzad o dlugosci 1 wzdluz +z). */
+/** Dlugosc modeli rzedow zniw (fld_wheat_row, fld_stubble, fld_swath - ROW_LEN w art/scripts/props_field.py). */
+const ROW_MODEL_LEN = 0.5;
+
+/** Rzad pola od z0 do z1 (wzgledem srodka pola) modelem `name` (rzad o dlugosci ROW_MODEL_LEN wzdluz +z). */
 function row(c: WorkCtx, name: string, cx: number, cy: number, cz: number, x: number, z0: number, z1: number, dx = 0): void {
   const a = Math.min(z0, z1), len = Math.abs(z1 - z0);
   if (len < 0.004) return;
-  mA.makeTranslation(cx + x + dx, cy, cz + a).multiply(mT.makeScale(1, 1, len));
+  mA.makeTranslation(cx + x + dx, cy, cz + a).multiply(mT.makeScale(1, 1, len / ROW_MODEL_LEN));
   c.propM(name, mA);
 }
 
@@ -1968,7 +1971,7 @@ function stubbleFields(c: WorkCtx): void {
     const k = 1 - smooth(clamp01((age - STUBBLE_S * 0.5) / (STUBBLE_S * 0.5)));
     c.prop('fld_soil', F.x, F.y, F.z, 0, 1, Math.max(0.05, k));
     for (const R of ROWS) {
-      mA.makeTranslation(F.x + R.x, F.y - 0.06 * (1 - k), F.z - R.len / 2).multiply(mT.makeScale(1, Math.max(0.05, k), R.len));
+      mA.makeTranslation(F.x + R.x, F.y - 0.06 * (1 - k), F.z - R.len / 2).multiply(mT.makeScale(1, Math.max(0.05, k), R.len / ROW_MODEL_LEN));
       c.propM('fld_stubble', mA);
     }
   }

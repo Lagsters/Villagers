@@ -15,6 +15,7 @@ import { PropPool } from './props.ts';
 import { CARRY_Y, Rig, UNIT_SCALE, type Pose, type RigFrames } from './rig.ts';
 import { animalScenes, buildingScenes, eventScenes, frameScenes, serfScenes, siteScenes } from './work/index.ts';
 import type { Origin, SerfAt, Vec3, WorkCtx } from './work/types.ts';
+import { yardRects, yardWeight, type Rect } from './yard.ts';
 
 const tmpColor = new THREE.Color();
 
@@ -60,6 +61,15 @@ function placement(size: number): { s: number; ox: number; oz: number } {
   return { s: pl.s, ox: FLAG_DIR[0] * pl.d, oz: FLAG_DIR[1] * pl.d };
 }
 
+/**
+ * Najwyzej tyle budynek stoi ponad swoim polem, gdy teren pod obrysem wznosi sie (pol jednostki wysokosci terenu):
+ * na lagodnym stoku nie tonie, a przy urwisku nie stoi na wysokiej podmurowce - tam wbija sie w zbocze.
+ */
+const MAX_LIFT = 0.5 * H_SCALE;
+
+/** Obrys konstrukcji modeli budynkow wg rodzaju (podworko - client/render/yard.ts). */
+const YARDS: readonly (readonly Rect[] | null)[] = BUILDINGS.map((_, k) => yardRects(`building_${k}`));
+
 /** Od tego przyblizenia rysujemy czapki, narzedzia i drobne rekwizyty. */
 const DETAIL_ZOOM = 1.6;
 /** Flagi na drogach mniejsze niz na budynkach - drobne proporczyki. */
@@ -88,6 +98,7 @@ export class EntitiesRenderer {
   private time = 0;
   private at: SerfAt = { x: 0, y: 0, z: 0, rot: 0, moving: false, t: 0, walk: 0, bob: 0, from: -1, to: -1 };
   private tmpV = new THREE.Vector3();
+  private tmpO = { x: 0, y: 0, z: 0 };
   /** Prostokat widocznosci (swiat x/z) - encje poza nim nie sa rysowane. */
   private vis = { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
   /** Drobne detale postaci (czapki, narzedzia) - tylko przy przyblizeniu, z daleka i tak niewidoczne. */
@@ -101,6 +112,8 @@ export class EntitiesRenderer {
   private ndc = new THREE.Vector2();
   private hit = new THREE.Vector3();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  /** Poziom budynkow (najwyzszy teren pod obrysem) - liczony raz, do zmiany wysokosci terenu. */
+  private bases = new Map<number, { pos: number; kind: number; y: number }>();
 
   /** Wyznacza prostokat widocznosci: rzut naroznikow ekranu na plaszczyzny terenu (y = 0 i y = 7). */
   setView(camera: THREE.Camera, zoom = 1): void {
@@ -175,7 +188,45 @@ export class EntitiesRenderer {
 
   /** Zdarzenia symulacji (po tickach) - sceny dostaja je w nastepnej klatce. */
   onEvents(ev: readonly GameEvent[]): void {
-    for (const e of ev) this.pendingEvents.push(e);
+    for (const e of ev) {
+      this.pendingEvents.push(e);
+      if (e.type === 'height') this.bases.clear();
+    }
+  }
+
+  /** Wysokosc terenu sie zmienila (np. przewiniecie gry) - poziomy budynkow do przeliczenia. */
+  clearBases(): void {
+    this.bases.clear();
+  }
+
+  /**
+   * Uklad modelu budynku: srodek, skala i poziom - najwyzszy punkt terenu pod obrysem konstrukcji (naroza, srodki
+   * bokow i srodki prostokatow obrysu, do tego pole budynku), najwyzej MAX_LIFT ponad polem. Nizej sciany
+   * schodza do terenu jako podmurowka (shader modeli), wiec budynek na zboczu nie wisi.
+   */
+  originOf(s: GameState, b: Building, out: Origin): Origin {
+    const p = this.wp(s, b.pos, this.tmpO);
+    const pl = placement(BUILDINGS[b.kind].size);
+    out.x = p.x + pl.ox;
+    out.z = p.z + pl.oz;
+    out.sc = pl.s;
+    out.yard = YARDS[b.kind];
+    const c = this.bases.get(b.id);
+    if (c && c.pos === b.pos && c.kind === b.kind) {
+      out.y = c.y;
+      return out;
+    }
+    let y = p.y;
+    for (const r of out.yard ?? []) {
+      for (let i = 0; i < 9; i++) {
+        const [dx, dz] = local(r[0] + (r[2] - r[0]) * (i % 3) / 2, r[1] + (r[3] - r[1]) * Math.floor(i / 3) / 2);
+        y = Math.max(y, groundHeight(s.map, out.x + dx * pl.s, out.z + dz * pl.s));
+      }
+    }
+    y = Math.min(y, p.y + MAX_LIFT);
+    this.bases.set(b.id, { pos: b.pos, kind: b.kind, y });
+    out.y = y;
+    return out;
   }
 
   /**
@@ -229,11 +280,12 @@ export class EntitiesRenderer {
       this.wp(s, b.pos, p);
       const def = BUILDINGS[b.kind];
       const pl = placement(def.size);
-      const sc = pl.s;
+      if (!this.inView(p.x + pl.ox, p.z + pl.oz)) continue;
+      const o = this.originOf(s, b, { x: 0, y: 0, z: 0, sc: 1, yard: null });
+      const sc = o.sc;
       const layer = this.buildingLayers[b.kind];
-      const bx = p.x + pl.ox, bz = p.z + pl.oz;
-      if (!this.inView(bx, bz)) continue;
-      const o: Origin = { x: bx, y: p.y, z: bz, sc };
+      const bx = o.x, bz = o.z;
+      p.y = o.y;
       if (b.stage === STAGE.DONE) {
         layer.push(bx, p.y, bz, 0, sc);
         this.banner(b, o);
@@ -563,17 +615,26 @@ class Ctx implements WorkCtx {
   }
 
   origin(b: Building): Origin {
-    const o = this.r.wp(this.s, b.pos, { x: 0, y: 0, z: 0 });
-    const pl = placement(BUILDINGS[b.kind].size);
-    return { x: o.x + pl.ox, y: o.y, z: o.z + pl.oz, sc: pl.s };
+    return this.r.originOf(this.s, b, { x: 0, y: 0, z: 0, sc: 1, yard: null });
   }
 
   at(o: Origin, lx: number, ly: number, lz = 0, out: Vec3 = { x: 0, y: 0, z: 0 }): Vec3 {
     const [dx, dz] = local(lx, ly);
     out.x = o.x + dx * o.sc;
-    out.y = o.y + lz * o.sc;
     out.z = o.z + dz * o.sc;
+    out.y = this.floorAt(o, lx, ly, out.x, out.z) + lz * o.sc;
     return out;
+  }
+
+  floor(o: Origin, lx: number, ly: number): number {
+    const [dx, dz] = local(lx, ly);
+    return this.floorAt(o, lx, ly, o.x + dx * o.sc, o.z + dz * o.sc);
+  }
+
+  private floorAt(o: Origin, lx: number, ly: number, x: number, z: number): number {
+    if (!o.yard) return o.y;
+    const w = yardWeight(o.yard, lx, ly);
+    return w > 0 ? o.y + w * (this.ground(x, z) - o.y) : o.y;
   }
 
   frameOf(o: Origin): THREE.Matrix4 {

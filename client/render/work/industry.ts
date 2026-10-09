@@ -177,12 +177,11 @@ function frameAt(c: WorkCtx, o: Origin, lx: number, ly: number, wy: number, out:
 }
 
 /**
- * Wysokosc podloza w punkcie (lx, ly) ukladu modelu: poziom budynku albo wyzszy teren. Budynki postawione od razu
- * (tryb pokazowy) stoja na niewyrownanym terenie - postacie i sprzety przed nimi nie moga sie w nim zapadac.
+ * Wysokosc podloza w punkcie (lx, ly) ukladu modelu: przy scianach poziom budynku, na podworku teren - jak
+ * sprzety modelu budynku (WorkCtx.floor); postacie i sprzety przed budynkiem na stoku nie zapadaja sie ani nie wisza.
  */
 function floorAt(c: WorkCtx, o: Origin, lx: number, ly: number): number {
-  const p = c.at(o, lx, ly, 0, pC);
-  return Math.max(o.y, c.ground(p.x, p.z));
+  return c.floor(o, lx, ly);
 }
 
 /** Sprzet stojacy przed budynkiem (model w jednostkach budynku) na podlozu w (lx, ly); zwraca wysokosc podloza. */
@@ -270,10 +269,9 @@ const GOLD_GLINTS = [[-0.02, -0.02, 0.036], [0.03, 0.015, 0.03], [0.005, -0.07, 
 const CART = new THREE.Matrix4();
 const TUB = new THREE.Matrix4();
 
-/** Wysokosc toru (swiat) w punkcie lx: przy wylocie poziom budynku, dalej teren. */
+/** Wysokosc toru (swiat) w punkcie lx: przy wylocie poziom budynku, dalej teren (podworko, WorkCtx.floor). */
 function railH(c: WorkCtx, o: Origin, lx: number): number {
-  const p = c.at(o, lx, MINE.railY, 0, pC);
-  return lerp(o.y, c.ground(p.x, p.z), ease((MINE.rail0 - lx) / 0.1)) + 0.003;
+  return c.floor(o, lx, MINE.railY) + 0.003;
 }
 
 /** Tor (szyny na podkladach, odbojnica) i kupka urobku - na wysokosci terenu. */
@@ -580,11 +578,11 @@ function steelworks(c: WorkCtx, b: Building, o: Origin): void {
       pB.z = lip.z;
       const fill = span(u, T.tilt, T.stop);
       const mold = c.at(o, SMELT.mold.x, SMELT.mold.y, SMELT.mold.z + fill * 0.008, pC);
-      mold.y += moldY - o.y;
+      mold.y += moldY - c.floor(o, SMELT.mold.x, SMELT.mold.y);
       slab(c, pB, mold, 0.017, 0.017, 1, 0, 0, mixHex(0xff9a30, 0xffd868, 0.5 + 0.5 * Math.sin(c.time * 23)));
       c.fx.stream(fxKey(b, 6), mold.x, mold.y + 0.01, mold.z, {
         kind: 'bit', n: 6, life: 0.32, vy: 0.55, spread: 0.32, spreadY: 0.15, gravity: 3.2, size: 0.011, sizeEnd: 0.005,
-        color: 0xffe080, colorEnd: 0xff5a18, floor: o.y,
+        color: 0xffe080, colorEnd: 0xff5a18, floor: moldY,
       });
     }
   }
@@ -597,7 +595,7 @@ function steelworks(c: WorkCtx, b: Building, o: Origin): void {
     if (cool > 0 && cool < 0.6) {
       // Stygnacy wlewek dymi.
       const ig = c.at(o, SMELT.mold.x, SMELT.mold.y, SMELT.mold.z + h, pC);
-      c.fx.stream(fxKey(b, 4), ig.x, ig.y + moldY - o.y, ig.z, {
+      c.fx.stream(fxKey(b, 4), ig.x, ig.y + moldY - c.floor(o, SMELT.mold.x, SMELT.mold.y), ig.z, {
         kind: 'puff', n: 3, life: 1.4, vy: 0.1, spread: 0.02, size: 0.015, sizeEnd: 0.05, color: 0xd0ccc6, colorEnd: 0xd8d6d2,
         jitter: 0.03, sway: 0.02, fade: 0.5,
       }, 1 - cool / 0.6);
@@ -946,7 +944,7 @@ function mint(c: WorkCtx, b: Building, o: Origin): void {
   MINT_Y.v = fixture(c, o, 'ind_stump', MINT.stump.x, MINT.stump.y);
   const u = working(c, b);
   if (u < 0) return;
-  const lift = MINT_Y.v - o.y;
+  const lift = MINT_Y.v - c.floor(o, MINT.die.x, MINT.die.y);
   chimneySmoke(c, o, b, MINT.chimney.x, MINT.chimney.y, MINT.chimney.z, 0.55, 0x8a8682, 0);
   const n = Math.min(COINS, Math.floor(u * COINS + 0.06));
   const f = u * COINS - Math.floor(u * COINS);
@@ -1042,7 +1040,7 @@ const BOAT_LIFT = { v: 0 };
 
 /** Punkt lodzi w ukladzie modelu (lx, ly, lz) w swiecie, z podniesieniem pochylni. */
 function boatAt(c: WorkCtx, o: Origin, lx: number, ly: number, lz: number, out: Vec3): Vec3 {
-  c.at(o, lx, ly, lz, out).y += BOAT_LIFT.v;
+  c.at(o, lx, ly, lz, out).y = o.y + lz * o.sc + BOAT_LIFT.v;
   return out;
 }
 
@@ -1224,7 +1222,7 @@ function shipyard(c: WorkCtx, b: Building, o: Origin): void {
     const zs = STRAKES[k].z + PLANK_H * 0.6;
     const sp = boatAt(c, o, x - 0.03, BOAT.y + side * (STRAKES[k].w + 0.012), zs, pC);
     c.fx.burst(fxKey(b, 18) * 64 + (bt.n & 63), bt.age, sp.x, sp.y, sp.z, {
-      kind: 'bit', n: 3, life: 0.4, vy: 0.35, spread: 0.25, gravity: 2.5, size: 0.01, sizeEnd: 0.007, color: 0xe8cf9c, floor: o.y,
+      kind: 'bit', n: 3, life: 0.4, vy: 0.35, spread: 0.25, gravity: 2.5, size: 0.01, sizeEnd: 0.007, color: 0xe8cf9c, floor: o.y + BOAT_LIFT.v,
     });
   }
 }

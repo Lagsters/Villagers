@@ -321,3 +321,53 @@ Drogi wodne z łodziami zostają (część pierwsza).
   Statyczne elementy modeli, które teraz są animowane, zniknęły z modeli budynków (świnie, osioł, kołowrót studni,
   łódź w stoczni, dym mielerza, ramię katapulty, skrzydła młyna - teraz `crf_sails`); rekwizyty scen w
   `art/scripts/props_*.py` (prefiksy `fld_`, `crf_`, `ind_`, `ppl_`), każdy w budżecie 300 trójkątów.
+
+## 2026-10-09 — Teren i natura, podwórka budynków na stoku (uwaga właściciela)
+- **Teren malowany w shaderze** (`client/render/terrain.ts`): każdy wierzchołek niesie wagi rodzajów terenu
+  (trawa, piasek, skała, śnieg; reszta to woda), a shader rozstrzyga w każdym pikselu, który rodzaj wygrywa -
+  z szumem granic w dwóch skalach, więc przejścia są wąskie i poszarpane jak malowane, a nie rozmyte na całe pole.
+  Faktury z jednej generowanej w kodzie tekstury 256×256 (kanały: trawa z kępami i źdźbłami, skała z głazów
+  i szczelin - komórki Worleya, piasek ze zmarszczkami, szum granic); skała oświetlona od słońca (spadek wysokości
+  z tekstury ku słońcu), na urwiskach mapowana pionowo; śnieg zsuwa się ze stromizn na skałę, na stromej łące
+  prześwituje ziemia; woda jaśnieje na płyciźnie, przy brzegu biała piana; plaża węższa (pole przy wodzie
+  w 60% piasek). Koszt: 4-5 odczytów tekstury na piksel terenu, liczba wywołań rysowania bez zmian.
+- **Natura** (`art/scripts/nature.py`): gładkie bryły, kolor malowany w wierzchołkach (ciemny dół, jasna góra)
+  i nowe wzory w shaderze modeli (`MODEL_PATTERNS`, numery 7-12): nieregularne kępy liści i gałęzi igliwia
+  (komórki wokół losowych punktów, każda oświetlona od góry), kora, skała ze spękaniami, źdźbła, kłosy.
+  Odmiany: świerk i sosna (`tree_pine`, `tree_pine2`), drzewo liściaste i brzoza (`tree_leaf`, `tree_leaf2`),
+  dwie skały (`stone`, `stone2`) - korony i głazy z kilku zlepionych elipsoid, ściany schowane w sąsiedniej bryle
+  są usuwane (budżet). Pole zboża: sześć grzbietów kłosów (trzy rzędy po dwa - żniwa w `field.ts` nadal koszą
+  trzy rzędy), rekwizyty żniw (`fld_wheat_row`, `fld_stubble`, `fld_soil`) z tych samych funkcji. Znak geologa
+  pokazuje kolorem symbolu znalezione złoże (węgiel, żelazo, złoto, kamień, nic). Budżety bez zmian: drzewa
+  132-142/150 trójkątów, reszta ≤ 300 (pole 188, skały 178-184).
+- **Rozmieszczenie** (`client/render/mapObjects.ts`): odmiana modelu i odcień instancji (jasność, ciepło) wg
+  pola, drzewa różnej wysokości (`treeLook` zwraca `sy` i odcień - drwal rysuje padające drzewo tak samo).
+  Sadzonki rosną płynnie do wielkości tego samego drzewa (bez skoku przy dojrzeniu), zboże rośnie płynnie i pod
+  koniec przechodzi z zieleni w złoto - wzrost liczony z licznika przeglądu mapy (`objTimer` i położenie
+  `sweep`, `sim/mapsweep.ts`), chunki z rosnącymi obiektami przeliczane co 5 ticków. Trzy nowe modele to trzy
+  warstwy instancji więcej (+3 wywołania rysowania, gdy wszystkie są w kadrze; puste warstwy nic nie kosztują).
+- **Podwórka budynków na stoku - bez zmian w symulacji.** Model budynku stał na wysokości swojego pola, a sprzęty
+  0,5-0,8 pola dalej tonęły w zboczu albo wisiały. Rozwiązanie w renderze:
+  - Blender dzieli części modelu budynku na konstrukcję (stoi na ziemi i jest wysoka albo rozległa) i podwórko
+    (zaczyna się nisko poza konstrukcją) i zapisuje w drugiej i trzeciej warstwie UV wagę podwórka (rośnie
+    z odległością od obrysu konstrukcji, 0 przy ścianie) oraz punkt, w którym brać wysokość terenu - zwarty sprzęt
+    (pieniek, beczka, stos desek) przesuwa się w całości wg środka, długi (żerdź płotu, tor) kładzie się na
+    stoku wierzchołek po wierzchołku (`Model.yard` w `art/scripts/lib.py`, obrys w `art/models/yards.json`).
+  - Shader modeli czyta wysokości pól z tekstury (ten sam rachunek co `groundHeight`, test w
+    `tests/unit/render.test.ts`) i przesuwa wierzchołki podwórka ku terenowi; spód konstrukcji wydłuża się w dół
+    do niższego terenu i jest malowany jako kamienna podmurówka, więc budynek nie wisi.
+  - Budynek stoi na najwyższym punkcie terenu pod obrysem, ale najwyżej pół jednostki wysokości ponad swoim
+    polem (`MAX_LIFT`) - na łagodnym stoku nie tonie, przy urwisku wbija się w zbocze zamiast stać na wysokiej
+    podmurówce (z samym maksimum chata rybaka przy urwisku stała na murze wysokości piętra).
+  - Sceny pracy biorą tę samą wysokość: `WorkCtx.at` i nowe `WorkCtx.floor` (`client/render/yard.ts`);
+    postacie i rekwizyty przed budynkiem (pieniek drwala z siekierą, kozioł i stos desek tartaku, tory kopalni,
+    kowadło, mennica, szkutnik) stoją na tym samym podłożu co model.
+  - Sprawdzone w pokazie z terenem sztucznie przechylonym wokół każdego budynku: płoty chlewni i hodowli osłów
+    oraz beczka studni wcześniej całkiem znikały w zboczu, teraz stoją na terenie. Na bardzo stromym stoku długie
+    sterty (bale przy tartaku) mocno się przechylają - w grze domy i duże budynki stoją na wyrównanym terenie
+    (pole i 6 sąsiadów), więc dotyczy to praktycznie tylko chat i kopalń.
+- **Warianty zmiany symulacji (do decyzji właściciela, niewdrożone):** (1) wyrównywanie kopaczem także pod chatami
+  (pole budynku i 6 sąsiadów, jak pod domami) - dłuższa budowa chat, wolniejszy start botów, `SIM_VERSION` 3;
+  kopalnie bez wyrównywania (zmieniałoby góry); (2) wyrównanie pod chatą tylko pola budynku i flagi - mniejsza
+  zmiana terenu i tempa; (3) powrót limitu różnicy wysokości przy stawianiu chat - sprzeczne z przyjętymi zasadami
+  pierwowzoru. Po zmianach w renderze żaden nie jest potrzebny.

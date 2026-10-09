@@ -10,6 +10,7 @@ na -Y i obracamy o 30 stopni, zeby drzwi patrzyly na flage (pole SE w grze).
 """
 import bpy
 import bmesh
+import json
 import math
 import os
 import sys
@@ -66,6 +67,8 @@ SMOOTH_ANGLE = 40.0
 TILES, PLANKS, LOGS, TARPAPER, FACE = 1, 2, 3, 4, 5
 # Sciany bez koloru gracza w czesciach barwionych instancja (tulow, rece): skora, spodnie, pasek.
 PLAIN = 6
+# Natura (art/scripts/nature.py): kepy lisci, igliwie, kora, skala, zdzbla i klosy zboza.
+FOLIAGE, NEEDLES, BARK, ROCK, STALKS, EARS = 7, 8, 9, 10, 11, 12
 PATTERN_STRIDE = 1000.0
 
 
@@ -105,6 +108,24 @@ def face_pattern(bm):
         for lp in f.loops:
             co = lp.vert.co
             lp[uvl].uv = (FACE * PATTERN_STRIDE + math.atan2(co.x, -co.y), co.z)
+
+
+# Podworko budynku (client/render/scene.ts, YARD_VERTEX): niskie sprzety przed i obok budynku gra stawia na terenie,
+# a sciany zostaja na poziomie budynku. Konstrukcja to czesci stojace na ziemi, wysokie albo rozlegle
+# (sciany, podmurowka, slupy wiaty, wieza szybowa); czesci zaczynajace sie nisko poza nia to podworko.
+# Waga podworka rosnie z odlegloscia od obrysu konstrukcji (od YARD_NEAR do YARD_FAR), wiec rzeczy przy scianie
+# zostaja przy niej, a dalsze leza na terenie. Ten sam wzor liczy gra dla scen (yardWeight w client/render/yard.ts).
+YARD_NEAR, YARD_FAR = 0.03, 0.12
+YARD_TALL, YARD_AREA, YARD_LOW = 0.24, 0.035, 0.2
+# Czesc podworka nie dluzsza niz YARD_RIGID przesuwa sie w calosci (wysokosc terenu w jej srodku).
+YARD_RIGID = 0.16
+
+
+def yard_weight(rects, x, y):
+    """Waga podworka 0..1 w punkcie (x, y) ukladu modelu: odleglosc od obrysu konstrukcji (prostokaty x0, y0, x1, y1)."""
+    d = min((math.hypot(max(r[0] - x, 0.0, x - r[2]), max(r[1] - y, 0.0, y - r[3])) for r in rects), default=1.0)
+    t = min(1.0, max(0.0, (d - YARD_NEAR) / (YARD_FAR - YARD_NEAR)))
+    return t * t * (3 - 2 * t)
 
 
 def mark_plain(bm, faces):
@@ -414,6 +435,46 @@ class Model:
         self._xf(bm, x, y, z, rz)
         return self._add(bm, col)
 
+    def yard(self, rotate_deg=0.0):
+        """
+        Podworko (zob. YARD_NEAR): warstwy UV kazdej czesci - 'Yard': u = waga podworka, v = 1 na spodzie
+        konstrukcji (gra wydluza go w dol do nizszego terenu); 'YardAt': punkt (x, z ukladu modelu w grze po obrocie
+        rotate_deg), w ktorym gra bierze wysokosc terenu. Zwarty sprzet (pieniek, beczka, stos desek) bierze ja ze
+        srodka i przesuwa sie caly, dluga czesc (zerdz plotu, belka) wierzcholek po wierzcholku - kladzie sie na
+        stoku. Zwraca obrys konstrukcji [(x0, y0, x1, y1), ...] w ukladzie modelu przed obrotem.
+        Eksporter glTF odwraca v (v' = 1 - v), stad zapis 1 - v.
+        """
+        boxes = []
+        for p in self.parts:
+            vs = [v.co for v in p.data.vertices]
+            boxes.append((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs),
+                          max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
+        struct = [b[2] < 0.02 and (b[5] - b[2] > YARD_TALL or (b[3] - b[0]) * (b[4] - b[1]) > YARD_AREA) for b in boxes]
+        rects = [(b[0], b[1], b[3], b[4]) for b, s in zip(boxes, struct) if s]
+        ca, sa = math.cos(math.radians(rotate_deg)), math.sin(math.radians(rotate_deg))
+        for p, b, s in zip(self.parts, boxes, struct):
+            if not p.data.uv_layers:
+                lay = p.data.uv_layers.new(name='UVMap')
+                for d in lay.data:
+                    d.uv = (0.0, 0.0)
+            lay = p.data.uv_layers.new(name='Yard')
+            at = p.data.uv_layers.new(name='YardAt')
+            me = p.data
+            cx, cy = (b[0] + b[3]) / 2, (b[1] + b[4]) / 2
+            rigid = max(b[3] - b[0], b[4] - b[1]) <= YARD_RIGID
+            w_c = yard_weight(rects, cx, cy) if not s and b[2] < YARD_LOW else 0.0
+            for loop in me.loops:
+                co = me.vertices[loop.vertex_index].co
+                if s:
+                    w, base = 0.0, 1.0 if co.z < 0.01 else 0.0
+                else:
+                    w, base = (w_c if rigid else yard_weight(rects, co.x, co.y)) if b[2] < YARD_LOW else 0.0, 0.0
+                ax, ay = (cx, cy) if rigid and not s else (co.x, co.y)
+                lay.data[loop.index].uv = (w, 1.0 - base)
+                # Uklad gry: x = x Blendera, z = -y (po obrocie); v zapisane jako 1 - z.
+                at.data[loop.index].uv = (ax * ca - ay * sa, 1.0 + (ax * sa + ay * ca))
+        return [tuple(round(c, 4) for c in r) for r in rects]
+
     def finish(self, rotate_deg=0.0, ao=0.0, ao_height=0.35, smooth=SMOOTH_ANGLE):
         """
         Laczy czesci w jeden obiekt, trianguluje i obraca. Zwraca obiekt.
@@ -533,13 +594,31 @@ def selected_names(all_names):
     return [n for n in all_names if not names or n in names]
 
 
-def build(builders, icons=True, ao=0.0, smooth=SMOOTH_ANGLE):
+YARDS = os.path.join(MODELS, 'yards.json')
+
+
+def save_yard(name, rects):
+    """Obrys konstrukcji modelu do art/models/yards.json (sceny pracy licza z niego wysokosc podworka)."""
+    data = {}
+    if os.path.exists(YARDS):
+        with open(YARDS, encoding='utf-8') as f:
+            data = json.load(f)
+    data[name] = rects
+    rows = [f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in sorted(data.items(), key=lambda kv: (len(kv[0]), kv[0]))]
+    with open(YARDS, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('{\n' + ',\n'.join(rows) + '\n}\n')
+
+
+def build(builders, icons=True, ao=0.0, smooth=SMOOTH_ANGLE, yard=None):
     """Buduje wybrane modele: builders = {nazwa: funkcja(Model)->rotacja}. Wypisuje liczbe trojkatow.
-    smooth = prog gladkiego cieniowania (postacie bez faz moga wygladzac mocniej niz budynki)."""
+    smooth = prog gladkiego cieniowania (postacie bez faz moga wygladzac mocniej niz budynki).
+    yard(nazwa) -> True: model z podworkiem (Model.yard) - budynki stojace na terenie."""
     for name in selected_names(list(builders)):
         reset()
         m = Model(name)
         rot = builders[name](m) or 0.0
+        if yard and yard(name):
+            save_yard(name, m.yard(rot))
         ob = m.finish(rot, ao=ao, smooth=smooth)
         export(ob)
         render_preview(ob, icon=96 if icons else 0)

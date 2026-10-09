@@ -68,6 +68,11 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
   (wydajność bez zmian, `tests/sim/workstages.test.ts`), tryb pokazowy `?demo=1` z panelem „Pokaz zawodów”,
   nagrywanie klatek `scripts/capture.ts` (stały krok czasu `--fixed`).
 
+### Po M10: teren, natura, podwórka na stoku
+- Teren malowany w shaderze (wagi rodzajów terenu, poszarpane granice, faktury trawy, skały, piasku, śniegu i wody),
+  odmiany drzew i skał z wzorami w shaderze, pola z rzędami kłosów, płynny wzrost sadzonek i zboża, znak geologa
+  z kolorem złoża; sprzęty przed budynkami leżą na terenie, a budynek na stoku ma podmurówkę (docs/DECISIONS.md).
+
 ## Dalej
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.
 

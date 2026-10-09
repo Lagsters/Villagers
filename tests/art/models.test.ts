@@ -44,7 +44,7 @@ const REQUIRED = [
   ...Array.from({ length: BUILDING_TYPES }, (_, k) => `building_${k}`),
   ...Array.from({ length: GOODS_COUNT }, (_, g) => `good_${g}`),
   'site_small', 'site_medium', 'site_large', 'crf_sails', 'woodcutter_axe', 'felled_trunk', 'felled_branches', 'fx_puff', 'fx_bit',
-  'tree_pine', 'tree_leaf', 'stump', 'stone', 'field', 'field_ripe', 'sign', 'ruin', 'fire', 'border', 'flag', 'flag_cloth', 'animal',
+  'tree_pine', 'tree_pine2', 'tree_leaf', 'tree_leaf2', 'stump', 'stone', 'stone2', 'field', 'field_ripe', 'sign', 'ruin', 'fire', 'border', 'flag', 'flag_cloth', 'animal',
   'serf_torso', 'serf_head', 'serf_leg', 'serf_arm', 'knight_helmet', 'knight_shield', 'knight_sword', 'donkey',
   ...HATS.map((h) => `hat_${h}`), ...TOOLS.map((t) => `tool_${t}`),
   'mark_flag', 'mark_small', 'mark_medium', 'mark_large', 'mark_mine',

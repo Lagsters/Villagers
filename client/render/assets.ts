@@ -39,6 +39,13 @@ function sceneGeometry(scene: THREE.Object3D): THREE.BufferGeometry | null {
       flat.setAttribute('pat', uv);
       flat.deleteAttribute('uv');
     }
+    // Druga i trzecia warstwa UV budynkow to podworko (client/render/yard.ts); pozostale modele dostaja zera -
+    // bez nich atrybut mialby wartosc zostawiona w GL przez inny program.
+    for (const [from, to] of [['uv1', 'yard'], ['uv2', 'yardAt']]) {
+      const a = flat.getAttribute(from);
+      flat.deleteAttribute(from);
+      flat.setAttribute(to, a ?? new THREE.BufferAttribute(new Float32Array(flat.getAttribute('position').count * 2), 2));
+    }
     parts.push(flat);
   });
   if (parts.length === 0) return null;

@@ -8,6 +8,7 @@ import type * as THREE from 'three';
 import type { Animal, Building, GameEvent, GameState, Serf } from '../../../sim/types.ts';
 import type { Fx } from '../fx.ts';
 import type { Pose, RigFrames } from '../rig.ts';
+import type { Rect } from '../yard.ts';
 
 export interface Vec3 {
   x: number;
@@ -15,9 +16,15 @@ export interface Vec3 {
   z: number;
 }
 
-/** Srodek modelu budynku w swiecie i jego skala (modele budynkow sa obrocone o 30 stopni ku fladze). */
+/**
+ * Srodek modelu budynku w swiecie i jego skala (modele budynkow sa obrocone o 30 stopni ku fladze); y - poziom
+ * budynku: najwyzszy punkt terenu pod jego obrysem, najwyzej o MAX_LIFT ponad polem (client/render/entities.ts);
+ * nizej sciany schodza do terenu jak podmurowka.
+ */
 export interface Origin extends Vec3 {
   sc: number;
+  /** obrys konstrukcji modelu (client/render/yard.ts) - poza nim podworko lezy na terenie; null - brak podworka */
+  yard: readonly Rect[] | null;
 }
 
 /** Polozenie osadnika w tej klatce (interpolowane miedzy polami). */
@@ -80,9 +87,14 @@ export interface WorkCtx {
   origin(b: Building): Origin;
   /**
    * Punkt w ukladzie modelu budynku (wspolrzedne Blendera: lx w prawo, ly w glab - front na -Y, lz w gore)
-   * w swiecie; y = wysokosc srodka budynku + lz * skala. Wynik w `out` (domyslnie nowy obiekt).
+   * w swiecie; y = podloze w tym miejscu (floor) + lz * skala. Wynik w `out` (domyslnie nowy obiekt).
    */
   at(o: Origin, lx: number, ly: number, lz?: number, out?: Vec3): Vec3;
+  /**
+   * Podloze w punkcie (lx, ly) ukladu modelu budynku, tak jak lezy tam model: przy scianach poziom budynku,
+   * na podworku teren (plynne przejscie jak w shaderze modeli, client/render/yard.ts).
+   */
+  floor(o: Origin, lx: number, ly: number): number;
   /** Macierz ukladu modelu budynku (y w gore, os x jak w Blenderze, front budynku na +z) ze skala - do propAt. */
   frameOf(o: Origin): THREE.Matrix4;
   /** Obrot postaci patrzacej z punktu a na punkt b. */

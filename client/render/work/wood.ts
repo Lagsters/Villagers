@@ -60,11 +60,11 @@ function limbing(c: WorkCtx, serf: Serf, flag: SerfAt): void {
   const go = p < 0.15 ? p / 0.15 : p > 0.88 ? (1 - p) / 0.12 : 1;
   const walking = go < 1;
   const x = flag.x + (stand.x - flag.x) * go, z = flag.z + (stand.z - flag.z) * go;
-  const y = flag.y + (o.y - flag.y) * go;
+  const y = flag.y + (stand.y - flag.y) * go;
   const toBlock = c.facing(stand.x, stand.z, block.x, block.z);
   const toStand = c.facing(flag.x, flag.z, stand.x, stand.z);
   const rot = !walking ? toBlock : p < 0.5 ? toStand : toStand + Math.PI;
-  const top = o.y + CHOP_BLOCK.top * o.sc;
+  const top = block.y + CHOP_BLOCK.top * o.sc;
   // Drzewo lezy w poprzek przed drwalem; do 2/3 pracy z galeziami, potem ten sam pien bez nich.
   const across = toBlock - Math.PI / 2;
   if (walking) shoulderTree(c, x, y, z, rot, p < 0.5);
@@ -78,7 +78,7 @@ function limbing(c: WorkCtx, serf: Serf, flag: SerfAt): void {
   if (!walking && p < 0.66) {
     // Odcinane galezie: listki i wiory przy kazdym uderzeniu.
     c.fx.burst(serf.id * 7 + bt.n, bt.age, block.x, top + 0.06, block.z,
-      { kind: 'bit', n: 4, life: 0.5, vy: 0.5, spread: 0.35, gravity: 2.2, size: 0.018, sizeEnd: 0.012, color: bt.n % 2 ? LEAF : WOOD_CHIP, floor: o.y + 0.01 });
+      { kind: 'bit', n: 4, life: 0.5, vy: 0.5, spread: 0.35, gravity: 2.2, size: 0.018, sizeEnd: 0.012, color: bt.n % 2 ? LEAF : WOOD_CHIP, floor: block.y + 0.01 });
   }
   c.figure({
     x, y, z, rot, owner: serf.owner, type: serf.type,
@@ -129,8 +129,8 @@ function chopping(c: WorkCtx, serf: Serf): void {
   const lie = Math.PI / 2 - 0.06;
   const angle = f < 1 ? lie * f * f : lie - Math.abs(Math.sin((p - FALL_END) * 40)) * 0.06 * Math.max(0, 1 - (p - FALL_END) * 12);
   fallM.makeTranslation(tree.x, tree.y, tree.z).multiply(rotM.makeRotationY(rot)).multiply(rotM.makeRotationX(angle))
-    .multiply(rotM.makeRotationY(tree.rot - rot)).multiply(rotM.makeScale(tree.s, tree.s, tree.s));
-  c.propM(tree.model, fallM);
+    .multiply(rotM.makeRotationY(tree.rot - rot)).multiply(rotM.makeScale(tree.s, tree.sy, tree.s));
+  c.propM(tree.model, fallM, tree.tintHex);
   if (p >= FALL_END) {
     const age = (p - FALL_END) * CHOP_TICKS * TICK_S;
     const dist = tree.s * 0.55;
@@ -178,7 +178,8 @@ function woodcutter(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
 /** Chata drwala: siekiera w pienku, gdy drwal nie ma jej w reku. */
 function woodcutterHut(c: WorkCtx, b: Building, o: Origin): void {
   const w = b.worker >= 0 ? c.s.serfs[b.worker] : null;
-  if (!w || !axeInHand(b, w)) c.prop('woodcutter_axe', o.x, o.y, o.z, 0, o.sc);
+  // Model siekiery jest w ukladzie chaty: przesuniety w pionie razem z pienkiem na podworku.
+  if (!w || !axeInHand(b, w)) c.prop('woodcutter_axe', o.x, c.floor(o, CHOP_BLOCK.x, CHOP_BLOCK.y), o.z, 0, o.sc);
 }
 
 /** Stos desek przed tartakiem (model: plank_stack w (0.3, -0.34), 4 warstwy) i miejsce tracza przy nim. */
@@ -211,7 +212,7 @@ function sawmill(c: WorkCtx, b: Building, o: Origin): void {
     });
     c.fx.stream(b.id * 16 + 1, log.x, log.y - 0.02, log.z, {
       kind: 'bit', n: 6, life: 0.7, vy: -0.05, spread: 0.12, spreadY: 0.05, gravity: 0.8, size: 0.012, sizeEnd: 0.008,
-      color: SAWDUST, jitter: 0.02, floor: o.y + 0.005,
+      color: SAWDUST, jitter: 0.02, floor: c.floor(o, SAW_HORSE.x, SAW_HORSE.y) + 0.005,
     });
     return;
   }

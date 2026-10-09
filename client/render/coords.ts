@@ -1,5 +1,4 @@
 /** Przeliczenia pole mapy -> wspolrzedne swiata three.js. */
-import { DIRS, stepXY } from '../../sim/grid.ts';
 import type { MapData } from '../../sim/mapgen.ts';
 
 export const ROW_H = Math.sqrt(3) / 2;
@@ -44,26 +43,21 @@ export function nearestIdx(map: MapData, wx: number, wz: number): number {
 }
 
 /**
- * Wysokosc terenu w punkcie (wx, wz) - dokladnie na siatce terenu: interpolacja barycentryczna
- * w trojkacie miedzy najblizszym polem a dwoma kolejnymi sasiadami.
+ * Wysokosc terenu w punkcie (wx, wz) - dokladnie na siatce terenu (client/render/terrain.ts): pas miedzy
+ * wierszem r a r + 1 w ukosnych wspolrzednych (q, t), w ktorych pola obu wierszy leza na calkowitych q;
+ * kazdy kwadrat [i, i + 1] dzieli przekatna na trojkat E/SE pola (i, r) i trojkat SW/SE pola (i + 1, r).
+ * Ten sam rachunek liczy shader modeli (GROUND_GLSL w client/render/scene.ts) - zmieniac razem.
  */
 export function groundHeight(map: MapData, wx: number, wz: number): number {
-  const i = nearestIdx(map, wx, wz);
-  if (i < 0) return 0;
-  const x = i % map.w, y = (i / map.w) | 0;
-  const ax = vx(x, y), az = vz(y), ah = map.height[i] * H_SCALE;
-  for (let d = 0; d < DIRS; d++) {
-    const [bx0, by0] = stepXY(x, y, d);
-    const [cx0, cy0] = stepXY(x, y, (d + 1) % DIRS);
-    if (bx0 < 0 || by0 < 0 || cx0 < 0 || cy0 < 0 || bx0 >= map.w || by0 >= map.h || cx0 >= map.w || cy0 >= map.h) continue;
-    const bx = vx(bx0, by0), bz = vz(by0), cx = vx(cx0, cy0), cz = vz(cy0);
-    const det = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
-    if (Math.abs(det) < 1e-9) continue;
-    const l1 = ((bz - cz) * (wx - cx) + (cx - bx) * (wz - cz)) / det;
-    const l2 = ((cz - az) * (wx - cx) + (ax - cx) * (wz - cz)) / det;
-    const l3 = 1 - l1 - l2;
-    const bh = map.height[by0 * map.w + bx0] * H_SCALE, ch = map.height[cy0 * map.w + cx0] * H_SCALE;
-    if (l1 >= -1e-6 && l2 >= -1e-6 && l3 >= -1e-6) return l1 * ah + l2 * bh + l3 * ch;
-  }
-  return ah;
+  if (nearestIdx(map, wx, wz) < 0) return 0;
+  const rf = wz / ROW_H;
+  const r = Math.floor(rf);
+  const t = rf - r;
+  const odd = r & 1;
+  const q = wx - odd * 0.5 - 0.5 * t;
+  const i = Math.floor(q);
+  const f = q - i;
+  const h = (x: number, y: number) => map.height[Math.min(map.h - 1, Math.max(0, y)) * map.w + Math.min(map.w - 1, Math.max(0, x))] * H_SCALE;
+  if (f + t <= 1) return (1 - f - t) * h(i, r) + f * h(i + 1, r) + t * h(i + odd, r + 1);
+  return (1 - t) * h(i + 1, r) + (1 - f) * h(i + odd, r + 1) + (f + t - 1) * h(i + 1 + odd, r + 1);
 }

@@ -923,4 +923,4 @@ BUILDERS = {
 }
 
 if __name__ == '__main__':
-    build(BUILDERS, ao=0.35)
+    build(BUILDERS, ao=0.35, yard=lambda name: name.startswith(('building_', 'site_')))

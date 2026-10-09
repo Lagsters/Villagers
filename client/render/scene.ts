@@ -25,7 +25,8 @@ export interface GraphicsOptions {
  * zob. surface_pattern i face_pattern w art/scripts/lib.py): u = numer * 1000 + polozenie poziome (na glowie:
  * kat od przodu), v = 1 - wysokosc albo odleglosc od okapu (eksporter glTF odwraca v). Wymiary w metrach modelu.
  * Gdy wzor robi sie drobniejszy niz kilka pikseli, kontrast gasnie do sredniej - bez migotania z daleka.
- * Wzor 6 (PLAIN) to brak wzoru i brak koloru gracza w czesciach barwionych instancja (skora, spodnie postaci).
+ * Wzor 6 (PLAIN) to brak wzoru i brak koloru gracza w czesciach barwionych instancja (skora, spodnie postaci,
+ * slupek znaku geologa). Wzory 7-12 to natura (kepy lisci, igliwie, kora, skala, zdzbla, klosy - art/scripts/nature.py).
  */
 const MODEL_PATTERNS = /* glsl */ `
 varying vec2 vPat;
@@ -98,11 +99,120 @@ vec3 faceColor(float a, float h, vec3 skin) {
   vec3 far = mix(skin, vec3(0.05), 0.7 * (1.0 - smoothstep(0.6, 1.3, e)));
   return mix(far, c, clamp(2.0 - fw * 6.0, 0.0, 1.0));
 }
+float patNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(patHash(i), patHash(i + vec2(1.0, 0.0)), f.x), mix(patHash(i + vec2(0.0, 1.0)), patHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+// Natura (art/scripts/nature.py): u - wokol bryly albo wzdluz rzedu, v - w gore.
+float natureShade(float id, float u, float v) {
+  if (id < 8.5) {
+    // Kepy lisci (7) albo galezie igliwia (8, splaszczone w poziomie): nieregularne kepy (komorki wokol losowych
+    // punktow), kazda oswietlona od gory, z ciemna szczelina na brzegu i plamami jak od pedzla.
+    vec2 g = id < 7.5 ? vec2(u / 0.075, v / 0.06) : vec2(u / 0.07, v / 0.035);
+    vec2 c = floor(g);
+    vec2 f = fract(g);
+    float d1 = 9.0;
+    vec2 to = vec2(0.0);
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 o = vec2(float(x), float(y));
+        vec2 p = o + 0.15 + 0.7 * vec2(patHash(c + o), patHash(c + o + 17.0)) - f;
+        float d = dot(p, p);
+        if (d < d1) { d1 = d; to = p; }
+      }
+    }
+    float k = 0.84 + 0.3 * clamp(0.45 - to.y * 0.9 + to.x * 0.25, 0.0, 1.0);
+    k *= 1.0 - 0.28 * smoothstep(0.22, 0.55, d1);
+    k *= 0.9 + 0.2 * patNoise(vec2(u, v) * 7.0);
+    return mix(0.97, k, patFade(g));
+  }
+  if (id < 9.5) {
+    // Kora: pionowe, lekko faliste bruzdy.
+    vec2 g = vec2(u / 0.016, v / 0.06);
+    float w = g.x + 0.3 * sin(v * 55.0 + patHash(vec2(floor(g.x), 2.0)) * 6.0);
+    float k = mix(0.62, 1.08, smoothstep(0.04, 0.3, abs(fract(w) - 0.5))) * (0.9 + 0.2 * patHash(vec2(floor(w), floor(g.y))));
+    return mix(0.92, k, patFade(g));
+  }
+  if (id < 10.5) {
+    // Skala: plamy i cienkie spekania.
+    vec2 p = vec2(u, v) / 0.08;
+    float n = patNoise(p) * 0.65 + patNoise(p * 2.7 + 3.1) * 0.35;
+    float crack = 1.0 - smoothstep(0.0, 0.03, abs(n - 0.52));
+    float k = (0.86 + 0.26 * n) * (1.0 - 0.25 * crack);
+    return mix(0.98, k, patFade(p * 2.7));
+  }
+  if (id < 11.5) {
+    // Zdzbla: gesto stojace, pionowe, kazde w nieco innym odcieniu.
+    vec2 g = vec2(u / 0.011, v / 0.05);
+    float k = mix(0.7, 1.1, smoothstep(0.08, 0.32, abs(fract(g.x) - 0.5))) * (0.9 + 0.2 * patHash(vec2(floor(g.x), 4.0)));
+    return mix(0.95, k, patFade(g));
+  }
+  // Klosy: ziarna w rzedach przesunietych o pol, ciemne szczeliny.
+  vec2 g = vec2(u / 0.016, v / 0.012);
+  float row = floor(g.y);
+  vec2 t = vec2(fract(g.x + 0.5 * mod(row, 2.0)), fract(g.y)) - 0.5;
+  float k = mix(1.14, 0.68, smoothstep(0.2, 0.5, length(t * vec2(1.7, 1.0)))) * (0.9 + 0.2 * patHash(vec2(row, floor(g.x))));
+  return mix(0.95, k, patFade(g));
+}
 vec3 patternColor(vec2 q, vec3 c) {
   float id = floor((q.x + 500.0) / 1000.0);
+  if (id > 6.5) return c * natureShade(id, q.x - id * 1000.0, 1.0 - q.y);
   if (id > 5.5) return c;
   if (id > 4.5) return faceColor(q.x - id * 1000.0, 1.0 - q.y, c);
   return c * patternShade(q);
+}
+`;
+
+/**
+ * Wysokosc terenu w shaderze wierzcholkow (tekstura wysokosci pol): ten sam rachunek co groundHeight
+ * w client/render/coords.ts - zmieniac razem.
+ */
+const GROUND_GLSL = /* glsl */ `
+uniform sampler2D groundMap;
+float groundCell(float x, float y) {
+  ivec2 s = textureSize(groundMap, 0);
+  return texelFetch(groundMap, clamp(ivec2(int(x), int(y)), ivec2(0), s - 1), 0).r;
+}
+float groundAt(vec2 p) {
+  float rf = p.y / ${ROW_H.toFixed(8)};
+  float r = floor(rf);
+  float t = rf - r;
+  float odd = mod(r, 2.0);
+  float q = p.x - odd * 0.5 - 0.5 * t;
+  float i = floor(q);
+  float f = q - i;
+  if (f + t <= 1.0) return (1.0 - f - t) * groundCell(i, r) + f * groundCell(i + 1.0, r) + t * groundCell(i + odd, r + 1.0);
+  return (1.0 - t) * groundCell(i + 1.0, r) + (1.0 - f) * groundCell(i + odd, r + 1.0) + (f + t - 1.0) * groundCell(i + 1.0 + odd, r + 1.0);
+}
+`;
+
+/**
+ * Podworko budynku (client/render/yard.ts): atrybut `yard` z Blendera - x = waga podworka (wierzcholek schodzi
+ * albo wchodzi na teren), y = 1 na spodzie konstrukcji (sciana siega w dol do nizszego terenu, zamiast wisiec);
+ * `yardAt` - punkt modelu (x, z), w ktorym brac wysokosc terenu (srodek zwartego sprzetu albo sam wierzcholek).
+ * Przesuniecie liczone w swiecie wzgledem wysokosci instancji, dzielone przez jej skale pionowa.
+ * vFound: x > 0 na scianach przy spodzie konstrukcji, y = wysokosc w modelu - ponizej zera sciana jest podmurowka.
+ */
+const YARD_VERTEX = /* glsl */ `
+vFound = vec2(0.0, 1.0);
+#ifdef USE_INSTANCING
+if (yard.x > 0.0 || yard.y > 0.5) {
+  vec4 yw = instanceMatrix * vec4(yardAt.x, 0.0, yardAt.y, 1.0);
+  float yd = groundAt(yw.xz) - instanceMatrix[3].y;
+  transformed.y += (yard.x * yd + yard.y * min(yd, 0.0)) / instanceMatrix[1][1];
+  vFound = vec2(yard.y, transformed.y);
+}
+#endif
+`;
+
+/** Podmurowka (sciana wydluzona w dol do terenu): kamien w pasach co 0,05 wysokosci modelu, ciemniejszy u dolu. */
+const FOUNDATION_FRAGMENT = /* glsl */ `
+if (vFound.x > 0.001 && vFound.y < 0.0) {
+  float row = fract(vFound.y / 0.05);
+  float k = mix(0.62, 1.0, smoothstep(0.0, 0.16, min(row, 1.0 - row)));
+  diffuseColor.rgb = vec3(0.6, 0.56, 0.5) * k * (0.8 + 0.2 * clamp(1.0 + vFound.y * 4.0, 0.0, 1.0));
 }
 `;
 
@@ -123,6 +233,8 @@ export class SceneRenderer {
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
   private sun: THREE.DirectionalLight;
+  /** Wysokosci pol (swiat) dla shadera modeli - podworka budynkow na terenie (GROUND_GLSL). */
+  private groundMap: { value: THREE.DataTexture | null } = { value: null };
   width = 1;
   height = 1;
 
@@ -153,14 +265,15 @@ export class SceneRenderer {
     // Normalne z modeli: gladkie krzywizny, ostre krawedzie bryl (zastepniki licza normalne plaskie).
     this.modelMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.modelMaterial.onBeforeCompile = (sh) => {
+      sh.uniforms.groundMap = this.groundMap;
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec2 pat;\nvarying vec2 vPat;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPat = pat;')
+        .replace('#include <common>', '#include <common>\nattribute vec2 pat;\nattribute vec2 yard;\nattribute vec2 yardAt;\nvarying vec2 vPat;\nvarying vec2 vFound;\n' + GROUND_GLSL)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPat = pat;\n' + YARD_VERTEX)
         // Kolor gracza tylko na koszulce: sciany PLAIN (skora, spodnie) zostaja w kolorze wierzcholkow.
         .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_INSTANCING_COLOR\nif (abs(floor((pat.x + 500.0) / 1000.0) - 6.0) < 0.5) vColor.xyz = color.xyz;\n#endif');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\n' + MODEL_PATTERNS)
-        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = patternColor(vPat, diffuseColor.rgb);');
+        .replace('#include <common>', '#include <common>\nvarying vec2 vFound;\n' + MODEL_PATTERNS)
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = patternColor(vPat, diffuseColor.rgb);\n' + FOUNDATION_FRAGMENT);
     };
 
     const dot = new THREE.CircleGeometry(0.045, 8);
@@ -179,6 +292,11 @@ export class SceneRenderer {
 
   setMap(map: MapData): void {
     this.map = map;
+    this.groundMap.value?.dispose();
+    const tex = new THREE.DataTexture(new Float32Array(map.w * map.h), map.w, map.h, THREE.RedFormat, THREE.FloatType);
+    tex.magFilter = tex.minFilter = THREE.NearestFilter;
+    this.groundMap.value = tex;
+    this.refreshGround();
     this.terrain = new TerrainRenderer(map);
     this.scene.add(this.terrain.group);
     this.objects = new MapObjectsRenderer(map, this.modelMaterial);
@@ -251,6 +369,16 @@ export class SceneRenderer {
     this.cam.lookAt(vx(x, y), vz(y));
   }
 
+  /** Wysokosci wszystkich pol do tekstury shadera (np. po przewinieciu gry z wyrownywaniem terenu). */
+  refreshGround(): void {
+    const tex = this.groundMap.value;
+    if (!tex) return;
+    const data = tex.image.data as Float32Array;
+    for (let i = 0; i < data.length; i++) data[i] = this.map.height[i] * H_SCALE;
+    tex.needsUpdate = true;
+    this.entities?.clearBases();
+  }
+
   /** Po tickach symulacji: zmiany obiektow mapy, drog, wysokosci terenu. */
   syncState(s: GameState, events: GameEvent[]): void {
     if (events.length) this.entities.onEvents(events);
@@ -259,9 +387,14 @@ export class SceneRenderer {
         this.terrain.markDirty(e.pos);
         this.objects.markHeight(e.pos);
         this.roads.invalidate();
+        const tex = this.groundMap.value;
+        if (tex) {
+          (tex.image.data as Float32Array)[e.pos] = s.map.height[e.pos] * H_SCALE;
+          tex.needsUpdate = true;
+        }
       }
     }
-    this.objects.sync();
+    this.objects.sync(s);
     this.roads.sync(s);
   }
 

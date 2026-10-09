@@ -1,17 +1,19 @@
 /** Paleta stylizowanego low-poly. */
-import { T } from '../../sim/defs.ts';
 
-export const TERRAIN_COLORS: Record<number, [number, number, number]> = {
-  [T.WATER]: [0.12, 0.34, 0.6],
-  [T.GRASS]: [0.2, 0.46, 0.08],
-  [T.DESERT]: [0.8, 0.64, 0.36],
-  [T.MOUNTAIN]: [0.46, 0.37, 0.28],
-  [T.SNOW]: [0.94, 0.95, 0.97],
-};
 /** Soczysta zielen lak: ciemne i jasne laty. */
 export const GRASS_DARK: [number, number, number] = [0.12, 0.36, 0.05];
 export const GRASS_LIGHT: [number, number, number] = [0.3, 0.58, 0.1];
-export const SHORE_COLOR: [number, number, number] = [0.82, 0.72, 0.46];
+/** Ziemia na stromych zboczach lak. */
+export const EARTH: [number, number, number] = [0.36, 0.27, 0.15];
+/** Piasek pustyni i plaz. */
+export const SAND: [number, number, number] = [0.84, 0.7, 0.42];
+/** Skala gor: ciemniejsza i jasniejsza (plamy). */
+export const ROCK_DARK: [number, number, number] = [0.36, 0.31, 0.26];
+export const ROCK_LIGHT: [number, number, number] = [0.6, 0.55, 0.48];
+export const SNOW: [number, number, number] = [0.93, 0.95, 0.98];
+/** Woda: plycizna przy brzegu, otwarta woda, glebia (kolor tla przy brzegu mapy). */
+export const SHALLOW_WATER: [number, number, number] = [0.2, 0.5, 0.66];
+export const WATER: [number, number, number] = [0.12, 0.34, 0.6];
 export const DEEP_WATER: [number, number, number] = [0.08, 0.25, 0.5];
 
 /** Kolory towarow (maly szescian na fladze / nad glowa tragarza). */

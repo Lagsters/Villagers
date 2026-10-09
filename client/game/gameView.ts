@@ -93,6 +93,7 @@ export class GameView {
         }
         this.view.syncState(s.state, []);
         this.view.terrain.markAllDirty();
+        this.view.refreshGround();
       },
     };
   }

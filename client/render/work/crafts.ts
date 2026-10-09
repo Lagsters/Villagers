@@ -262,7 +262,7 @@ function doorWalk(c: WorkCtx, serf: Serf, at: SerfAt, pts: readonly number[]): P
   const q = c.at(o, w.x, w.y, 0, w1);
   const fig = c.walkPose(serf, at);
   fig.x = q.x;
-  fig.y = lerp(o.y, fw.y, t);
+  fig.y = q.y;
   fig.z = q.z;
   exitDist = w.dist * o.sc;
   if (at.moving) {
