@@ -93,6 +93,7 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
   docs/DECISIONS.md).
 - Serwer lobby gry wieloosobowej na `api.kwasnypp.ovh/osada/` (repozytorium `vps01`, wydanie `signal-v*`),
   limit połączeń odporny na podrobiony nagłówek, panel budowy z nazwami w jednej linii (docs/DECISIONS.md).
+- Chata wszędzie tam, gdzie dom, na stoku z wyrównaniem terenu (SIM_VERSION 5) (docs/DECISIONS.md).
 
 ## Dalej
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.

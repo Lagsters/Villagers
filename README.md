@@ -76,7 +76,9 @@ w `client/audio.ts`; głośność ogólna w ustawieniach menu.
 ## Zasady stawiania budynków
 
 - Chata: trawa na polu, sąsiedzi nie w wodzie ani w śniegu, żaden sąsiad nie wyżej ani niżej o więcej niż
-  1 stopień wysokości (bez kopacza - na stromym stoku stałaby na wysokiej podmurówce).
+  1 stopień wysokości. Chatę można też postawić wszędzie tam, gdzie wolno postawić dom - na stromszym stoku
+  najpierw przychodzi kopacz i wyrównuje teren, więc chata nie stoi na wysokiej podmurówce. Boty stawiają chaty
+  tylko na łagodnym stoku.
 - Dom i duży budynek: trawa wokół, brak budynków na 6 sąsiednich polach i domów w drugim pierścieniu, różnica
   wysokości w drugim pierścieniu < 9; kopacz wyrównuje pole i 6 sąsiadów przed budową.
 - Kopalnia: góry na polu. Flagi nie mogą sąsiadować.
@@ -122,6 +124,19 @@ Gra wieloosobowa lokalnie — w drugim terminalu serwer sygnalizacyjny:
 ```bash
 npm run server
 ```
+
+### Gra wieloosobowa przez internet
+
+Na `https://lagsters.github.io/Villagers/` lobby działa przez serwer `wss://api.kwasnypp.ovh/osada/`:
+
+1. Gospodarz: **Gra wieloosobowa** → imię → **Utwórz pokój** — pojawia się 6-znakowy kod pokoju.
+2. Pozostali (do 8 graczy, także na innych komputerach i telefonach): **Gra wieloosobowa** → imię → kod →
+   **Dołącz** → **Jestem gotowy**.
+3. Gospodarz: **Rozpocznij grę**.
+
+Na jednym komputerze drugi gracz to okno incognito. Wszyscy muszą mieć tę samą wersję strony (po aktualizacji gry
+odświeżyć). Bez przekaźnika TURN gracz za restrykcyjną siecią (część sieci firmowych i komórkowych) widzi lobby,
+ale partia mu nie startuje (`docs/DEPLOY.md`).
 
 ## Testy
 

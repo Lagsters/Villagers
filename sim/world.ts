@@ -102,14 +102,56 @@ const BIG_HEIGHT_SPAN = 9;
  */
 const HUT_HEIGHT_STEP = 1;
 
+/** Chata na tym polu wymaga wyrownania terenu: ktorys z 6 sasiadow rozni sie wysokoscia o wiecej niz HUT_HEIGHT_STEP. */
+export function hutOnSlope(map: MapData, pos: number): boolean {
+  const t = nb(map);
+  for (let d = 0; d < 6; d++) {
+    const j = t[pos * 6 + d];
+    if (j >= 0 && Math.abs(map.height[j] - map.height[pos]) > HUT_HEIGHT_STEP) return true;
+  }
+  return false;
+}
+
+/**
+ * Miejsce spelnia warunki domu i duzego budynku: trawa wokol (poza polem flagi), na 6 sasiednich polach brak
+ * budynkow (drzewa i flagi nie przeszkadzaja), w drugim pierscieniu brak innego domu/duzego budynku i roznica
+ * wysokosci < BIG_HEIGHT_SPAN (teren zostanie wyrownany).
+ */
+function bigSiteOk(s: GameState, pos: number): boolean {
+  const map = s.map;
+  const t = nb(map);
+  for (let d = 0; d < 6; d++) {
+    const j = t[pos * 6 + d];
+    if (map.terrain[j] !== T.GRASS && d !== DIR_SE) return false;
+    const o = map.obj[j];
+    if (o === O.BUILDING || o === O.BUILDING_PART) return false;
+  }
+  // Drugi pierscien (12 pol): dla kazdego kierunku dwa kroki prosto oraz krok prosto i krok w kolejnym kierunku.
+  let hMin = 99, hMax = -1;
+  for (let k = 0; k < 12; k++) {
+    const d = k >> 1;
+    const a = t[pos * 6 + d];
+    const v = a < 0 ? -1 : t[a * 6 + (k & 1 ? (d + 1) % 6 : d)];
+    if (v < 0) continue;
+    const h = map.height[v];
+    if (h < hMin) hMin = h;
+    if (h > hMax) hMax = h;
+    if (map.obj[v] === O.BUILDING) {
+      const other = s.buildings[map.objId[v]];
+      if (other && isBigSize(BUILDINGS[other.kind].size)) return false;
+    }
+  }
+  return hMax - hMin < BIG_HEIGHT_SPAN;
+}
+
 /**
  * Czy mozna postawic budynek danego rodzaju (zasady pierwowzoru):
  * - pole i 6 sasiadow wlasne, na polu brak drogi i przeszkod, flaga na SE stoi (wlasna, wolna) albo da sie ja postawic;
- * - chata: trawa na polu, sasiedzi nie w wodzie, zaden nie wyzej ani nizej o wiecej niz HUT_HEIGHT_STEP - bez
- *   warunkow co do sasiednich budynkow;
+ * - chata: trawa na polu, sasiedzi nie w wodzie, bez warunkow co do sasiednich budynkow; zaden sasiad nie wyzej ani
+ *   nizej o wiecej niz HUT_HEIGHT_STEP - albo miejsce spelnia warunki domu (bigSiteOk): chata staje wszedzie tam,
+ *   gdzie dom, a stok wyrownuje kopacz (decyzja wlasciciela);
  * - kopalnia: gory na polu;
- * - dom i duzy budynek: trawa wokol, na 6 sasiednich polach brak budynkow (drzewa i flagi nie przeszkadzaja),
- *   w drugim pierscieniu brak innego domu/duzego budynku i roznica wysokosci < 9 (teren zostanie wyrownany).
+ * - dom i duzy budynek: bigSiteOk.
  */
 export function canBuild(s: GameState, p: number, pos: number, kind: number): boolean {
   const map = s.map;
@@ -123,37 +165,14 @@ export function canBuild(s: GameState, p: number, pos: number, kind: number): bo
   if (def.size === SIZE.MINE) {
     if (terrain !== T.MOUNTAIN) return false;
   } else if (terrain !== T.GRASS) return false;
-  const big = isBigSize(def.size);
   for (let d = 0; d < 6; d++) {
     const j = t[pos * 6 + d];
     if (j < 0 || !ownedBy(map, j, p)) return false;
     const tj = map.terrain[j];
     if (tj === T.WATER || tj === T.SNOW) return false;
-    if (def.size === SIZE.SMALL && Math.abs(map.height[j] - map.height[pos]) > HUT_HEIGHT_STEP) return false;
-    if (big) {
-      if (tj !== T.GRASS && d !== DIR_SE) return false;
-      const o = map.obj[j];
-      if (o === O.BUILDING || o === O.BUILDING_PART) return false;
-    }
   }
-  if (big) {
-    // Drugi pierscien (12 pol): dla kazdego kierunku dwa kroki prosto oraz krok prosto i krok w kolejnym kierunku.
-    let hMin = 99, hMax = -1;
-    for (let k = 0; k < 12; k++) {
-      const d = k >> 1;
-      const a = t[pos * 6 + d];
-      const v = a < 0 ? -1 : t[a * 6 + (k & 1 ? (d + 1) % 6 : d)];
-      if (v < 0) continue;
-      const h = map.height[v];
-      if (h < hMin) hMin = h;
-      if (h > hMax) hMax = h;
-      if (map.obj[v] === O.BUILDING) {
-        const other = s.buildings[map.objId[v]];
-        if (other && isBigSize(BUILDINGS[other.kind].size)) return false;
-      }
-    }
-    if (hMax - hMin >= BIG_HEIGHT_SPAN) return false;
-  }
+  if (isBigSize(def.size) && !bigSiteOk(s, pos)) return false;
+  if (def.size === SIZE.SMALL && hutOnSlope(map, pos) && !bigSiteOk(s, pos)) return false;
   if (map.obj[flagPos] === O.FLAG) {
     const f = s.flags[map.objId[flagPos]];
     return !!f && f.owner === p && f.building < 0;

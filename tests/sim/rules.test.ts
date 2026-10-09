@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { B, O, T } from '../../sim/defs.ts';
 import { DIR_E, DIR_NW, DIR_SE, DIR_W, spiral } from '../../sim/grid.ts';
 import { step } from '../../sim/step.ts';
-import type { GameState } from '../../sim/types.ts';
+import { STAGE, type GameState } from '../../sim/types.ts';
 import { canBuild, canPlaceFlag, neighbor } from '../../sim/world.ts';
 import { findRoadPath } from '../../sim/roads.ts';
 import { newGame } from './helpers.ts';
@@ -52,18 +52,38 @@ describe('zasady stawiania budynkow (jak w pierwowzorze)', () => {
     expect(canBuild(s, 0, three, B.SAWMILL)).toBe(true);
   });
 
-  it('chata nie wymaga wolnych sasiadow, ale stoi tylko na lagodnym stoku (sasiad najwyzej o 1 wyzej albo nizej)', () => {
+  it('chata nie wymaga wolnych sasiadow; na stoku (sasiad wyzej albo nizej o wiecej niz 1) tylko na miejscu domu', () => {
     const { s, a } = flatArea();
     s.map.obj[at(s, a, DIR_W)] = O.TREE;
     s.map.height[at(s, a, DIR_E)] = 11;
     s.map.height[at(s, a, DIR_W)] = 9;
     expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(true);
     s.map.height[at(s, a, DIR_E)] = 12;
-    expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(false);
+    expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(true); // stok, ale miejsce domu - teren zostanie wyrownany
     s.map.height[at(s, a, DIR_E)] = 20;
     expect(canBuild(s, 0, a, B.SAWMILL)).toBe(true); // roznica 10 tylko na sasiedzie, drugi pierscien plaski
+    expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(true);
     s.map.height[at(s, a, DIR_E, 2)] = 20;
     expect(canBuild(s, 0, a, B.SAWMILL)).toBe(false); // drugi pierscien: roznica >= 9
+    expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(false); // ani dom, ani lagodny stok
+  });
+
+  it('chata stoi wszedzie tam, gdzie dom; na stoku czeka na wyrownanie terenu jak dom', () => {
+    const { s, a } = flatArea();
+    // Budynek na sasiednim polu: miejsce nie nadaje sie na dom, wiec chata tylko na lagodnym stoku.
+    step(s, [{ type: 'build', player: 0, pos: at(s, a, DIR_W, 2), kind: B.WOODCUTTER }]);
+    const b = at(s, a, DIR_W);
+    s.map.height[at(s, b, DIR_E)] = 12;
+    expect(canBuild(s, 0, b, B.SAWMILL)).toBe(false);
+    expect(canBuild(s, 0, b, B.WOODCUTTER)).toBe(false);
+    // Miejsce domu na stoku: chata stawia plac w etapie wyrownywania, na plaskim od razu buduje.
+    const c = at(s, a, DIR_E, 3);
+    s.map.height[at(s, c, DIR_E)] = 13;
+    expect(canBuild(s, 0, c, B.SAWMILL)).toBe(true);
+    step(s, [{ type: 'build', player: 0, pos: c, kind: B.WOODCUTTER }]);
+    const hut = s.buildings[s.map.objId[c]]!;
+    expect(hut.stage).toBe(STAGE.LEVEL);
+    expect(hut.levelHeight).toBe(10); // srednia z pola i 6 sasiadow: (6 * 10 + 13) / 7
   });
 
   it('mlyn jest chata', () => {

@@ -4,14 +4,14 @@
  * szybsza rozbudowa, pelny lancuch militarny, atakuje przewaga).
  * Bot ma wlasny PRNG (nie jest czescia stanu gry): w sieci boty liczy tylko host.
  */
-import { B, BUILDINGS, FIRST_TOOL, G, O, RES, S, SERF_TOOLS, T, TOOLS_COUNT, isMilitary, isStone } from '../sim/defs.ts';
+import { B, BUILDINGS, FIRST_TOOL, G, O, RES, S, SERF_TOOLS, T, TOOLS_COUNT, SIZE, isMilitary, isStone } from '../sim/defs.ts';
 import type { Command } from '../sim/commands.ts';
 import { DIR_SE, hexDist, spiral } from '../sim/grid.ts';
 import { attackPreview, attackersAvailable, defenderLevels, isAttackTarget } from '../sim/military.ts';
 import { findRoadPath } from '../sim/roads.ts';
 import { UNREACHABLE, flagDist } from '../sim/routing.ts';
 import { STAGE, type Building, type GameState } from '../sim/types.ts';
-import { buildingCells, canBuild, isBigSize, neighbor } from '../sim/world.ts';
+import { buildingCells, canBuild, hutOnSlope, isBigSize, neighbor } from '../sim/world.ts';
 
 export const AI_EASY = 1;
 export const AI_HARD = 2;
@@ -234,10 +234,14 @@ export class Bot {
   /** Proba postawienia budynku w najlepszym miejscu. */
   private tryBuild(s: GameState, need: Need, cmds: Command[]): boolean {
     const cands: [number, number][] = [];
+    const small = BUILDINGS[need.kind].size === SIZE.SMALL;
     for (const pos of this.owned) {
       const until = this.failed.get(pos);
       if (until !== undefined && until > s.tick) continue;
       if (!canBuild(s, this.player, pos, need.kind)) continue;
+      // Chaty tylko na lagodnym stoku: na stromym czekaja na kopacza i zajmuja miejsca domow, a wtedy czesc partii
+      // botow konczy sie bez zwyciezcy (docs/DECISIONS.md).
+      if (small && hutOnSlope(s.map, pos)) continue;
       const sc = need.score(pos);
       if (need.min !== undefined && sc < need.min) continue;
       cands.push([sc, pos]);

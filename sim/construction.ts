@@ -1,13 +1,13 @@
 /**
  * Place budowy: wyrownywanie terenu (kopacz), budowa (budowniczy), ukonczenie, pozar i rozbiorka.
  */
-import { BUILDINGS, GOODS_COUNT, O, SERF_TYPES, isInventory, isMilitary } from './defs.ts';
+import { BUILDINGS, GOODS_COUNT, O, SERF_TYPES, SIZE, isInventory, isMilitary } from './defs.ts';
 import { DIR_SE } from './grid.ts';
 import { rerouteFlags } from './goods.ts';
 import { placeFlag, removeFlag, removeRoad } from './roads.ts';
 import { SS, killSerf, sendHome } from './serfs.ts';
 import { STAGE, type Building, type GameState, type Inventory, type Serf } from './types.ts';
-import { allocId, buildingCells, canBuild, event, isBigSize, nb, recomputeTerritory } from './world.ts';
+import { allocId, buildingCells, canBuild, event, hutOnSlope, isBigSize, nb, recomputeTerritory } from './world.ts';
 
 export const BUILD_TICKS_PER_UNIT = 40;
 export const LEVEL_TICKS = 20;
@@ -86,7 +86,8 @@ export function placeBuilding(s: GameState, p: number, pos: number, kind: number
     finishBuilding(s, b);
     return id;
   }
-  if (isBigSize(def.size)) {
+  // Chata na stoku stoi tylko na miejscu domu (canBuild) i, jak dom, czeka na wyrownanie terenu.
+  if (isBigSize(def.size) || (def.size === SIZE.SMALL && hutOnSlope(map, pos))) {
     // Srednia wysokosc pol do wyrownania.
     const lc = levelCells(s, pos);
     let sum = 0;

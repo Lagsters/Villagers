@@ -603,3 +603,13 @@ kamienną podmurówką (na stoku przy plaży - jak pół ściany).
   400 px; z kosztem pod nazwą wszystkie mieszczą się już przy 320 px, a przycisk nie rośnie (dwie linie tekstu
   mieszczą się w wysokości ikony).
 
+## 2026-10-10 — Chata wszędzie tam, gdzie dom (SIM_VERSION 5)
+- **Zasada właściciela: mały budynek można postawić zawsze na miejscu dużego, ale nie odwrotnie.** Wcześniej chata
+  wymagała różnicy wysokości do sąsiadów najwyżej 1, a dom znosi stok do 8 w drugim pierścieniu (kopacz
+  wyrównuje), więc na pochyłym miejscu domu chaty nie było w panelu. Teraz chata staje też na każdym miejscu domu
+  (`bigSiteOk` w `sim/world.ts`); na stromszym stoku plac zaczyna od wyrównywania jak przy domu (wariant A
+  właściciela - wariant B, bez wyrównywania, zostawiłby chatę na wysokiej podmurówce).
+- **Boty dalej stawiają chaty tylko na łagodnym stoku.** Z chatami na stokach (także tylko awaryjnie, gdy brak
+  płaskiego miejsca) 1-3 z 20 partii kończyły się bez zwycięzcy, a trudny bot wygrywał 9; chaty na stokach
+  czekają na kopacza i zajmują miejsca domów. Po ograniczeniu: 20/20 ze zwycięzcą, trudny 10/20.
+
