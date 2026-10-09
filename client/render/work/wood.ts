@@ -15,7 +15,7 @@ import { SHOULDER, UNIT_SCALE } from '../rig.ts';
 import type { Origin, Scenes, SerfAt, WorkCtx } from './types.ts';
 
 /** Pieniek przed chata drwala (srodek, wysokosc wierzchu) i miejsce drwala przy nim, w ukladzie modelu. */
-const CHOP_BLOCK = { x: 0.32, y: -0.28, top: 0.074, standX: 0.18, standY: -0.31 };
+const CHOP_BLOCK = { x: 0.22, y: -0.29, top: 0.074, standX: 0.36, standY: -0.31 };
 /** Koziol przed tartakiem (srodek klody, wysokosc oparcia) i miejsce tracza za nim, w ukladzie modelu. */
 const SAW_HORSE = { x: -0.12, y: -0.44, top: 0.075, sawyerX: -0.12, sawyerY: -0.33 };
 const WOOD_CHIP = 0xd8b07a;
@@ -78,7 +78,7 @@ function limbing(c: WorkCtx, serf: Serf, flag: SerfAt): void {
   if (!walking && p < 0.66) {
     // Odcinane galezie: listki i wiory przy kazdym uderzeniu.
     c.fx.burst(serf.id * 7 + bt.n, bt.age, block.x, top + 0.06, block.z,
-      { kind: 'bit', n: 4, life: 0.5, vy: 0.5, spread: 0.35, gravity: 2.2, size: 0.018, sizeEnd: 0.012, color: bt.n % 2 ? LEAF : WOOD_CHIP, floor: block.y + 0.01 });
+      { kind: 'bit', n: 4, life: 0.5, vy: 0.5, spread: 0.35, gravity: 2.2, size: 0.018, sizeEnd: 0.012, color: bt.n % 2 ? LEAF : WOOD_CHIP, floor: block.y + 0.01, sound: 'chop', soundGain: 0.7 });
   }
   c.figure({
     x, y, z, rot, owner: serf.owner, type: serf.type,
@@ -113,7 +113,7 @@ function chopping(c: WorkCtx, serf: Serf): void {
     if (standing) {
       c.fx.burst(serf.id * 13 + bt.n, bt.age, tree.x - Math.sin(rot) * 0.05, tree.y + 0.1, tree.z - Math.cos(rot) * 0.05,
         { kind: 'bit', n: 5, life: 0.55, vx: -Math.sin(rot) * 0.4, vz: -Math.cos(rot) * 0.4, vy: 0.5, spread: 0.3, gravity: 2.4,
-          size: 0.02, sizeEnd: 0.014, color: WOOD_CHIP, floor: tree.y + 0.01 });
+          size: 0.02, sizeEnd: 0.014, color: WOOD_CHIP, floor: tree.y + 0.01, sound: 'chop' });
     }
     c.figure({
       x: st.x, y: st.y, z: st.z, rot, owner: serf.owner, type: serf.type,
@@ -125,6 +125,7 @@ function chopping(c: WorkCtx, serf: Serf): void {
   }
   // Drzewo pada: obrot wokol podstawy pnia w strone, w ktora patrzy drwal (z przyspieszeniem i lekkim odbiciem).
   c.hideObject(serf.target);
+  c.sfx('wood_crack', tree.x, tree.z, serf.id * 4096 + serf.target);
   const f = Math.min(1, (p - CHOP_END) / (FALL_END - CHOP_END));
   const lie = Math.PI / 2 - 0.06;
   const angle = f < 1 ? lie * f * f : lie - Math.abs(Math.sin((p - FALL_END) * 40)) * 0.06 * Math.max(0, 1 - (p - FALL_END) * 12);
@@ -136,7 +137,7 @@ function chopping(c: WorkCtx, serf: Serf): void {
     const dist = tree.s * 0.55;
     const hx = tree.x + Math.sin(rot) * dist, hz = tree.z + Math.cos(rot) * dist;
     c.fx.burst(serf.id * 17 + 3, age, hx, tree.y + 0.04, hz,
-      { kind: 'bit', n: 8, life: 0.9, vy: 0.6, spread: 0.5, gravity: 1.6, size: 0.026, sizeEnd: 0.014, color: LEAF, floor: tree.y + 0.01 });
+      { kind: 'bit', n: 8, life: 0.9, vy: 0.6, spread: 0.5, gravity: 1.6, size: 0.026, sizeEnd: 0.014, color: LEAF, floor: tree.y + 0.01, sound: 'tree_land' });
     c.fx.burst(serf.id * 17 + 4, age, hx, tree.y + 0.03, hz,
       { kind: 'puff', n: 5, life: 1.0, vy: 0.12, spread: 0.25, spreadY: 0.05, size: 0.06, sizeEnd: 0.14, color: 0xb9a27c, fade: 0.5 });
   }
@@ -204,8 +205,9 @@ function sawmill(c: WorkCtx, b: Building, o: Origin): void {
   const st = c.at(o, SAW_HORSE.sawyerX, SAW_HORSE.sawyerY);
   if (p < SAW_END) {
     c.good(G.LUMBER, log.x, log.y, log.z, c.frontRot, o.sc * 1.1);
-    // Pila tam i z powrotem: obie rece na raczce, wymach od barku.
+    // Pila tam i z powrotem: obie rece na raczce, wymach od barku; pociagniecie pily przy kazdej zmianie kierunku.
     const k = Math.sin(c.time * 7 + b.id);
+    c.sfx('saw', log.x, log.z, b.id * 4096 + Math.floor((c.time * 7 + b.id) / Math.PI + 0.5));
     c.figure({
       x: st.x, y: st.y + Math.abs(k) * 0.006, z: st.z, rot: c.frontRot, owner: b.owner, type: S.SAWYER,
       lean: 0.18, armL: -0.75 + k * 0.4, armR: -0.95 + k * 0.4,

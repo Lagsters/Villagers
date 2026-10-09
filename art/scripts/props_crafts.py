@@ -53,15 +53,20 @@ def crf_flame(m):
 
 
 def crf_pig(m):
-    """Swinia bez nog (nogi to crf_leg w stawach (+-0.024, +-0.045, 0.05)); przod na -Y, brzuch na z ~ 0.04."""
+    """Tulow swini bez nog i glowy (nogi crf_leg w stawach (+-0.024, +-0.045, 0.05), glowa crf_pig_head w stawie
+    szyi (0, -0.055, 0.085)); przod na -Y, brzuch na z ~ 0.04; ogonek zakrecony."""
     m.sphere(0.045, 8, 5, z=0.075, sx=1.0, sy=1.6, sz=0.85, col='pig')
-    m.sphere(0.033, 7, 4, y=-0.075, z=0.084, sy=1.05, col='pig')
-    m.cyl(0.016, 0.022, 7, y=-0.1, z=0.078, rx=R, col='#e48888')
-    for s in (-1, 1):
-        m.cbox(0.02, 0.006, 0.024, x=s * 0.019, y=-0.078, z=0.115, rx=0.7, ry=-s * 0.35, col='#e99a9a')
-        m.cbox(0.006, 0.006, 0.007, x=s * 0.015, y=-0.104, z=0.096, col='black', jitter=0.0)
     m.beam((0, 0.068, 0.09), (0, 0.084, 0.105), 0.008, '#e99a9a')
     m.beam((0, 0.084, 0.105), (0.006, 0.09, 0.094), 0.007, '#e99a9a')
+
+
+def crf_pig_head(m):
+    """Glowa swini z poczatkiem w stawie szyi (gra ja pochyla - rycie, jedzenie, wachanie): ryj, oczy, uszy."""
+    m.sphere(0.033, 7, 4, y=-0.02, z=-0.001, sy=1.05, col='pig')
+    m.cyl(0.016, 0.022, 7, y=-0.045, z=-0.007, rx=R, col='#e48888')
+    for s in (-1, 1):
+        m.cbox(0.02, 0.006, 0.024, x=s * 0.019, y=-0.023, z=0.03, rx=0.7, ry=-s * 0.35, col='#e99a9a')
+        m.cbox(0.006, 0.006, 0.007, x=s * 0.015, y=-0.049, z=0.011, col='black', jitter=0.0)
 
 
 def crf_leg(m):
@@ -204,7 +209,7 @@ def crf_disc(m):
 
 
 BUILDERS = {
-    'crf_sack': crf_sack, 'crf_loaf': crf_loaf, 'crf_peel': crf_peel, 'crf_glow': crf_glow, 'crf_pig': crf_pig,
+    'crf_sack': crf_sack, 'crf_loaf': crf_loaf, 'crf_peel': crf_peel, 'crf_glow': crf_glow, 'crf_pig': crf_pig, 'crf_pig_head': crf_pig_head,
     'crf_leg': crf_leg, 'crf_donkey': crf_donkey, 'crf_donkey_head': crf_donkey_head, 'crf_carcass': crf_carcass,
     'crf_tray': crf_tray, 'crf_basket': crf_basket, 'crf_pail': crf_pail, 'crf_pail_water': crf_pail_water,
     'crf_pail_feed': crf_pail_feed, 'crf_paddle': crf_paddle, 'crf_winch': crf_winch, 'crf_rope': crf_rope,

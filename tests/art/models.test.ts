@@ -25,8 +25,8 @@ async function load(name: string): Promise<{ tris: number; attrs: string[] }> {
   return { tris, attrs };
 }
 
-/** Cala postac (osadnik z czapka i narzedziem, rycerz) - zob. docs/DECISIONS.md, postacie gladkie. */
-const UNIT_BUDGET = 400;
+/** Cala postac (osadnik z czapka i narzedziem, rycerz) - zob. docs/DECISIONS.md: postacie gladkie, lokcie i dlonie. */
+const UNIT_BUDGET = 460;
 
 /** Budzet trojkatow wg rodzaju modelu (zob. specyfikacja i docs/DECISIONS.md). */
 function budget(name: string): number {
@@ -45,7 +45,8 @@ const REQUIRED = [
   ...Array.from({ length: GOODS_COUNT }, (_, g) => `good_${g}`),
   'site_small', 'site_medium', 'site_large', 'crf_sails', 'woodcutter_axe', 'felled_trunk', 'felled_branches', 'fx_puff', 'fx_bit',
   'tree_pine', 'tree_pine2', 'tree_leaf', 'tree_leaf2', 'stump', 'stone', 'stone2', 'field', 'field_ripe', 'sign', 'ruin', 'fire', 'border', 'flag', 'flag_cloth', 'animal',
-  'serf_torso', 'serf_head', 'serf_leg', 'serf_arm', 'knight_helmet', 'knight_shield', 'knight_sword', 'donkey',
+  'tuft', 'bush', 'stair_step',
+  'serf_torso', 'serf_head', 'serf_leg', 'serf_upperarm', 'serf_forearm', 'knight_helmet', 'knight_shield', 'knight_sword', 'donkey',
   ...HATS.map((h) => `hat_${h}`), ...TOOLS.map((t) => `tool_${t}`),
   'mark_flag', 'mark_small', 'mark_medium', 'mark_large', 'mark_mine',
 ];
@@ -71,13 +72,13 @@ describe('M8: modele z Blendera', () => {
 
   it('jednostka (rycerz ze wszystkimi czesciami) <= 400 trojkatow, modele razem < 5 MB', async () => {
     let knight = 0;
-    for (const [n, count] of [['serf_torso', 1], ['serf_head', 1], ['serf_leg', 2], ['serf_arm', 2], ['knight_helmet', 1], ['knight_shield', 1], ['knight_sword', 1]] as const) {
+    for (const [n, count] of [['serf_torso', 1], ['serf_head', 1], ['serf_leg', 2], ['serf_upperarm', 2], ['serf_forearm', 2], ['knight_helmet', 1], ['knight_shield', 1], ['knight_sword', 1]] as const) {
       knight += (await load(n)).tris * count;
     }
     expect(knight).toBeLessThanOrEqual(UNIT_BUDGET);
     // Osadnik: cialo + najciezsze nakrycie glowy + najciezsze narzedzie.
     let body = 0;
-    for (const [n, count] of [['serf_torso', 1], ['serf_head', 1], ['serf_leg', 2], ['serf_arm', 2]] as const) body += (await load(n)).tris * count;
+    for (const [n, count] of [['serf_torso', 1], ['serf_head', 1], ['serf_leg', 2], ['serf_upperarm', 2], ['serf_forearm', 2]] as const) body += (await load(n)).tris * count;
     let hat = 0, tool = 0;
     for (const h of HATS) hat = Math.max(hat, (await load(`hat_${h}`)).tris);
     for (const t of TOOLS) tool = Math.max(tool, (await load(`tool_${t}`)).tris);

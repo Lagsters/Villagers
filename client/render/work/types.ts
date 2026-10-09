@@ -118,6 +118,15 @@ export interface WorkCtx {
   inView(x: number, z: number): boolean;
   /** Ukrywa w tej klatce statyczny obiekt mapy na polu (np. zboze koszone przez rolnika - scena rysuje je sama). */
   hideObject(cell: number): void;
+  /**
+   * Dzwiek w punkcie swiata (client/sfx.ts: SFX). key - numer zdarzenia (np. id osadnika * 64 + numer uderzenia):
+   * to samo zdarzenie gra raz, choc scena wola co klatke; -1 - zawsze.
+   */
+  sfx(name: string, x: number, z: number, key?: number, gain?: number): void;
+  /** Petla dzwieku (client/sfx.ts: LOOPS) pod kluczem - gra, dopoki scena wola co klatke. */
+  sfxLoop(key: number, name: string, x: number, z: number, gain?: number): void;
+  /** Teren rysuje w tej klatce na polu zaorana ziemie (siew, sciernisko) - jak pod polem zboza. */
+  plowCell(cell: number): void;
 
   /** Pracownik budynku, jesli jest w srodku (nie wynosi towaru na flage), albo null. */
   workerInside(b: Building): Serf | null;

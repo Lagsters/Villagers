@@ -9,7 +9,7 @@ import { MAX_ROAD_LEN, findRoadPath, roadAt, validateRoad } from '../../sim/road
 import { STAGE, type Building, type GameEvent, type GameState } from '../../sim/types.ts';
 import { attackersAvailable } from '../../sim/military.ts';
 import { iconUrl } from '../render/assets.ts';
-import { canBuild, canPlaceFlag, neighbor } from '../../sim/world.ts';
+import { canBuild, canPlaceFlag, isRoadPassable, neighbor } from '../../sim/world.ts';
 import type { GameSession } from '../game/session.ts';
 import { el, button, clear } from './dom.ts';
 
@@ -262,7 +262,7 @@ export class Hud {
     const map = s.map;
     const tail = this.roadTail();
     if (n < 0 || this.roadPath.includes(n) || this.roadPath.length > MAX_ROAD_LEN) return false;
-    if (map.owner[n] !== this.me + 1 || map.roads[n] !== 0 || (map.obj[n] !== O.NONE && map.obj[n] !== O.SIGN)) return false;
+    if (map.owner[n] !== this.me + 1 || map.roads[n] !== 0 || !isRoadPassable(map.obj[n])) return false;
     if (map.terrain[n] === T.WATER || map.terrain[n] === T.SNOW) return false;
     if (this.roadPath.length === 1) {
       const f = s.flags[map.objId[tail]];
@@ -291,7 +291,7 @@ export class Hud {
       const used = new Set(this.roadPath);
       const me = this.me + 1;
       const dirs = findPath(map, tail, end, (i) => !used.has(i) && map.owner[i] === me && map.roads[i] === 0
-        && (map.obj[i] === O.NONE || map.obj[i] === O.SIGN) && map.terrain[i] !== T.WATER && map.terrain[i] !== T.SNOW, 4000);
+        && isRoadPassable(map.obj[i]) && map.terrain[i] !== T.WATER && map.terrain[i] !== T.SNOW, 4000);
       if (!dirs) return null;
       cells = this.roadPath.slice();
       for (const d of dirs) cells.push(neighbor(map, cells[cells.length - 1], d));

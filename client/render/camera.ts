@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 
 const PITCH_DEFAULT = THREE.MathUtils.degToRad(38);
-const PITCH_MIN = THREE.MathUtils.degToRad(22);
+/** Najnizej 10 stopni nad horyzontem - widok niemal z poziomu ziemi, z krzywizna (client/render/curve.ts). */
+const PITCH_MIN = THREE.MathUtils.degToRad(10);
 const PITCH_MAX = THREE.MathUtils.degToRad(80);
 const DIST = 80;
 const ZOOM_MIN = 0.35;

@@ -7,7 +7,7 @@
  * reki (z narzedziem) na +x. Katy: wymach (Rx) ujemny = do przodu; odwiedzenie na bok dodatnie = na zewnatrz.
  */
 import * as THREE from 'three';
-import { S } from '../../sim/defs.ts';
+import { G, S } from '../../sim/defs.ts';
 import { InstancedLayer } from './instanced.ts';
 
 export const HIP = 0.14;
@@ -16,6 +16,8 @@ export const SHOULDER = 0.31;
 export const ARM_X = 0.078;
 /** Dlon wzgledem barku (jak HAND w art/scripts/units.py). */
 export const HAND = -0.15;
+/** Lokiec wzgledem barku (jak ELBOW w art/scripts/units.py). */
+export const ELBOW = -0.078;
 /** Szyja: os pochylania glowy (jak NECK w art/scripts/units.py). */
 export const NECK = 0.315;
 /** Dlugosc nogi od biodra do podeszwy. */
@@ -24,6 +26,73 @@ export const LEG = 0.14;
 export const UNIT_SCALE = 0.85;
 /** Wysokosc towaru niesionego na glowie (jednostki modelu). */
 export const CARRY_Y = 0.47;
+
+/**
+ * Sposob niesienia towaru (zalezy od jego ciezaru i ksztaltu): na glowie (lekkie), na prawym ramieniu (dlugie: pnie,
+ * deski), oburacz przed soba (ciezkie i zwarte: kamien, ruda, wegiel, stal, beczka, swinia), w prawej rece u boku
+ * (wiadro z woda).
+ */
+export type CarryStyle = 'head' | 'shoulder' | 'arms' | 'hand';
+const SHOULDER_GOODS: readonly number[] = [G.LUMBER, G.PLANK];
+const ARMS_GOODS: readonly number[] = [G.PIG, G.BEER, G.STONE, G.IRON_ORE, G.STEEL, G.COAL, G.GOLD_ORE];
+
+export function carryStyle(g: number): CarryStyle {
+  if (SHOULDER_GOODS.includes(g)) return 'shoulder';
+  if (ARMS_GOODS.includes(g)) return 'arms';
+  return g === G.WATER ? 'hand' : 'head';
+}
+
+/**
+ * Rece (i tulow) postaci niosacej towar sposobem st; swing - wymach do kroku (rece wolne go zachowuja). Na glowie
+ * obie rece w gorze, na ramieniu prawa trzyma pien, lewa macha; oburacz - rece przed soba, tulow odchylony do tylu;
+ * wiadro - prawa reka w dol, odsunieta, tulow przechylony w druga strone.
+ */
+export function carryArms(p: Pose, st: CarryStyle, swing = 0): void {
+  if (st === 'head') {
+    // Rece w gorze, lekko zgiete w lokciach - dlonie przytrzymuja towar na glowie.
+    p.armL = p.armR = -2.9;
+    p.elbowL = p.elbowR = 0.5;
+  } else if (st === 'shoulder') {
+    // Prawa reka zgieta, dlon na pniu nad barkiem; lewa macha do kroku.
+    p.armR = -1.9;
+    p.elbowR = 1.4;
+    p.armROut = 0.32;
+    swingArm(p, -1, swing);
+    p.tilt = (p.tilt ?? 0) - 0.05;
+  } else if (st === 'arms') {
+    // Ramiona w dol, przedramiona poziomo przed piersia - towar na przedramionach i w dloniach.
+    p.armL = p.armR = -0.5 + swing * 0.1;
+    p.elbowL = p.elbowR = 1.1;
+    p.armLOut = p.armROut = 0.12;
+    p.lean = (p.lean ?? 0) - 0.08;
+  } else {
+    p.armR = -swing * 0.25;
+    p.elbowR = 0.08;
+    p.armROut = 0.2;
+    swingArm(p, -1, swing);
+    p.tilt = (p.tilt ?? 0) - 0.07;
+  }
+}
+
+/** Reka wolna przy chodzie (side 1 - prawa, -1 - lewa): wymach i lokiec zgiety mocniej, gdy reka idzie do przodu. */
+export function swingArm(p: Pose, side: number, swing: number): void {
+  const elbow = 0.18 + Math.max(0, -swing) * 0.5;
+  if (side > 0) {
+    p.armR = swing;
+    p.elbowR = elbow;
+  } else {
+    p.armL = swing;
+    p.elbowL = elbow;
+  }
+}
+
+/** Polozenie niesionego towaru (macierz instancji) wzgledem stawow postaci narysowanej z towarem sposobem st. */
+export function carryMatrix(out: THREE.Matrix4, f: RigFrames, st: CarryStyle): THREE.Matrix4 {
+  if (st === 'shoulder') return out.copy(f.torso).multiply(m1.makeTranslation(ARM_X + 0.01, SHOULDER + 0.006, 0)).multiply(m1.makeRotationY(Math.PI / 2));
+  if (st === 'arms') return out.copy(f.torso).multiply(m1.makeTranslation(0, SHOULDER - 0.12, 0.1));
+  if (st === 'hand') return out.copy(f.armR).multiply(m1.makeTranslation(0, HAND - 0.11, 0));
+  return out.copy(f.root).multiply(m1.makeTranslation(0, CARRY_Y, 0));
+}
 
 /** Wyglad zawodow: nakrycie glowy (hat_*) i narzedzie w prawej rece (tool_*), wg typu osadnika. */
 export const HATS = ['hair', 'cap', 'straw', 'hood', 'feather', 'miner', 'brim', 'miller', 'chef', 'leather', 'explorer', 'sailor', 'kettle', 'beret', 'mask',
@@ -79,6 +148,9 @@ export interface Pose {
   /** wymach rak (Rx; ujemny = do przodu, -PI/2 = poziomo przed soba, -PI = pionowo w gore) */
   armL?: number;
   armR?: number;
+  /** zgiecie lokcia (+ = przedramie do przodu, ku piersi); 0 - reka prosta */
+  elbowL?: number;
+  elbowR?: number;
   /** odwiedzenie rak na boki (+ = na zewnatrz) */
   armLOut?: number;
   armROut?: number;
@@ -110,7 +182,7 @@ export interface RigFrames {
   torso: THREE.Matrix4;
   /** glowa (uklad jak model glowy: poczatek na ziemi) */
   head: THREE.Matrix4;
-  /** reka prawa / lewa: poczatek w barku, os reki w dol (dlon w y = HAND) */
+  /** przedramie prawe / lewe: uklad barku obrocony o zgiecie lokcia - dlon w (0, HAND, 0) */
   armR: THREE.Matrix4;
   armL: THREE.Matrix4;
 }
@@ -128,7 +200,8 @@ export class Rig {
   readonly torsoL: InstancedLayer;
   readonly headL: InstancedLayer;
   readonly legL: InstancedLayer;
-  readonly armL: InstancedLayer;
+  readonly upperArm: InstancedLayer;
+  readonly foreArm: InstancedLayer;
   readonly helmet: InstancedLayer;
   readonly shield: InstancedLayer;
   readonly sword: InstancedLayer;
@@ -144,7 +217,8 @@ export class Rig {
     this.torsoL = layer('serf_torso', 512, true);
     this.headL = layer('serf_head', 512);
     this.legL = layer('serf_leg', 1024);
-    this.armL = layer('serf_arm', 1024, true); // rekawy koszulki w kolorze gracza
+    this.upperArm = layer('serf_upperarm', 1024, true); // rekawy koszulki w kolorze gracza
+    this.foreArm = layer('serf_forearm', 1024);
     this.helmet = layer('knight_helmet', 64);
     this.shield = layer('knight_shield', 64);
     this.sword = layer('knight_sword', 64);
@@ -154,7 +228,7 @@ export class Rig {
   }
 
   layers(): InstancedLayer[] {
-    return [this.torsoL, this.headL, this.legL, this.armL, this.helmet, this.shield, this.sword, ...this.hats.values()];
+    return [this.torsoL, this.headL, this.legL, this.upperArm, this.foreArm, this.helmet, this.shield, this.sword, ...this.hats.values()];
   }
 
   private color(owner: number): THREE.Color {
@@ -189,11 +263,17 @@ export class Rig {
       f.head.multiply(m1.makeTranslation(0, -NECK, 0));
     }
     this.headL.pushMatrix(f.head);
-    // Rece: bark -> obrot w pionie (yaw) -> odwiedzenie (Rz) -> wymach (Rx).
-    this.arm(f.armR, f.torso, ARM_X, p.armRYaw ?? 0, p.armROut ?? 0, p.armR ?? 0);
-    this.arm(f.armL, f.torso, -ARM_X, p.armLYaw ?? 0, -(p.armLOut ?? 0), p.armL ?? 0);
-    this.armL.color(this.armL.pushMatrix(f.armR), c.r, c.g, c.b);
-    this.armL.color(this.armL.pushMatrix(f.armL), c.r, c.g, c.b);
+    // Rece: bark -> obrot w pionie (yaw) -> odwiedzenie (Rz) -> wymach (Rx); ramie w ukladzie barku, przedramie
+    // z dlonia obrocone wokol lokcia.
+    for (const [out, x, yaw, abd, swing, elbow] of [
+      [f.armR, ARM_X, p.armRYaw ?? 0, p.armROut ?? 0, p.armR ?? 0, p.elbowR ?? 0],
+      [f.armL, -ARM_X, p.armLYaw ?? 0, -(p.armLOut ?? 0), p.armL ?? 0, p.elbowL ?? 0],
+    ] as const) {
+      this.arm(out, f.torso, x, yaw, abd, swing);
+      this.upperArm.color(this.upperArm.pushMatrix(out), c.r, c.g, c.b);
+      if (elbow) out.multiply(m1.makeTranslation(0, ELBOW, 0)).multiply(m1.makeRotationX(-elbow)).multiply(m1.makeTranslation(0, -ELBOW, 0));
+      this.foreArm.pushMatrix(out);
+    }
     const look = LOOK[p.type];
     if (this.details) {
       const hat = look?.[0];

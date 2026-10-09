@@ -214,7 +214,7 @@ function chimneySmoke(c: WorkCtx, o: Origin, b: Building, x: number, y: number, 
   if (sparks > 0) {
     c.fx.stream(fxKey(b, 1), p.x, p.y, p.z, {
       kind: 'bit', n: 6, life: 1.0, vy: 0.42, spread: 0.1, spreadY: 0.12, gravity: -0.12, size: 0.017, sizeEnd: 0.005,
-      color: 0xffd060, colorEnd: 0xff4a12, jitter: 0.015, sway: 0.02,
+      color: 0xffd060, colorEnd: 0xff4a12, jitter: 0.015, sway: 0.02, sound: 'fire', soundGain: 0.5,
     }, sparks);
   }
 }
@@ -369,7 +369,7 @@ function mine(c: WorkCtx, b: Building, o: Origin): void {
     const top = c.ground(pile.x, pile.z) + MINE.pileTop * o.sc;
     c.fx.stream(fxKey(b, 2), lip.x, lip.y, lip.z, {
       kind: 'bit', n: 9, life: 0.42, vx: d.x * 0.25, vz: d.z * 0.25, vy: -0.05, spread: 0.08, spreadY: 0.05, gravity: 2.4,
-      size: 0.024, sizeEnd: 0.018, color: ore, jitter: 0.018, floor: top - 0.01,
+      size: 0.024, sizeEnd: 0.018, color: ore, jitter: 0.018, floor: top - 0.01, sound: 'rubble',
     });
     c.fx.stream(fxKey(b, 3), pile.x, top, pile.z, {
       kind: 'puff', n: 5, life: 1.1, vy: 0.1, spread: 0.07, spreadY: 0.03, size: 0.03, sizeEnd: 0.1,
@@ -477,7 +477,7 @@ function steelworks(c: WorkCtx, b: Building, o: Origin): void {
     const d = modelDir(0, -1, 0);
     c.fx.stream(fxKey(b, 7), mp.x, mp.y, mp.z, {
       kind: 'bit', n: 4, life: 0.5, vx: d.x * 0.25, vz: d.z * 0.25, vy: 0.35, spread: 0.15, gravity: 1.5, size: 0.012, sizeEnd: 0.004,
-      color: 0xffe080, colorEnd: 0xff5a18, jitter: 0.02,
+      color: 0xffe080, colorEnd: 0xff5a18, jitter: 0.02, sound: 'fire', soundGain: 0.6,
     });
   }
   if (u < T.pull) {
@@ -582,7 +582,7 @@ function steelworks(c: WorkCtx, b: Building, o: Origin): void {
       slab(c, pB, mold, 0.017, 0.017, 1, 0, 0, mixHex(0xff9a30, 0xffd868, 0.5 + 0.5 * Math.sin(c.time * 23)));
       c.fx.stream(fxKey(b, 6), mold.x, mold.y + 0.01, mold.z, {
         kind: 'bit', n: 6, life: 0.32, vy: 0.55, spread: 0.32, spreadY: 0.15, gravity: 3.2, size: 0.011, sizeEnd: 0.005,
-        color: 0xffe080, colorEnd: 0xff5a18, floor: moldY,
+        color: 0xffe080, colorEnd: 0xff5a18, floor: moldY, sound: 'pour', soundGain: 0.4,
       });
     }
   }
@@ -807,6 +807,7 @@ function smithy(c: WorkCtx, b: Building, o: Origin, Y: Smithy, type: number, u: 
       dir = Math.atan2(hit.x - bx, hit.z - bz);
       by = anvilTop + 0.006;
       blankAt(c, bx, by, bz, dir, 0, blankScale, ramp(HEAT, heat));
+      if (bt.age >= 0 && bt.age < 0.12) c.sfx('anvil', hit.x, hit.z, fxKey(b, 8) * 64 + (bt.n & 63));
       // Iskry przy kazdym uderzeniu - tym mniej, im chlodniejszy pret.
       if (heat > 0.3) {
         c.fx.burst(fxKey(b, 8) * 64 + (bt.n & 63), bt.age, hit.x, by + 0.008, hit.z, {
@@ -826,7 +827,7 @@ function smithy(c: WorkCtx, b: Building, o: Origin, Y: Smithy, type: number, u: 
   const age = (u - T.dip - 0.008) * sec;
   c.fx.burst(fxKey(b, 9), age, w.x, wy + 0.01, w.z, {
     kind: 'puff', n: 9, life: 1.5, vy: 0.32, spread: 0.07, spreadY: 0.1, gravity: -0.06, size: 0.04, sizeEnd: 0.15,
-    color: STEAM, colorEnd: 0xd8dde2, jitter: 0.03, sway: 0.03, fade: 0.4,
+    color: STEAM, colorEnd: 0xd8dde2, jitter: 0.03, sway: 0.03, fade: 0.4, sound: 'hiss',
   });
   if (mode === 'quench' && u > T.dip + 0.008 && u < T.lift - 0.02) {
     c.fx.stream(fxKey(b, 10), w.x, wy + 0.01, w.z, {
@@ -885,6 +886,7 @@ function weaponsmith(c: WorkCtx, b: Building, o: Origin): void {
     const p = c.at(o, Fg.x, Fg.y, Fg.z + 0.01, pC);
     c.fx.stream(fxKey(b, 12), p.x, p.y, p.z, {
       kind: 'bit', n: 4, life: 0.6, vy: 0.35, spread: 0.08, gravity: -0.05, size: 0.01, sizeEnd: 0.003, color: 0xffd060, colorEnd: 0xff4a12, jitter: 0.04,
+      sound: 'fire', soundGain: 0.6,
     });
   }
   if (smithy(c, b, o, ARMORY, S.WEAPONSMITH, u)) {
@@ -983,7 +985,7 @@ function mint(c: WorkCtx, b: Building, o: Origin): void {
   for (const hit of MINT_HITS) {
     const age = (f - hit) * coinSec;
     c.fx.burst(fxKey(b, 14) + (hit > 0.5 ? 1 : 0), age, flash.x, flash.y, flash.z, {
-      kind: 'puff', n: 1, life: 0.2, size: 0.1, sizeEnd: 0.01, color: 0xfff8d0,
+      kind: 'puff', n: 1, life: 0.2, size: 0.1, sizeEnd: 0.01, color: 0xfff8d0, sound: 'stamp',
     });
     c.fx.burst(fxKey(b, 16) + (hit > 0.5 ? 1 : 0), age, flash.x, flash.y, flash.z, {
       kind: 'bit', n: 7, life: 0.4, vy: 0.45, spread: 0.36, spreadY: 0.12, gravity: 2.6, size: 0.012, sizeEnd: 0.004,
@@ -1222,7 +1224,7 @@ function shipyard(c: WorkCtx, b: Building, o: Origin): void {
     const zs = STRAKES[k].z + PLANK_H * 0.6;
     const sp = boatAt(c, o, x - 0.03, BOAT.y + side * (STRAKES[k].w + 0.012), zs, pC);
     c.fx.burst(fxKey(b, 18) * 64 + (bt.n & 63), bt.age, sp.x, sp.y, sp.z, {
-      kind: 'bit', n: 3, life: 0.4, vy: 0.35, spread: 0.25, gravity: 2.5, size: 0.01, sizeEnd: 0.007, color: 0xe8cf9c, floor: o.y + BOAT_LIFT.v,
+      kind: 'bit', n: 3, life: 0.4, vy: 0.35, spread: 0.25, gravity: 2.5, size: 0.01, sizeEnd: 0.007, color: 0xe8cf9c, floor: o.y + BOAT_LIFT.v, sound: 'hammer_wood',
     });
   }
 }
@@ -1276,7 +1278,7 @@ function charburner(c: WorkCtx, b: Building, o: Origin): void {
   const dense = 0.3 + 0.7 * u;
   c.fx.stream(fxKey(b, 20), top.x, top.y, top.z, {
     kind: 'puff', n: 12, life: 3.4, vx: 0.05, vy: 0.15, vz: -0.03, spread: 0.025, spreadY: 0.02, gravity: -0.01,
-    size: 0.05 + 0.03 * u, sizeEnd: 0.15 + 0.12 * u, color: mixHex(0xc8c4bc, 0x6e6a66, u), colorEnd: 0xcac8c4, jitter: 0.015, sway: 0.035, fade: 0.25,
+    size: 0.05 + 0.03 * u, sizeEnd: 0.15 + 0.12 * u, color: mixHex(0xc8c4bc, 0x6e6a66, u), colorEnd: 0xcac8c4, jitter: 0.015, sway: 0.035, fade: 0.25, sound: 'fire', soundGain: 0.4,
   }, dense);
   for (let i = 0; i < KILN_VENTS.length; i++) {
     const a = KILN_VENTS[i];
@@ -1361,12 +1363,12 @@ function charburner(c: WorkCtx, b: Building, o: Origin): void {
     for (let i = 0; i < KILN_THROWS.length; i++) {
       c.fx.burst(fxKey(b, 24 + i), (gf - KILN_THROWS[i][1]) * sec, from.x, from.y, from.z, {
         kind: 'bit', n: 7, life: 0.55, vx: (hit.x - from.x) * 1.7, vz: (hit.z - from.z) * 1.7, vy: 0.3, spread: 0.12, gravity: 2.4,
-        size: 0.022, sizeEnd: 0.016, color: SOIL, floor: hit.y,
+        size: 0.022, sizeEnd: 0.016, color: SOIL, floor: hit.y, sound: 'dirt',
       });
     }
     for (let i = 0; i < KILN_PATS.length; i++) {
       c.fx.burst(fxKey(b, 26 + i), (gf - KILN_PATS[i]) * sec, hit.x, hit.y, hit.z, {
-        kind: 'puff', n: 3, life: 0.6, vy: 0.08, spread: 0.06, size: 0.02, sizeEnd: 0.06, color: 0x8a7458, colorEnd: 0xb0a088, fade: 0.5,
+        kind: 'puff', n: 3, life: 0.6, vy: 0.08, spread: 0.06, size: 0.02, sizeEnd: 0.06, color: 0x8a7458, colorEnd: 0xb0a088, fade: 0.5, sound: 'slap', soundGain: 0.8,
       });
     }
   }

@@ -3,6 +3,8 @@ import type { MapData } from '../../sim/mapgen.ts';
 
 export const ROW_H = Math.sqrt(3) / 2;
 export const H_SCALE = 0.22;
+/** Skala przesuniecia srodka drogi omijajacej drzewo w teksturze (client/render/cells.ts): bajt = 128 + BEND_K * v. */
+export const BEND_K = 300;
 
 export function vx(x: number, y: number): number {
   return x + (y & 1) * 0.5;

@@ -3,7 +3,8 @@ import { B, O, T } from '../../sim/defs.ts';
 import { DIR_E, DIR_NW, DIR_SE, DIR_W, spiral } from '../../sim/grid.ts';
 import { step } from '../../sim/step.ts';
 import type { GameState } from '../../sim/types.ts';
-import { canBuild, neighbor } from '../../sim/world.ts';
+import { canBuild, canPlaceFlag, neighbor } from '../../sim/world.ts';
+import { findRoadPath } from '../../sim/roads.ts';
 import { newGame } from './helpers.ts';
 
 /** Plaski, wolny, wlasny teren trawy w promieniu r wokol pola obok zamku gracza 0. */
@@ -51,20 +52,38 @@ describe('zasady stawiania budynkow (jak w pierwowzorze)', () => {
     expect(canBuild(s, 0, three, B.SAWMILL)).toBe(true);
   });
 
-  it('chata nie wymaga plaskiego terenu ani wolnych sasiadow', () => {
+  it('chata nie wymaga wolnych sasiadow, ale stoi tylko na lagodnym stoku (sasiad najwyzej o 1 wyzej albo nizej)', () => {
     const { s, a } = flatArea();
-    s.map.height[at(s, a, DIR_E)] = 20;
     s.map.obj[at(s, a, DIR_W)] = O.TREE;
+    s.map.height[at(s, a, DIR_E)] = 11;
+    s.map.height[at(s, a, DIR_W)] = 9;
     expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(true);
+    s.map.height[at(s, a, DIR_E)] = 12;
+    expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(false);
+    s.map.height[at(s, a, DIR_E)] = 20;
     expect(canBuild(s, 0, a, B.SAWMILL)).toBe(true); // roznica 10 tylko na sasiedzie, drugi pierscien plaski
     s.map.height[at(s, a, DIR_E, 2)] = 20;
     expect(canBuild(s, 0, a, B.SAWMILL)).toBe(false); // drugi pierscien: roznica >= 9
-    expect(canBuild(s, 0, a, B.WOODCUTTER)).toBe(true);
   });
 
   it('mlyn jest chata', () => {
     const { s, a } = flatArea();
     step(s, [{ type: 'build', player: 0, pos: a, kind: B.WOODCUTTER }]);
     expect(canBuild(s, 0, at(s, a, DIR_E, 2), B.MILL)).toBe(true);
+  });
+});
+
+describe('drogi przez drzewa', () => {
+  it('droga moze przejsc przez pole z drzewem, drzewo zostaje; flagi na drzewie postawic sie nie da', () => {
+    const s = newGame(2, 64, 'TEST');
+    const m = s.map;
+    const castle = s.buildings[s.players[0].castle]!;
+    const a = s.flags[castle.flag]!.pos;
+    const t = neighbor(m, neighbor(m, a, DIR_E), DIR_E);
+    const end = neighbor(m, neighbor(m, t, DIR_E), DIR_E);
+    for (const c of [neighbor(m, a, DIR_E), t, neighbor(m, t, DIR_E), end]) { m.obj[c] = O.NONE; m.terrain[c] = T.GRASS; m.height[c] = m.height[a]; }
+    m.obj[t] = O.TREE;
+    expect(findRoadPath(s, 0, a, end)).not.toBeNull();
+    expect(canPlaceFlag(s, 0, t)).toBe(false);
   });
 });

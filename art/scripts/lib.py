@@ -28,6 +28,9 @@ PALETTE = {
     'roof_red': '#b0493a', 'roof_brown': '#7e5436', 'roof_green': '#5f7f3e', 'roof_blue': '#4f6a8f',
     'roof_slate': '#5c6470', 'thatch': '#c9a45a',
     'stone': '#a7a39c', 'stone_dark': '#7d7a74', 'stone_light': '#c4c0b8',
+    # Cokol budynkow i stopien przy drzwiach; podmurowka (gra, FOUNDATION_FRAGMENT w client/render/scene.ts)
+    # i stopnie schodow (stone_step) maja kolor cokolu przyciemnionego przy ziemi przez ao budynkow (x 0.67).
+    'plinth': '#a39e95', 'stone_step': '#88847c',
     'metal': '#8e959e', 'metal_dark': '#5a6068', 'gold': '#e8b83a', 'copper': '#b87333',
     'coal': '#2b2b2e', 'iron_ore': '#8a4f3d', 'gold_ore': '#c9a54a',
     'leaf': '#5b8f3a', 'leaf_dark': '#3f6f2e', 'pine': '#2f5f3e', 'pine_dark': '#244a31',
@@ -39,8 +42,8 @@ PALETTE = {
     'roof_red_dark': '#8e3a2e', 'roof_brown_dark': '#62412a', 'roof_green_dark': '#4a6630', 'roof_blue_dark': '#3d5474',
     'roof_slate_dark': '#474e58', 'thatch_dark': '#a8863f', 'glass': '#34465a', 'shutter': '#4f7a52',
     'brick': '#a2553f', 'brick_dark': '#7c3f2f',
-    'terracotta': '#b8532c', 'terracotta_dark': '#86391c', 'whitewash': '#ece7dc', 'plank': '#b35a2b', 'plank_dark': '#7a3a1b',
-    'log_o': '#a55a2f', 'rock': '#8d8a84',
+    'terracotta': '#b8532c', 'terracotta_dark': '#86391c', 'whitewash': '#ece7dc', 'plank': '#b48a5c', 'plank_dark': '#7e5b3b',
+    'log_o': '#a77a50', 'rock': '#8d8a84',
     'tile_dark': '#94401f', 'stone_pale': '#c9ced6', 'tarpaper': '#4f4b47', 'tarpaper_dark': '#36322f',
     'bread': '#c98a3d', 'fish': '#8fb3cc', 'meat': '#b5483c', 'flour': '#f5f1e6', 'beer': '#d9a441',
 }
@@ -148,6 +151,10 @@ class Model:
     def __init__(self, name):
         self.name = name
         self.parts = []
+        # Drzwi budynku (x, y, z progu, szerokosc) w ukladzie modelu przed obrotem - na przedniej scianie (-Y).
+        self.doors = []
+        # Czesci kladace sie calym spodem na terenie (Model.yard): kazdy wierzcholek na wysokosci terenu pod nim.
+        self.draped = set()
 
     def _add(self, bm, col, jitter=0.04, cols=None):
         """Czesc z bmesha; cols = kolory wg material_index scian (malowany wzor), cols[0] to kolor bazowy."""
@@ -440,8 +447,9 @@ class Model:
         Podworko (zob. YARD_NEAR): warstwy UV kazdej czesci - 'Yard': u = waga podworka, v = 1 na spodzie
         konstrukcji (gra wydluza go w dol do nizszego terenu); 'YardAt': punkt (x, z ukladu modelu w grze po obrocie
         rotate_deg), w ktorym gra bierze wysokosc terenu. Zwarty sprzet (pieniek, beczka, stos desek) bierze ja ze
-        srodka i przesuwa sie caly, dluga czesc (zerdz plotu, belka) wierzcholek po wierzcholku - kladzie sie na
-        stoku. Zwraca obrys konstrukcji [(x0, y0, x1, y1), ...] w ukladzie modelu przed obrotem.
+        srodka i przesuwa sie caly, dluga czesc (zerdz plotu, belka) punkt po punkcie swojej osi - kladzie sie na
+        stoku, czesc z self.draped (podloga placu budowy) - kazdym wierzcholkiem na terenie. Zwraca obrys konstrukcji
+        [(x0, y0, x1, y1), ...] w ukladzie modelu przed obrotem.
         Eksporter glTF odwraca v (v' = 1 - v), stad zapis 1 - v.
         """
         boxes = []
@@ -449,7 +457,8 @@ class Model:
             vs = [v.co for v in p.data.vertices]
             boxes.append((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs),
                           max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
-        struct = [b[2] < 0.02 and (b[5] - b[2] > YARD_TALL or (b[3] - b[0]) * (b[4] - b[1]) > YARD_AREA) for b in boxes]
+        struct = [p.name not in self.draped and b[2] < 0.02 and (b[5] - b[2] > YARD_TALL or (b[3] - b[0]) * (b[4] - b[1]) > YARD_AREA)
+                  for p, b in zip(self.parts, boxes)]
         rects = [(b[0], b[1], b[3], b[4]) for b, s in zip(boxes, struct) if s]
         ca, sa = math.cos(math.radians(rotate_deg)), math.sin(math.radians(rotate_deg))
         for p, b, s in zip(self.parts, boxes, struct):
@@ -465,11 +474,18 @@ class Model:
             w_c = yard_weight(rects, cx, cy) if not s and b[2] < YARD_LOW else 0.0
             for loop in me.loops:
                 co = me.vertices[loop.vertex_index].co
-                if s:
+                ox, oy = co.x, co.y
+                if p.name in self.draped:
+                    w, base = 1.0, 0.0
+                elif s:
                     w, base = 0.0, 1.0 if co.z < 0.01 else 0.0
                 else:
-                    w, base = (w_c if rigid else yard_weight(rects, co.x, co.y)) if b[2] < YARD_LOW else 0.0, 0.0
-                ax, ay = (cx, cy) if rigid and not s else (co.x, co.y)
+                    # Dluga czesc (bal, zerdz plotu) idzie za terenem tylko wzdluz swojej osi: punkt na osi czesci
+                    # (srodek przekroju), wiec przekroj sie nie odksztalca - bal na stoku zostaje okragly.
+                    if not rigid:
+                        ox, oy = (co.x, cy) if b[3] - b[0] >= b[4] - b[1] else (cx, co.y)
+                    w, base = (w_c if rigid else yard_weight(rects, ox, oy)) if b[2] < YARD_LOW else 0.0, 0.0
+                ax, ay = (cx, cy) if rigid and not s and p.name not in self.draped else (ox, oy)
                 lay.data[loop.index].uv = (w, 1.0 - base)
                 # Uklad gry: x = x Blendera, z = -y (po obrocie); v zapisane jako 1 - z.
                 at.data[loop.index].uv = (ax * ca - ay * sa, 1.0 + (ax * sa + ay * ca))
@@ -597,13 +613,18 @@ def selected_names(all_names):
 YARDS = os.path.join(MODELS, 'yards.json')
 
 
-def save_yard(name, rects):
-    """Obrys konstrukcji modelu do art/models/yards.json (sceny pracy licza z niego wysokosc podworka)."""
+def save_yard(name, rects, doors):
+    """
+    Obrys konstrukcji modelu i glowne drzwi do art/models/yards.json: sceny pracy licza z obrysu wysokosc podworka,
+    gra stawia przed drzwiami schody (gdy prog jest nad terenem) i prowadzi do nich sciezke od flagi. Glowne drzwi to
+    te najblizej przodu modelu (najmniejsze y), przy remisie najblizej osi.
+    """
     data = {}
     if os.path.exists(YARDS):
         with open(YARDS, encoding='utf-8') as f:
             data = json.load(f)
-    data[name] = rects
+    door = min(doors, key=lambda d: (round(d[1], 3), abs(d[0]))) if doors else None
+    data[name] = {'rects': rects, 'door': [round(c, 4) for c in door] if door else None}
     rows = [f'  {json.dumps(k)}: {json.dumps(v)}' for k, v in sorted(data.items(), key=lambda kv: (len(kv[0]), kv[0]))]
     with open(YARDS, 'w', encoding='utf-8', newline='\n') as f:
         f.write('{\n' + ',\n'.join(rows) + '\n}\n')
@@ -618,7 +639,7 @@ def build(builders, icons=True, ao=0.0, smooth=SMOOTH_ANGLE, yard=None):
         m = Model(name)
         rot = builders[name](m) or 0.0
         if yard and yard(name):
-            save_yard(name, m.yard(rot))
+            save_yard(name, m.yard(rot), m.doors)
         ob = m.finish(rot, ao=ao, smooth=smooth)
         export(ob)
         render_preview(ob, icon=96 if icons else 0)

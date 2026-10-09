@@ -54,6 +54,15 @@ export function isClearObj(o: number): boolean {
   return o === O.NONE || o === O.SIGN;
 }
 
+/**
+ * Czy droga moze przejsc przez pole z obiektem o: wolne pole albo drzewo (takze sadzonka i pieniek) - drzewo
+ * zostaje, a droga omija je w grze lagodnym lukiem (client/render/roadBend.ts). Flagi na takim polu nie da sie
+ * postawic (canPlaceFlag wymaga wolnego pola).
+ */
+export function isRoadPassable(o: number): boolean {
+  return isClearObj(o) || (o >= O.SAPLING1 && o <= O.STUMP);
+}
+
 export function ownedBy(map: MapData, idx: number, p: number): boolean {
   return map.owner[idx] === p + 1;
 }
@@ -85,11 +94,19 @@ export function isBigSize(size: number): boolean {
 
 /** Najwieksza dopuszczalna roznica wysokosci w drugim pierscieniu pod duzy budynek (jak w pierwowzorze). */
 const BIG_HEIGHT_SPAN = 9;
+/**
+ * Najwieksza roznica wysokosci miedzy polem chaty a kazdym z 6 sasiadow. Chata nie ma kopacza (teren nie jest
+ * wyrownywany), wiec na bardziej stromym stoku stalaby na wysokiej podmurowce (uwaga wlasciciela - odstepstwo
+ * od pierwowzoru, w ktorym chata nie ma warunku wysokosci). Kopalnie bez limitu: w gorach sasiednie pola roznia sie
+ * zwykle o 2-3, a limit 1 albo 2 zostawia botom za malo miejsc na kopalnie (partie bez zwyciezcy).
+ */
+const HUT_HEIGHT_STEP = 1;
 
 /**
  * Czy mozna postawic budynek danego rodzaju (zasady pierwowzoru):
  * - pole i 6 sasiadow wlasne, na polu brak drogi i przeszkod, flaga na SE stoi (wlasna, wolna) albo da sie ja postawic;
- * - chata: trawa na polu, sasiedzi nie w wodzie - bez warunkow co do sasiednich budynkow i wysokosci;
+ * - chata: trawa na polu, sasiedzi nie w wodzie, zaden nie wyzej ani nizej o wiecej niz HUT_HEIGHT_STEP - bez
+ *   warunkow co do sasiednich budynkow;
  * - kopalnia: gory na polu;
  * - dom i duzy budynek: trawa wokol, na 6 sasiednich polach brak budynkow (drzewa i flagi nie przeszkadzaja),
  *   w drugim pierscieniu brak innego domu/duzego budynku i roznica wysokosci < 9 (teren zostanie wyrownany).
@@ -112,6 +129,7 @@ export function canBuild(s: GameState, p: number, pos: number, kind: number): bo
     if (j < 0 || !ownedBy(map, j, p)) return false;
     const tj = map.terrain[j];
     if (tj === T.WATER || tj === T.SNOW) return false;
+    if (def.size === SIZE.SMALL && Math.abs(map.height[j] - map.height[pos]) > HUT_HEIGHT_STEP) return false;
     if (big) {
       if (tj !== T.GRASS && d !== DIR_SE) return false;
       const o = map.obj[j];

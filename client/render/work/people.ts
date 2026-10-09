@@ -18,7 +18,7 @@ import { CS, bestSlot } from '../../../sim/transport.ts';
 import { FLAG_SLOTS, STAGE, type Building, type GameEvent, type GameState, type Road, type Serf } from '../../../sim/types.ts';
 import { nb } from '../../../sim/world.ts';
 import { objectSpot } from '../mapObjects.ts';
-import { HAND, HIP, Rig, UNIT_SCALE, type Pose, type RigFrames } from '../rig.ts';
+import { HAND, HIP, Rig, UNIT_SCALE, carryArms, carryStyle, swingArm, type Pose, type RigFrames } from '../rig.ts';
 import type { Origin, Scenes, SerfAt, Vec3, WorkCtx } from './types.ts';
 
 // ---------------------------------------------------------------- pomocnicze
@@ -194,6 +194,12 @@ function goodInHands(c: WorkCtx, g: number, f: RigFrames, rot: number): void {
   c.good(g, m.x, m.y - 0.035, m.z, rot, UNIT_SCALE);
 }
 
+function hash(a: number, b: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 13), 0x27d4eb2d);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
 function basePose(serf: Serf, x: number, y: number, z: number, rot: number): Pose {
   return { x, y, z, rot, owner: serf.owner, type: serf.type, tool: null };
 }
@@ -229,7 +235,7 @@ function idleFacing(c: WorkCtx, road: Road | null, cell: number): number {
   return Math.abs(angleDiff(r1, c.toCamera)) < Math.abs(angleDiff(r2, c.toCamera)) ? r1 : r2;
 }
 
-/** Stanie bez pracy (w = waga pozy): przestepowanie z nogi na noge, rozgladanie sie, czasem drapanie w glowe. */
+/** Stanie bez pracy (w = waga pozy): przestepowanie z nogi na noge, rozgladanie sie i co kilka sekund drobna czynnosc. */
 function standIdle(c: WorkCtx, p: Pose, id: number, w: number): void {
   if (w <= 0) return;
   const t = c.time + id * 1.7;
@@ -246,14 +252,44 @@ function standIdle(c: WorkCtx, p: Pose, id: number, w: number): void {
   p.armROut = 0.07 * w;
   p.headTurn = Math.sin(t * 0.45) * 0.7 * w;
   p.head = 0.05 * w;
-  // Co kilka sekund drapie sie w glowe.
+  // Co kilka sekund jedna z drobnych czynnosci (inna w kazdym cyklu): drapanie sie w glowe, przeciaganie sie
+  // z ziewnieciem, wypatrywanie z dlonia przy czole, rece za plecami, przytupywanie.
   const cyc = t % 9;
-  const scratch = ease(cyc, 5, 5.4) * (1 - ease(cyc, 6.6, 7));
-  if (scratch > 0) {
-    p.armR = lerp(p.armR, -2.75 + Math.sin(t * 18) * 0.12, scratch * w);
-    p.armROut = lerp(p.armROut, 0.55, scratch * w);
-    p.head = lerp(p.head, 0.2, scratch * w);
-    p.headTurn = lerp(p.headTurn, -0.3, scratch * w);
+  const act = Math.floor(hash(id * 31 + Math.floor(t / 9), 5) * 5);
+  const k = ease(cyc, 4.6, 5.2) * (1 - ease(cyc, 7.4, 8)) * w;
+  if (k <= 0) return;
+  if (act === 0) {
+    p.armR = lerp(p.armR, -2.4 + Math.sin(t * 18) * 0.12, k);
+    p.elbowR = 1.3 * k;
+    p.armROut = lerp(p.armROut, 0.55, k);
+    p.head = lerp(p.head, 0.2, k);
+    p.headTurn = lerp(p.headTurn, -0.3, k);
+  } else if (act === 1) {
+    p.armL = lerp(p.armL, -2.95, k);
+    p.armR = lerp(p.armR, -2.95, k);
+    p.armLOut = lerp(p.armLOut, 0.35, k);
+    p.armROut = lerp(p.armROut, 0.35, k);
+    p.head = lerp(p.head, -0.3, k);
+    p.headTurn = lerp(p.headTurn, 0, k);
+    p.lean = -0.1 * k;
+  } else if (act === 2) {
+    // Dlon przy czole jak daszek: ramie do przodu i w gore, przedramie zgiete ku twarzy.
+    p.armR = lerp(p.armR, -1.7, k);
+    p.elbowR = 1.9 * k;
+    p.armROut = lerp(p.armROut, -0.15, k);
+    p.head = lerp(p.head, -0.12, k);
+    p.headTurn = lerp(p.headTurn, Math.sin(t * 0.3) * 0.9, k);
+  } else if (act === 3) {
+    // Rece za plecami: ramiona do tylu i do srodka, lokcie lekko zgiete.
+    p.armL = lerp(p.armL, 0.5, k);
+    p.armR = lerp(p.armR, 0.5, k);
+    p.elbowL = p.elbowR = 0.25 * k;
+    p.armLOut = lerp(p.armLOut, -0.3, k);
+    p.armROut = lerp(p.armROut, -0.3, k);
+    p.lean = 0.04 * k;
+  } else {
+    p.legR = lerp(p.legR ?? 0, -0.25 * Math.max(0, Math.sin(t * 9)), k);
+    p.head = lerp(p.head, 0.08 + Math.max(0, Math.sin(t * 9)) * 0.05, k);
   }
 }
 
@@ -396,9 +432,18 @@ function carrier(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
   const walk = w * Math.PI * 2 * Math.max(0.6, dist);
   if (walking) walkLegs(p, walk);
   const carrying = serf.carry >= 0;
-  // Rece: z towarem na glowie w gorze, bez towaru wymach do kroku.
-  p.armL = carrying ? -Math.PI : walking ? -Math.sin(walk) * 0.5 : 0;
-  p.armR = carrying ? -Math.PI : walking ? Math.sin(walk) * 0.5 : 0;
+  // Rece: z towarem ulozone wg sposobu niesienia (carryArms), bez towaru wymach do kroku.
+  const style = carrying ? carryStyle(serf.carry) : 'head';
+  const held = basePose(serf, x, y, z, rot);
+  carryArms(held, style);
+  swingArm(p, -1, walking ? -Math.sin(walk) * 0.5 : 0);
+  swingArm(p, 1, walking ? Math.sin(walk) * 0.5 : 0);
+  if (carrying) carryArms(p, style, p.armL);
+  // Pod gore pochyla sie do przodu, z gory odchyla do tylu; z ciezkim ladunkiem mocniej.
+  if (walking && dist > 1e-3) {
+    const slope = (c.ground(to.x, to.z) - c.ground(from.x, from.z)) / dist;
+    p.lean = (p.lean ?? 0) + Math.max(-0.18, Math.min(0.25, slope * (style === 'arms' ? 1.4 : 1.0)));
+  }
 
   // Na glowie (domyslnie), w dloniach albo na ziemi: polozenie towaru w tej klatce.
   let goodMode: 'head' | 'hands' | 'none' = carrying ? 'head' : 'none';
@@ -418,8 +463,12 @@ function carrier(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
     if (carrying) {
       const up = ease(t, LEAVE_WALK * 0.45, LEAVE_WALK + 0.1);
       const chest = bentStart ? -0.75 + (1 - k) * -0.6 : -1.3;
-      p.armL = lerp(chest, -Math.PI, up);
-      p.armR = p.armL;
+      p.armL = lerp(chest, held.armL ?? 0, up);
+      p.armR = lerp(chest, held.armR ?? 0, up);
+      p.armLOut = lerp(0, held.armLOut ?? 0, up);
+      p.armROut = lerp(0, held.armROut ?? 0, up);
+      p.elbowL = lerp(0, held.elbowL ?? 0, up);
+      p.elbowR = lerp(0, held.elbowR ?? 0, up);
       goodMode = up < 0.85 ? 'hands' : 'head';
     }
   }
@@ -437,8 +486,12 @@ function carrier(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
       if (drop) {
         // Podaje towar drugiemu, a na koniec stawia go przy fladze.
         const down = ease(t, w1 - 0.06, w1 + 0.15);
-        p.armL = lerp(-Math.PI, -1.3, down);
-        p.armR = p.armL;
+        p.armL = lerp(held.armL ?? 0, -1.3, down);
+        p.armR = lerp(held.armR ?? 0, -1.3, down);
+        p.armLOut = lerp(held.armLOut ?? 0, 0, down);
+        p.armROut = lerp(held.armROut ?? 0, 0, down);
+        p.elbowL = lerp(held.elbowL ?? 0, 0, down);
+        p.elbowR = lerp(held.elbowR ?? 0, 0, down);
         if (down > 0.15) goodMode = 'hands';
         handOut(p, ease(t, w1 + 0.1, w1 + 0.25));
         const set = ease(t, 0.84, 0.97);
@@ -448,8 +501,12 @@ function carrier(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
     } else if (drop) {
       // Zdejmuje towar z glowy do piersi, potem schyla sie i stawia go na ziemi.
       const down = ease(t, w1 - 0.06, w1 + 0.12);
-      p.armL = lerp(-Math.PI, -1.2, down);
-      p.armR = p.armL;
+      p.armL = lerp(held.armL ?? 0, -1.2, down);
+      p.armR = lerp(held.armR ?? 0, -1.2, down);
+      p.armLOut = lerp(held.armLOut ?? 0, 0, down);
+      p.armROut = lerp(held.armROut ?? 0, 0, down);
+      p.elbowL = lerp(held.elbowL ?? 0, 0, down);
+      p.elbowR = lerp(held.elbowR ?? 0, 0, down);
       if (down > 0.15) goodMode = 'hands';
       bendPose(p, ease(t, w1 + 0.1, 0.97));
       toGround = ease(t, 0.85, 1);
@@ -494,9 +551,18 @@ function carrier(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
       const slotRot = (act / FLAG_SLOTS) * TAU + 1.2;
       c.good(serf.carry, lerp(m.x, g.x, toGround), lerp(m.y - 0.035, g.y, toGround), lerp(m.z, g.z, toGround),
         lerpAngle(p.rot, slotRot, toGround), lerp(UNIT_SCALE, 1, toGround));
+      if (toGround > 0.9) c.sfx(dropSound(serf.carry), g.x, g.z, 0x6600000 + serf.id, 0.7);
     } else goodInHands(c, serf.carry, f, p.rot);
   }
   return true;
+}
+
+/** Odglos towaru stawianego na ziemi: drewno, kamien i ruda, metal albo worek (reszta). */
+function dropSound(g: number): string {
+  if (g === G.LUMBER || g === G.PLANK || g === G.BOAT || g === G.BOW || g === G.ROLLING_PIN) return 'drop_wood';
+  if (g === G.STONE || g === G.IRON_ORE || g === G.GOLD_ORE || g === G.COAL) return 'drop_stone';
+  if (g === G.STEEL || g === G.GOLD || g >= G.SHOVEL) return 'drop_metal';
+  return 'drop_sack';
 }
 
 /** Tragarz stoi przy fladze: chwila miedzy krokami (schylony nad towarem, z rekami wyciagnietymi do drugiego) albo czeka. */
@@ -529,11 +595,13 @@ function atFlag(c: WorkCtx, serf: Serf, road: Road): void {
     }
     if (serf.carry >= 0 && (sp.bent || sp.hand)) setRole(flagPick, serf.pos, serf.id, st.x, st.z, c.time);
   }
-  const f = c.figure(p);
-  if (serf.carry >= 0) {
-    if (sp && (sp.bent || sp.hand)) goodInHands(c, serf.carry, f, p.rot);
-    else c.good(serf.carry, st.x, st.y + 0.47 * UNIT_SCALE, st.z, p.rot, UNIT_SCALE);
+  const inHands = !!sp && (sp.bent || sp.hand);
+  if (serf.carry >= 0 && !inHands) {
+    p.carry = serf.carry;
+    carryArms(p, carryStyle(serf.carry));
   }
+  const f = c.figure(p);
+  if (serf.carry >= 0 && inHands) goodInHands(c, serf.carry, f, p.rot);
 }
 
 /** Czekanie przy pelnej fladze z towarem w rekach: przestepuje z nogi na noge, rozglada sie. */
@@ -710,7 +778,9 @@ function builder(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
   waitSince.delete(serf.id);
   const p = ph.p;
   const wp = wallPlank(g, ph.n, vB);
-  const work = c.at(o, wp.x, -g.hy - 0.085, 0, vB);
+  // Punkt deski w ukladzie modelu - vB zaraz nadpisze miejsce pracy w swiecie.
+  const wpx = wp.x, wpy = wp.y, wpz = wp.z;
+  const work = c.at(o, wpx, -g.hy - 0.085, 0, vB);
   const workX = work.x, workZ = work.z;
   const inward = c.frontRot + Math.PI;
 
@@ -809,10 +879,10 @@ function builder(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
       pose.armR = -0.45 - up * 1.1;
       pose.head = 0.2;
     }
-    const hit = c.at(o, wp.x + 0.03, wp.y - 0.01, plank ? wp.z : 0.03, vC);
+    const hit = c.at(o, wpx + 0.03, wpy - 0.01, plank ? wpz : 0.03, vC);
     c.fx.burst(serf.id * 31 + bt.n, bt.age, hit.x, hit.y, hit.z, {
       kind: 'bit', n: 3, life: 0.4, vy: 0.45, spread: 0.3, gravity: 2.6, size: 0.014, sizeEnd: 0.008,
-      color: plank ? WOOD_CHIP : STONE_CHIP, floor: o.y + 0.005,
+      color: plank ? WOOD_CHIP : STONE_CHIP, floor: o.y + 0.005, sound: plank ? 'hammer_wood' : 'chisel',
     });
   } else if (p < BUILD.look) {
     // Oglada robote: glowa w gore, reka ociera czolo.
@@ -968,6 +1038,7 @@ function digger(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
     c.fx.burst(serf.id * 53 + k + serf.pos * 7, age, hR.x, hR.y, hR.z, {
       kind: 'bit', n: 6, life: 0.8, vx: Math.sin(back) * 0.5, vz: Math.cos(back) * 0.5, vy: 0.35, spread: 0.12,
       gravity: 2.6, size: 0.026, sizeEnd: 0.02, color: EARTH, floor: siteFloor(c, b, st.x - Math.sin(st.rot) * 0.3, st.z - Math.cos(st.rot) * 0.3) + 0.008,
+      sound: 'dirt',
     });
   }
   return true;
@@ -1140,7 +1211,7 @@ function geologist(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
       const gy = c.ground(gx, gz);
       c.fx.burst(serf.id * 37 + bt.n, bt.age, gx, gy + 0.01, gz, {
         kind: 'bit', n: 4, life: 0.45, vy: 0.5, spread: 0.3, gravity: 2.6, size: 0.014, sizeEnd: 0.008,
-        color: ROCK_CHIP, floor: gy + 0.003,
+        color: ROCK_CHIP, floor: gy + 0.003, sound: 'pick_stone', soundGain: 0.8,
       });
       if (bt.n % 2 === 0) {
         c.fx.burst(serf.id * 41 + bt.n, bt.age, gx, gy + 0.02, gz, {
@@ -1195,7 +1266,7 @@ function geologist(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
     const age = (f - 0.98 + 1) % 1;
     if (f > 0.97 || f < 0.25) {
       c.fx.burst(serf.id * 43 + hits, age * 0.45, vA.x, vA.y + 0.45 + sign, vA.z, {
-        kind: 'bit', n: 3, life: 0.3, vy: 0.35, spread: 0.3, gravity: 2.2, size: 0.01, sizeEnd: 0.006, color: WOOD_CHIP,
+        kind: 'bit', n: 3, life: 0.3, vy: 0.35, spread: 0.3, gravity: 2.2, size: 0.01, sizeEnd: 0.006, color: WOOD_CHIP, sound: 'hammer_wood',
       });
     }
   } else {
@@ -1240,6 +1311,10 @@ interface KnightMem {
   t: number;
   hp: number;
   hit: number;
+  /** Poczatek biezacego kroku: pole i punkt (ustalane raz na krok - w polowie kroku m.x to juz biezace polozenie). */
+  stepCell: number;
+  sx: number;
+  sz: number;
 }
 const knightMem = new Map<number, KnightMem>();
 /** Padajacy rycerze (po zdarzeniu 'death'). */
@@ -1273,7 +1348,7 @@ function shieldArm(p: Pose, g: number): void {
 function rememberKnight(serf: Serf, p: Pose, c: WorkCtx): void {
   let m = knightMem.get(serf.id);
   if (!m) {
-    m = { cell: serf.pos, x: 0, y: 0, z: 0, rot: 0, owner: serf.owner, level: serf.level, t: 0, hp: serf.hp, hit: -10 };
+    m = { cell: serf.pos, x: 0, y: 0, z: 0, rot: 0, owner: serf.owner, level: serf.level, t: 0, hp: serf.hp, hit: -10, stepCell: -1, sx: 0, sz: 0 };
     knightMem.set(serf.id, m);
     prune(knightMem, 600);
   }
@@ -1374,7 +1449,7 @@ function duel(c: WorkCtx, serf: Serf, attacker: boolean): void {
     const hx = spot.x + Math.sin(rot) * DUEL_R * 1.1, hz = spot.z + Math.cos(rot) * DUEL_R * 1.1;
     const tick0 = c.s.tick - (a ? ROUND_TICKS - a.timer : 0);
     c.fx.burst(serf.id * 89 + tick0, age, hx, spot.y + 0.2, hz, {
-      kind: 'bit', n: 5, life: 0.25, vy: 0.5, spread: 0.6, gravity: 2, size: 0.012, sizeEnd: 0.003, color: SPARK_HIT,
+      kind: 'bit', n: 5, life: 0.25, vy: 0.5, spread: 0.6, gravity: 2, size: 0.012, sizeEnd: 0.003, color: SPARK_HIT, sound: 'clash', soundGain: 0.8,
     });
   }
 }
@@ -1382,6 +1457,10 @@ function duel(c: WorkCtx, serf: Serf, attacker: boolean): void {
 /** Rycerz w marszu albo stojacy: tarcza, miecz i zwyciestwo (miecz w gorze po smierci przeciwnika obok). */
 function knight(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
   const s = c.s;
+  if (at.to < 0) {
+    const m = knightMem.get(serf.id);
+    if (m) m.stepCell = -1;
+  }
   if (serf.state === SS.KNIGHT_FIGHT) {
     const opp = s.serfs[serf.sub];
     if (opp && opp.state === SS.KNIGHT_FIGHT) {
@@ -1397,9 +1476,16 @@ function knight(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
     const from = c.cell(at.from, vB);
     const to = c.cell(at.to, vC);
     let ax = from.x, az = from.z, bx = to.x, bz = to.z;
-    if (mem && mem.cell === at.from && Math.hypot(mem.x - from.x, mem.z - from.z) < 0.3) {
-      ax = mem.x;
-      az = mem.z;
+    if (mem) {
+      // Krok zaczyna sie tam, gdzie rycerz stal (np. z boku pola po pojedynku), jesli to na polu startu.
+      if (mem.stepCell !== at.from) {
+        const here = mem.cell === at.from && Math.hypot(mem.x - from.x, mem.z - from.z) < 0.3;
+        mem.stepCell = at.from;
+        mem.sx = here ? mem.x : from.x;
+        mem.sz = here ? mem.z : from.z;
+      }
+      ax = mem.sx;
+      az = mem.sz;
     }
     if (serf.path.length === 0 && serf.state === SS.KNIGHT_ATTACK && serf.sub !== -3) {
       duelSpot(c, at.to, true, vC);
@@ -1852,7 +1938,7 @@ function drawShells(c: WorkCtx): void {
     const a = age - sh.dur;
     c.fx.burst(sh.key * 3 + 1, a, sh.tx, sh.ty, sh.tz, {
       kind: 'puff', n: 9, life: 1.4, vy: 0.35, spread: 0.45, spreadY: 0.15, gravity: 0.15, size: 0.09, sizeEnd: 0.22,
-      color: DUST, colorEnd: 0xd8d0c0, fade: 0.4,
+      color: DUST, colorEnd: 0xd8d0c0, fade: 0.4, sound: 'impact',
     });
     c.fx.burst(sh.key * 3 + 2, a, sh.tx, sh.ty + 0.05, sh.tz, {
       kind: 'bit', n: 10, life: 0.9, vy: 1.1, spread: 0.7, gravity: 3.2, size: 0.03, sizeEnd: 0.02,
@@ -2003,7 +2089,7 @@ function sailor(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
     for (const sx of [-1, 1]) {
       Rig.point(mBoat, sx * 0.27, 0, 0.11, hR);
       c.fx.burst(serf.id * 61 + sx + Math.floor(t * 1.1) * 3, ph / 1.1, hR.x, y, hR.z, {
-        kind: 'puff', n: 4, life: 0.4, vy: 0.35, spread: 0.12, gravity: 1.6, size: 0.02, sizeEnd: 0.01, color: SPLASH,
+        kind: 'puff', n: 4, life: 0.4, vy: 0.35, spread: 0.12, gravity: 1.6, size: 0.02, sizeEnd: 0.01, color: SPLASH, sound: 'splash_small', soundGain: 0.5,
       });
     }
   }

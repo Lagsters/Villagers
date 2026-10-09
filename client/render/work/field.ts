@@ -44,7 +44,7 @@ const TICK_S = 1 / TICKS_PER_SECOND;
  * wierzch ziemi. Lesnik kleka za grzadka (standY, miedzy grzadka a chata) twarza ku fladze; dochodzi tam przez
  * punkt pass przy prawym koncu grzadki.
  */
-const SEEDBED = { x: -0.3, y: -0.365, cols: [-0.065, -0.02, 0.025, 0.07], rows: [-0.025, 0.025], top: 0.035, standY: -0.262, passX: -0.17, passY: -0.268 };
+const SEEDBED = { x: -0.2, y: -0.365, cols: [-0.065, -0.02, 0.025, 0.07], rows: [-0.025, 0.025], top: 0.035, standY: -0.262, passX: -0.07, passY: -0.268 };
 /** Kamienny stol przed chata kamieniarza: miejsce bloku na plycie, wierzch plyty, miejsce kamieniarza z prawej, kilof oparty z lewej. */
 const STONE_TABLE = { x: 0.27, y: -0.33, blockX: 0.02, top: 0.082, standX: 0.39, standY: -0.33, pickX: 0.19, pickY: -0.37 };
 /** Zerdz z siecia przed chata rybaka: wysokosc zerdzi, siec i suszone ryby przed nia (y), miejsca ryb wzdluz zerdzi. */
@@ -54,7 +54,7 @@ const GAME_RACK = { x: -0.35, y: -0.26, bar: 0.3, standX: -0.21, standY: -0.31 }
 
 /** Rzedy dojrzalego pola (jak art/scripts/nature.py: field_ripe): przesuniecie w x, dlugosc wzdluz z, liczba zamachow kosa. */
 const ROWS: readonly { x: number; len: number; swings: number }[] = [
-  { x: -0.22, len: 0.42, swings: 4 }, { x: 0, len: 0.64, swings: 6 }, { x: 0.22, len: 0.42, swings: 4 },
+  { x: -0.25, len: 0.42, swings: 4 }, { x: 0, len: 0.64, swings: 6 }, { x: 0.25, len: 0.42, swings: 4 },
 ];
 /** Etapy zniw (czesc WORKING): koszenie rzedow i przejscia miedzy nimi, zgarnianie, wiazanie, podnoszenie snopa. */
 const MOW = [[0, 0.2], [0.24, 0.48], [0.52, 0.7]] as const;
@@ -436,7 +436,7 @@ function foresterPrep(c: WorkCtx, serf: Serf, at: SerfAt): void {
     pose.armLYaw = 0.2 * kk;
     const age = (p - PULL) * PREP_TICKS * TICK_S;
     c.fx.burst(serf.id * 17 + 3, age, seed.x, seed.y + 0.01, seed.z,
-      { kind: 'bit', n: 5, life: 0.5, vy: 0.45, spread: 0.25, gravity: 2.4, size: 0.014, sizeEnd: 0.01, color: SOIL, floor: stationY(c, o, SEEDBED.x, SEEDBED.y) + 0.012 });
+      { kind: 'bit', n: 5, life: 0.5, vy: 0.45, spread: 0.25, gravity: 2.4, size: 0.014, sizeEnd: 0.01, color: SOIL, floor: stationY(c, o, SEEDBED.x, SEEDBED.y) + 0.012, sound: 'dirt', soundGain: 0.6 });
   }
   const f = c.figure(pose);
   if (p >= PULL) saplingInHand(c, f, model, pose.armL ?? 0);
@@ -560,7 +560,7 @@ function planting(c: WorkCtx, serf: Serf): void {
     const n = Math.floor(u);
     const age = (u - n) * (0.14 * PLANT_TICKS * TICK_S) / 4;
     c.fx.burst(serf.id * 23 + n, age - 0.12, look.x + (n % 2 ? rx : -rx) * 0.04, gy + 0.01, look.z + (n % 2 ? rz : -rz) * 0.04,
-      { kind: 'puff', n: 3, life: 0.5, vy: 0.12, spread: 0.12, gravity: 0.1, size: 0.03, sizeEnd: 0.05, color: DUST, fade: 0.5 });
+      { kind: 'puff', n: 3, life: 0.5, vy: 0.12, spread: 0.12, gravity: 0.1, size: 0.03, sizeEnd: 0.05, color: DUST, fade: 0.5, sound: 'shovel' });
   } else {
     // Przyglada sie sadzonce, oparty o lopate.
     pose.head = 0.4;
@@ -577,7 +577,7 @@ function planting(c: WorkCtx, serf: Serf): void {
     pt(f.armR, 0, HAND - 0.085, 0.18, vA);
     c.fx.burst(serf.id * 29 + Math.floor(dig * 3), throwAge, vA.x, vA.y, vA.z,
       { kind: 'bit', n: 8, life: 0.45, vx: (moundX - vA.x) / 0.4, vz: (moundZ - vA.z) / 0.4, vy: 0.55, spread: 0.1, gravity: 3.2,
-        size: 0.026, sizeEnd: 0.02, color: SOIL, floor: moundY + 0.005 });
+        size: 0.026, sizeEnd: 0.02, color: SOIL, floor: moundY + 0.005, sound: 'dirt' });
   }
   // Dolek i kopczyk ziemi.
   const hole = smooth(dig) * (1 - smooth(fill));
@@ -602,7 +602,7 @@ function planting(c: WorkCtx, serf: Serf): void {
     if (fill > 0 && fill < 1) {
       const n = Math.floor(fill * 6);
       c.fx.burst(serf.id * 31 + n, (fill * 6 - n) * 0.25, look.x, gy + 0.01, look.z,
-        { kind: 'bit', n: 3, life: 0.35, vy: 0.3, spread: 0.2, gravity: 2.5, size: 0.014, color: SOIL, floor: gy + 0.005 });
+        { kind: 'bit', n: 3, life: 0.35, vy: 0.3, spread: 0.2, gravity: 2.5, size: 0.014, color: SOIL, floor: gy + 0.005, sound: 'dirt', soundGain: 0.5 });
     }
   }
 }
@@ -699,7 +699,7 @@ function breaking(c: WorkCtx, serf: Serf): void {
       const age = f * secPer;
       c.fx.burst(serf.id * 37 + n, age, hitX, hitY, hitZ,
         { kind: 'bit', n: 6, life: 0.55, vx: fx * -0.5, vz: fz * -0.5, vy: 0.65, spread: 0.38, gravity: 2.6, size: 0.022, sizeEnd: 0.016,
-          color: n % 2 ? STONE_CHIP : 0x8d8a84, floor: rock.y + 0.008 });
+          color: n % 2 ? STONE_CHIP : 0x8d8a84, floor: rock.y + 0.008, sound: 'pick_stone' });
       if (n % 3 === 2) {
         c.fx.burst(serf.id * 41 + n, age, hitX, hitY, hitZ,
           { kind: 'puff', n: 4, life: 0.9, vx: fx * -0.08, vz: fz * -0.08, vy: 0.12, spread: 0.06, gravity: -0.02, size: 0.04, sizeEnd: 0.1,
@@ -758,9 +758,9 @@ function breaking(c: WorkCtx, serf: Serf): void {
     }
     const age = (p - LAND) * BREAK_TICKS * TICK_S;
     c.fx.burst(serf.id * 43, age, blockX, blockY + 0.02, blockZ,
-      { kind: 'puff', n: 5, life: 0.8, vy: 0.1, spread: 0.12, gravity: 0.05, size: 0.04, sizeEnd: 0.09, color: 0xcfcac0, fade: 0.5 });
+      { kind: 'puff', n: 5, life: 0.8, vy: 0.1, spread: 0.12, gravity: 0.05, size: 0.04, sizeEnd: 0.09, color: 0xcfcac0, fade: 0.5, sound: 'drop_stone', soundGain: 1.3 });
     c.fx.burst(serf.id * 47, (p - BREAK) * BREAK_TICKS * TICK_S, hitX, hitY, hitZ,
-      { kind: 'bit', n: 8, life: 0.6, vx: -fx * 0.6, vz: -fz * 0.6, vy: 0.7, spread: 0.4, gravity: 2.6, size: 0.02, sizeEnd: 0.014, color: STONE_CHIP, floor: rock.y + 0.008 });
+      { kind: 'bit', n: 8, life: 0.6, vx: -fx * 0.6, vz: -fz * 0.6, vy: 0.7, spread: 0.4, gravity: 2.6, size: 0.02, sizeEnd: 0.014, color: STONE_CHIP, floor: rock.y + 0.008, sound: 'pick_stone', soundGain: 1.2 });
   }
 }
 
@@ -832,7 +832,7 @@ function dressing(c: WorkCtx, serf: Serf, at: SerfAt): void {
       pose.lean = 0.32 - up * 0.08;
       const secPer = ((H1 - H0) * DRESS_TICKS * TICK_S) / N;
       c.fx.burst(serf.id * 53 + n, fBeat * secPer, table.x, table.y + 0.06, table.z,
-        { kind: 'bit', n: 5, life: 0.45, vy: 0.55, spread: 0.4, gravity: 2.8, size: 0.017, sizeEnd: 0.012, color: n % 2 ? STONE_CHIP : 0x9a968f, floor: stationY(c, o, STONE_TABLE.x, STONE_TABLE.y) + 0.006 });
+        { kind: 'bit', n: 5, life: 0.45, vy: 0.55, spread: 0.4, gravity: 2.8, size: 0.017, sizeEnd: 0.012, color: n % 2 ? STONE_CHIP : 0x9a968f, floor: stationY(c, o, STONE_TABLE.x, STONE_TABLE.y) + 0.006, sound: 'chisel' });
     } else {
       // Ogladanie kostki i branie jej w obie rece.
       const k = smooth(span(p, 0.84, 0.9));
@@ -1110,7 +1110,7 @@ function fishing(c: WorkCtx, serf: Serf): void {
     ripple(c, sh.fx, water, sh.fz, (p - 0.5) * sec, 0.9, 0.1);
     ripple(c, sh.fx, water, sh.fz, (p - 0.6) * sec, 0.9, 0.12);
     c.fx.burst(serf.id * 59, landAge, sh.fx, water + 0.01, sh.fz,
-      { kind: 'puff', n: 5, life: 0.4, vy: 0.45, spread: 0.18, gravity: 2.5, size: 0.016, sizeEnd: 0.01, color: WATER_DROP });
+      { kind: 'puff', n: 5, life: 0.4, vy: 0.45, spread: 0.18, gravity: 2.5, size: 0.016, sizeEnd: 0.01, color: WATER_DROP, sound: 'splash_small' });
     return;
   }
   if (!catchIt) return;
@@ -1118,7 +1118,7 @@ function fishing(c: WorkCtx, serf: Serf): void {
   const strikeAge = (p - 0.7) * sec;
   ripple(c, sh.fx, water, sh.fz, strikeAge, 1.2, 0.2);
   c.fx.burst(serf.id * 61, strikeAge, sh.fx, water + 0.01, sh.fz,
-    { kind: 'puff', n: 7, life: 0.55, vy: 0.6, spread: 0.25, gravity: 2.4, size: 0.02, sizeEnd: 0.012, color: WATER_DROP });
+    { kind: 'puff', n: 7, life: 0.55, vy: 0.6, spread: 0.25, gravity: 2.4, size: 0.02, sizeEnd: 0.012, color: WATER_DROP, sound: 'splash' });
   if (p >= 0.955) return;
   const wig = Math.sin(t * 23) * 0.9;
   const hangX = tip.x, hangY = tip.y - 0.13, hangZ = tip.z;
@@ -1309,7 +1309,7 @@ function animal(c: WorkCtx, a: Animal, at: SerfAt): boolean {
     // Trafienie: klaczki siersci.
     pt(mDeer, d.side * 0.045, 0.185, 0.03, vA);
     c.fx.burst(a.id * 71, age, vA.x, vA.y, vA.z,
-      { kind: 'bit', n: 5, life: 0.45, vy: 0.4, spread: 0.3, gravity: 1.6, size: 0.012, sizeEnd: 0.008, color: FUR, floor: at.y + 0.005 });
+      { kind: 'bit', n: 5, life: 0.45, vy: 0.4, spread: 0.3, gravity: 1.6, size: 0.012, sizeEnd: 0.008, color: FUR, floor: at.y + 0.005, sound: 'arrow_hit' });
     return true;
   }
   if (deaths.has(a.id)) deaths.delete(a.id);
@@ -1337,6 +1337,9 @@ function animal(c: WorkCtx, a: Animal, at: SerfAt): boolean {
       rel = Math.atan2(Math.sin(rel), Math.cos(rel));
       pitch = -0.35;
       yaw = Math.max(-0.9, Math.min(0.9, rel));
+      // Parskniecie zaniepokojonego jelenia, z rzadka.
+      const n = Math.floor(c.time / 3 + a.id * 0.37);
+      if (((n * 2654435761 + a.id * 40503) >>> 0) % 5 === 0) c.sfx('deer_snort', at.x, at.z, 0x5100000 + a.id * 4096 + (n & 4095));
       legs4[1] = -0.1 * Math.max(0, Math.sin(c.time * 3 + a.id));
     } else {
       // Pasie sie: leb przy ziemi i skubanie trawy, co jakis czas podnosi leb i rozglada sie.
@@ -1464,6 +1467,7 @@ function shooting(c: WorkCtx, serf: Serf, at: SerfAt): void {
   } else if (release && a) {
     // Lot strzaly od luku do boku jelenia.
     const grip = pt(bow, 0, 0, 0, vB);
+    if (p < 0.93) c.sfx('bow', grip.x, grip.z, 0x5000000 + serf.id);
     const hit = hitPoint(c, a, at.x, at.z, vD);
     const k = span(p, 0.9, 1.0);
     const x = lerp(grip.x, hit.x, k), y = lerp(grip.y, hit.y, k) + Math.sin(k * Math.PI) * 0.06, z = lerp(grip.z, hit.z, k);
@@ -1659,9 +1663,8 @@ function mowerAt(dir: number, r: number, u: number): { x: number; z: number } {
   return { x: R.x + 0.05 * dir, z: zc - dir * 0.15 };
 }
 
-/** Pole w trakcie zniw: ziemia, sciernisko, stojace zboze i pokosy wg postepu; gather - zgarniete pokosy (0..1). */
+/** Pole w trakcie zniw (ziemie rysuje teren): sciernisko, stojace zboze i pokosy wg postepu; gather - zgarniete pokosy (0..1). */
 function harvestField(c: WorkCtx, cx: number, cy: number, cz: number, dir: number, cut: readonly number[], gather: number): void {
-  c.prop('fld_soil', cx, cy, cz, 0, 1);
   for (let r = 0; r < 3; r++) {
     const R = ROWS[r];
     const near = -dir * R.len / 2, far = dir * R.len / 2;
@@ -1676,7 +1679,7 @@ function harvestField(c: WorkCtx, cx: number, cy: number, cz: number, dir: numbe
 
 const cut3 = [0, 0, 0];
 /** Siew: trzy przejscia wzdluz pola (x wzgledem srodka pola), dlugosc przejscia w granicach szesciokata ziemi. */
-const SOW_X = [-0.24, 0, 0.24];
+const SOW_X = [-0.25, 0, 0.25];
 function sowHalf(x: number): number {
   return 0.33 - Math.abs(x) * 0.45;
 }
@@ -1803,7 +1806,7 @@ function harvesting(c: WorkCtx, serf: Serf): void {
     const fwx = Math.sin(rot), fwz = Math.cos(rot);
     c.fx.burst(serf.id * 73 + swingN, swingAge, gx + fwx * 0.18, F.y + 0.12, gz + fwz * 0.18,
       { kind: 'bit', n: 7, life: 0.6, vx: lx * 0.7, vz: lz * 0.7, vy: 0.6, spread: 0.3, gravity: 2.0, size: 0.016, sizeEnd: 0.012,
-        color: swingN % 2 ? STRAW : 0xcfae4c, floor: F.y + 0.03 });
+        color: swingN % 2 ? STRAW : 0xcfae4c, floor: F.y + 0.03, sound: 'swish' });
   }
   if (sheafLift >= 0 && !scytheStuck) scytheUpright(c, f.armL, pose.armL ?? 0);
   if (scytheStuck && c.details) stuckTool(c, 'fld_scythe', F.x + sheafX - 0.15 * -dir, F.z + sheafZ + dir * 0.05, rot + 2.4, -2.23, HAND + 0.13, -0.12);
@@ -1838,8 +1841,7 @@ function sowing(c: WorkCtx, serf: Serf): void {
   const p = c.progress(serf.timer, FARM_TICKS);
   const sec = FARM_TICKS * TICK_S;
   const dir = mowDir(c);
-  const appear = smooth(span(p, 0, 0.05));
-  c.prop('fld_soil', F.x, F.y, F.z, 0, 0.4 + 0.6 * appear, 0.25 * appear);
+  c.plowCell(serf.target);
   const P0 = 0.04, P1 = 0.96, PASS = 3, THROWS = 4;
   const u = span(p, P0, P1) * PASS;
   const i = Math.min(PASS - 1, Math.floor(u)), k = u - i;
@@ -1900,7 +1902,7 @@ function sowing(c: WorkCtx, serf: Serf): void {
     const FLY = 0.5;
     c.fx.burst(serf.id * 79 + i * 10 + n, throwAge, vA.x, vA.y, vA.z,
       { kind: 'bit', n: 12, life: 0.75, vx: (F.x + tx - vA.x) / FLY, vz: (F.z + tz - vA.z) / FLY, vy: 0.3, spread: 0.22, spreadY: 0.1, gravity: 2.2,
-        size: 0.015, sizeEnd: 0.012, color: SEED, floor: F.y + 0.008 });
+        size: 0.015, sizeEnd: 0.012, color: SEED, floor: F.y + 0.008, sound: 'scatter' });
   }
 }
 
@@ -1956,7 +1958,7 @@ function farmer(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
   return true;
 }
 
-/** Rzerysko po zniwach: zostaje chwile na pustym polu i zapada sie w ziemie. */
+/** Rzerysko po zniwach: zostaje chwile na zaoranej ziemi pustego pola i zapada sie w nia. */
 function stubbleFields(c: WorkCtx): void {
   if (stubble.size === 0) return;
   for (const [cell, t] of stubble) {
@@ -1969,7 +1971,7 @@ function stubbleFields(c: WorkCtx): void {
     const F = c.cell(cell, w1);
     if (!c.inView(F.x, F.z)) continue;
     const k = 1 - smooth(clamp01((age - STUBBLE_S * 0.5) / (STUBBLE_S * 0.5)));
-    c.prop('fld_soil', F.x, F.y, F.z, 0, 1, Math.max(0.05, k));
+    c.plowCell(cell);
     for (const R of ROWS) {
       mA.makeTranslation(F.x + R.x, F.y - 0.06 * (1 - k), F.z - R.len / 2).multiply(mT.makeScale(1, Math.max(0.05, k), R.len / ROW_MODEL_LEN));
       c.propM('fld_stubble', mA);

@@ -1,0 +1,186 @@
+<title>Odsłuch dźwięków Osady</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+Sans+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Układ: wąska kolumna kart dźwięków; w każdej karcie rząd wariantów (płytki z falą), wybór zaznacza płytkę. */
+:root {
+  --bg: #eef0ea; --panel: #f8f9f5; --ink: #1f2a22; --muted: #5d6a60; --line: #d3d9cf;
+  --moss: #4d7a3a; --moss-soft: #dfead6; --wave: #8aa37b; --play: #2f5524;
+  --display: "Alegreya Sans SC", "Trebuchet MS", sans-serif;
+  --body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #161b17; --panel: #1f2620; --ink: #e5eadf; --muted: #9aa797; --line: #323d33;
+  --moss: #8fc274; --moss-soft: #2b3b26; --wave: #6f8f61; --play: #b6e09f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #161b17; --panel: #1f2620; --ink: #e5eadf; --muted: #9aa797; --line: #323d33;
+  --moss: #8fc274; --moss-soft: #2b3b26; --wave: #6f8f61; --play: #b6e09f; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5 }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 28px }
+h1 { font-family: var(--display); font-size: 2rem; margin: 0; text-wrap: balance; letter-spacing: .02em }
+h2 { font-family: var(--display); font-size: 1.3rem; margin: 0; letter-spacing: .03em }
+.lead { margin: 6px 0 0; max-width: 68ch; color: var(--muted) }
+.status { font-size: .9rem; color: var(--muted) }
+.status b { color: var(--moss) }
+section { display: grid; gap: 14px }
+.hint { margin: 0; color: var(--muted); max-width: 68ch }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px }
+.head h3 { margin: 0; font-size: 1.1rem; font-weight: 700 }
+.head .where { color: var(--muted); font-size: .92rem }
+.head .count { margin-left: auto; font-size: .85rem; color: var(--moss); font-variant-numeric: tabular-nums }
+.vars { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px }
+.v { border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: grid; gap: 4px; background: var(--bg) }
+.v.on { border-color: var(--moss); background: var(--moss-soft) }
+.v button.play { all: unset; cursor: pointer; display: block; border-radius: 4px }
+.v button.play:focus-visible, .v label:focus-within { outline: 2px solid var(--moss); outline-offset: 2px }
+.v canvas { width: 100%; height: 44px; display: block }
+.meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-family: var(--mono); font-size: .72rem; color: var(--muted) }
+.meta label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--ink); font-family: var(--body); font-size: .85rem }
+.feat { font-family: var(--mono); font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums }
+.playing canvas { opacity: .65 }
+.tag { font-family: var(--body); font-size: .72rem; color: var(--moss); letter-spacing: .04em }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Odsłuch dźwięków Osady</h1>
+    <p class="lead">Wszystkie dźwięki są syntetyzowane w przeglądarce. Z każdego głosu wygenerowano wiele wariantów; tu są
+      najbliższe wzorcowi prawdziwego odgłosu (długość, wysokość tonu, barwa) i możliwie różne od siebie, a obok nich warianty
+      już grające w grze (oznaczone „w grze”, wstępnie zaznaczone). Kliknij falę, żeby posłuchać. Zaznacz „dobre” przy
+      wariantach, które mają zostać w grze: gra będzie losować tylko spośród zaznaczonych.</p>
+    <p class="status" id="status">Wczytywanie zapisanego wyboru…</p>
+  </header>
+  <section id="voice"><h2>Głosy: zwierzęta, ptaki, okrzyki</h2></section>
+  <section id="work"><h2>Praca i zdarzenia</h2><p class="hint">Po 3 losowe warianty. Gra losuje z całej przestrzeni; zaznacz, jeśli któryś odstaje na plus.</p></section>
+  <section id="loop"><h2>Tło i pętle</h2><p class="hint">Po 4 sekundy. W grze głośność zależy od tego, co widać w kadrze i jak blisko jest kamera.</p></section>
+</div>
+
+<script>
+const SOUNDS = /*DATA*/[];
+const picks = {};
+let db = null;
+let current = null;
+const statusEl = document.getElementById('status');
+
+function countText(name) {
+  const n = (picks[name] || []).length;
+  return n ? `wybrane: ${n}` : '';
+}
+
+function drawWave(canvas, buf) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 140, h = canvas.clientHeight || 44;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const g = canvas.getContext('2d');
+  g.scale(dpr, dpr);
+  const d = buf.getChannelData(0);
+  const col = getComputedStyle(document.documentElement).getPropertyValue('--wave').trim();
+  g.fillStyle = col;
+  let peak = 1e-6;
+  for (let i = 0; i < d.length; i += 7) peak = Math.max(peak, Math.abs(d[i]));
+  const step = d.length / w;
+  for (let x = 0; x < w; x++) {
+    let m = 0;
+    for (let i = Math.floor(x * step); i < Math.floor((x + 1) * step); i += 3) m = Math.max(m, Math.abs(d[i]));
+    const bh = Math.max(1, (m / peak) * (h - 4));
+    g.fillRect(x, (h - bh) / 2, 1, bh);
+  }
+}
+
+let decodeCtx = null;
+async function decode(src) {
+  try {
+    decodeCtx = decodeCtx || new (window.OfflineAudioContext)(1, 44100, 44100);
+    const bytes = Uint8Array.from(atob(src.split(',')[1]), (c) => c.charCodeAt(0));
+    return await decodeCtx.decodeAudioData(bytes.buffer);
+  } catch { return null; }
+}
+
+function render() {
+  for (const s of SOUNDS) {
+    const sec = document.getElementById(s.group);
+    const card = document.createElement('article');
+    card.className = 'card';
+    card.innerHTML = `<div class="head"><h3></h3><span class="where"></span><span class="count"></span></div><div class="vars"></div>`;
+    card.querySelector('h3').textContent = s.label;
+    card.querySelector('.where').textContent = s.desc;
+    const count = card.querySelector('.count');
+    count.textContent = countText(s.name);
+    const vars = card.querySelector('.vars');
+    for (const v of s.variants) {
+      const el = document.createElement('div');
+      el.className = 'v';
+      const id = `p-${s.name}-${v.seed}`;
+      el.innerHTML = `<button class="play" type="button" aria-label="Odtwórz ${s.label}, wariant ${v.seed}"><canvas></canvas></button>
+        <div class="meta"><span>#${v.seed}${s.kept.includes(v.seed) ? ' <span class="tag">w grze</span>' : ''}</span>${s.group === 'loop' ? '' : `<label><input type="checkbox" id="${id}"> dobre</label>`}</div>
+        ${s.group === 'loop' ? '' : `<div class="feat">${v.dur}s${v.f0 ? ' · ' + v.f0 + ' Hz' : ''}</div>`}`;
+      const audio = new Audio(v.src);
+      el.querySelector('button').addEventListener('click', () => {
+        if (current && current !== audio) { current.pause(); current.currentTime = 0; }
+        current = audio;
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        el.classList.add('playing');
+        audio.onended = () => el.classList.remove('playing');
+      });
+      const box = el.querySelector('input');
+      if (box) {
+        box.addEventListener('change', () => toggle(s.name, v.seed, box.checked));
+        el.dataset.key = `${s.name}:${v.seed}`;
+      }
+      vars.appendChild(el);
+      decode(v.src).then((buf) => { if (buf) drawWave(el.querySelector('canvas'), buf); });
+    }
+    card.dataset.name = s.name;
+    sec.appendChild(card);
+  }
+}
+
+function sync() {
+  for (const el of document.querySelectorAll('.v[data-key]')) {
+    const [name, seed] = el.dataset.key.split(':');
+    const on = (picks[name] || []).includes(Number(seed));
+    el.classList.toggle('on', on);
+    el.querySelector('input').checked = on;
+  }
+  for (const card of document.querySelectorAll('.card')) card.querySelector('.count').textContent = countText(card.dataset.name);
+  const total = Object.values(picks).reduce((a, l) => a + l.length, 0);
+  statusEl.innerHTML = db
+    ? `Wybór zapisuje się na bieżąco i Claude go odczyta. Zaznaczone warianty: <b>${total}</b>.`
+    : `Zapis wyboru jest tu niedostępny: zaznaczenia zostaną tylko na tej stronie. Podaj numery wariantów w rozmowie. Zaznaczone: <b>${total}</b>.`;
+}
+
+const writing = {};
+function toggle(name, seed, on) {
+  const set = new Set(picks[name] || []);
+  if (on) set.add(seed); else set.delete(seed);
+  picks[name] = [...set].sort((a, b) => a - b);
+  sync();
+  save(name);
+}
+
+/** Zapis wyboru dzwieku do bazy; zapisy jednego dokumentu ida po kolei. */
+function save(name) {
+  if (!db) return;
+  writing[name] = (writing[name] || Promise.resolve()).then(() =>
+    db.doc('picks/' + name).set({ seeds: picks[name] }).catch(() => {
+      statusEl.textContent = 'Nie udało się zapisać wyboru. Podaj numery wariantów w rozmowie.';
+    }));
+}
+
+for (const s of SOUNDS) if (s.kept.length) picks[s.name] = [...s.kept];
+render();
+sync();
+(async () => {
+  db = await window.claude?.use('db') ?? null;
+  if (!db) { sync(); return; }
+  db.collection('picks').onSnapshot((snap) => {
+    for (const d of snap.docs) picks[d.id] = (d.data()?.seeds || []).filter((x) => typeof x === 'number');
+    sync();
+  }, () => { db = null; sync(); });
+  sync();
+})();
+</script>

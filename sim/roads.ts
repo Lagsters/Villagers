@@ -8,7 +8,7 @@ import { invalidateRoutes } from './routing.ts';
 import { sendHome } from './serfs.ts';
 import { carrierAfterSplit } from './transport.ts';
 import { FLAG_SLOTS, type Flag, type GameState, type Road } from './types.ts';
-import { allocId, canPlaceFlag, isClearObj, isLandWalkable, neighbor, ownedBy, walkCost } from './world.ts';
+import { allocId, canPlaceFlag, isClearObj, isLandWalkable, isRoadPassable, neighbor, ownedBy, walkCost } from './world.ts';
 import { cancelTransit } from './goods.ts';
 import { findPath } from './pathfind.ts';
 
@@ -103,7 +103,7 @@ export function validateRoad(s: GameState, p: number, start: number, dirs: numbe
     if (!last) {
       if (!ownedBy(map, nx, p)) return null;
       if (map.roads[nx] !== 0) return null;
-      if (!isClearObj(map.obj[nx])) return null;
+      if (!isRoadPassable(map.obj[nx])) return null;
       if (map.terrain[nx] === T.WATER) {
         if (!waterRoadCell(s, nx)) return null;
         water = true;
@@ -265,13 +265,14 @@ export function roadAt(s: GameState, pos: number): number {
  * Najkrotsza mozliwa droga (lista kierunkow) z flagi na polu `from` do pola `to`
  * (istniejacej wlasnej flagi albo miejsca na nowa). null gdy sie nie da.
  */
-export function findRoadPath(s: GameState, p: number, from: number, to: number): number[] | null {
+export function findRoadPath(s: GameState, p: number, from: number, to: number, throughTrees = true): number[] | null {
   const map = s.map;
   if (from === to) return null;
   const endIsFlag = map.obj[to] === O.FLAG;
   if (!endIsFlag && !canPlaceFlag(s, p, to)) return null;
   const path = findPath(map, from, to, (i) =>
-    ownedBy(map, i, p) && map.roads[i] === 0 && isClearObj(map.obj[i]) && isLandWalkable(map, i), 4000);
+    ownedBy(map, i, p) && map.roads[i] === 0 && (throughTrees ? isRoadPassable(map.obj[i]) : isClearObj(map.obj[i]))
+    && isLandWalkable(map, i), 4000);
   if (!path || path.length > MAX_ROAD_LEN) return null;
   return validateRoad(s, p, from, path) ? path : null;
 }

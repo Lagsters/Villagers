@@ -206,7 +206,8 @@ export class Bot {
   private roadTo(s: GameState, flagPos: number, avoid: number[], maxLen = 16, tries = 6): Command | null {
     for (const from of this.networkFlags(s, flagPos).slice(0, tries)) {
       if (from === flagPos) return null;
-      const dirs = findRoadPath(s, this.player, from, flagPos);
+      // Bot prowadzi drogi po wolnych polach: przez drzewa nie da sie ich potem dzielic flagami (dluga droga = korek).
+      const dirs = findRoadPath(s, this.player, from, flagPos, false);
       if (!dirs || dirs.length > maxLen) continue;
       let c = from;
       let bad = false;

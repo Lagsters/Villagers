@@ -72,6 +72,25 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 - Teren malowany w shaderze (wagi rodzajów terenu, poszarpane granice, faktury trawy, skały, piasku, śniegu i wody),
   odmiany drzew i skał z wzorami w shaderze, pola z rzędami kłosów, płynny wzrost sadzonek i zboża, znak geologa
   z kolorem złoża; sprzęty przed budynkami leżą na terenie, a budynek na stoku ma podmurówkę (docs/DECISIONS.md).
+- Teren, drogi, drzewa i pola jako jeden obraz: stan pól w teksturze dla shadera terenu (cienie, ściółka, wydeptana
+  ziemia, drogi i zaorane pola rysowane przez teren), wspólna paleta zieleni, niższe zboże bez płyty, kępy trawy
+  i krzaki (docs/DECISIONS.md).
+- Plaża, góry, śnieg i woda: rodzaje terenu w teksturze (granice niezależne od siatki), nowa skała, zaspy, wydmy
+  i mokry brzeg, falująca woda z pianą, trzcina, suche kępy i drobne kamienie (docs/DECISIONS.md).
+- Niższe fundamenty (poziom budynku ze średniej wysokości terenu), schody przed drzwiami i ścieżka od flagi pod
+  drzwi, limit stoku pod chatą (SIM_VERSION 3), woda tylko na poziomie swojego lustra (docs/DECISIONS.md).
+- Łagodne wzniesienie górskie przy zamkach, kamera do 10° nad horyzontem, krzywizna świata z morzem i niebem
+  (docs/DECISIONS.md); równowaga botów: test wymaga co najmniej 10/20 wygranych trudnego bota.
+- Jednolity kolor podmurówki, cokołu i schodów, jaśniejsze deski; ręczne poprawki mapy DOLINA/64 (wzniesienie
+  z kopalniami i jezioro), ziemia placu budowy na terenie, kłody i pieniek drwala, grządka leśnika bliżej drzwi
+  (docs/DECISIONS.md).
+- Świnki z zachowaniami na wybiegu (błoto, rycie, płot), tragarze niosą towar wg ciężaru i mają więcej zachowań
+  w bezczynności, okrągłe kłody na stoku, drogi przez drzewa łagodnym łukiem (SIM_VERSION 4) (docs/DECISIONS.md).
+- Drogi omijają łukiem także budynki; postacie z łokciami i dłońmi (docs/DECISIONS.md).
+- Dźwięk z położeniem (głośność i wyrazistość wg przybliżenia i odległości od środka widoku, panorama), dźwięki
+  pracy wszystkich zawodów, głosy zwierząt i rycerzy, otoczenie mieszane wg kadru; odsłuch wariantów
+  `scripts/sounds.ts` i strona odsłuchu `scripts/sounds-page.py`, wybór właściciela w `PICKS`, kwik świni wybrany pomiarem (README, docs/AUDIO.md,
+  docs/DECISIONS.md).
 
 ## Dalej
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.

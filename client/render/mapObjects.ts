@@ -2,23 +2,26 @@
  * Statyczne obiekty mapy (drzewa, skaly, pola, znaki, ruiny). Lista instancji jest liczona
  * per chunk; do GPU trafiaja tylko chunki w kadrze. Zmiany wykrywamy porownaniem kopii map.obj.
  * Drzewa i skaly maja po dwie odmiany modelu i odcien instancji wg pola; sadzonki i zboze rosna plynnie
- * (wzrost z licznika przegladu mapy - sim/mapsweep.ts - odswiezany co GROW_TICKS).
+ * (wzrost z licznika przegladu mapy - sim/mapsweep.ts - odswiezany co GROW_TICKS). Ozdoby terenu (kepy trawy w kolorze
+ * trawy pod nimi, krzaki, trzcina, suche kepy, drobne kamienie) stoja tylko tam, gdzie nie zawadzaja: z dala od drog,
+ * flag i budynkow.
  */
 import * as THREE from 'three';
-import { O, isField, isStone, isTree } from '../../sim/defs.ts';
+import { O, T, isField, isStone, isTree } from '../../sim/defs.ts';
+import { stepXY } from '../../sim/grid.ts';
 import type { MapData } from '../../sim/mapgen.ts';
 import { FIELD_STAGE, SAPLING_STAGE } from '../../sim/mapsweep.ts';
 import type { GameState } from '../../sim/types.ts';
-import { H_SCALE, vx, vz } from './coords.ts';
+import { H_SCALE, groundHeight, vx, vz } from './coords.ts';
 import { InstancedLayer } from './instanced.ts';
 import { getModel } from './models.ts';
-import { CHUNK } from './terrain.ts';
+import { CHUNK, grassColor } from './terrain.ts';
 
-const KINDS = ['tree_pine', 'tree_pine2', 'tree_leaf', 'tree_leaf2', 'stump', 'stone', 'stone2', 'field', 'field_ripe', 'sign', 'ruin'] as const;
+const KINDS = ['tree_pine', 'tree_pine2', 'tree_leaf', 'tree_leaf2', 'stump', 'stone', 'stone2', 'field', 'field_ripe', 'sign', 'ruin', 'tuft', 'bush'] as const;
 type Kind = (typeof KINDS)[number];
 export type TreeModel = 'tree_pine' | 'tree_pine2' | 'tree_leaf' | 'tree_leaf2';
 /** Warstwy z kolorem instancji: odcien drzew i skal, dojrzewanie zboza, zloze na znaku geologa. */
-const TINTED: readonly Kind[] = ['tree_pine', 'tree_pine2', 'tree_leaf', 'tree_leaf2', 'stone', 'stone2', 'field', 'sign'];
+const TINTED: readonly Kind[] = ['tree_pine', 'tree_pine2', 'tree_leaf', 'tree_leaf2', 'stone', 'stone2', 'field', 'sign', 'tuft', 'bush'];
 const K = Object.fromEntries(KINDS.map((k, i) => [k, i])) as Record<Kind, number>;
 
 /** Co tyle tickow przeliczamy chunki z rosnacymi sadzonkami i zbozem (1 s gry przy tempie 1x). */
@@ -26,12 +29,22 @@ const GROW_TICKS = 5;
 /** Wielkosc swiezo posadzonej sadzonki (jak SAPLING_S w client/render/work/field.ts). */
 const SAPLING_S = 0.15;
 /** Mnoznik koloru zielonego zboza tuz przed dojrzaloscia: zielen przechodzi w zloto modelu field_ripe. */
-const RIPEN: readonly [number, number, number] = [3.6, 1.12, 1.6];
+const RIPEN: readonly [number, number, number] = [4.0, 1.4, 2.1];
+/**
+ * Mnoznik koloru kepy trawy wzgledem trawy terenu pod nia: pionowe zdzbla lapia mniej slonca niz ziemia,
+ * wiec bez rozjasnienia kepa bylaby ciemna plamka.
+ */
+const TUFT_LIGHT = 1.6;
+/** Kolor suchej kepy na pustyni (przed rozjasnieniem TUFT_LIGHT): slomkowy, jak przesuszona trawa przy piasku. */
+const DRY_TUFT: readonly number[] = [0.32, 0.27, 0.1];
 /** Kolor symbolu na znaku geologa wg zloza (RES.*): brak (takze ryby), wegiel, zelazo, zloto, kamien. */
 const SIGN_COLORS = [0xf2ead8, 0x2a2a2e, 0xa8553a, 0xf2c230, 0xa9a59c, 0xf2ead8];
 
-/** Instancja obiektu; tr, tg, tb - kolor instancji (liniowo, mnozony przez kolory modelu), tr < 0 - bez koloru. */
-interface Inst { k: number; x: number; y: number; z: number; r: number; s: number; sy: number; i: number; tr: number; tg: number; tb: number }
+/**
+ * Instancja obiektu; i - pole obiektu (sceny pracy moga go ukryc) albo -1, g - pole ozdoby terenu (znika, gdy
+ * scena orze pole); tr, tg, tb - kolor instancji (liniowo, mnozony przez kolory modelu), tr < 0 - bez koloru.
+ */
+interface Inst { k: number; x: number; y: number; z: number; r: number; s: number; sy: number; i: number; g?: number; tr: number; tg: number; tb: number }
 
 function hashf(i: number, k: number): number {
   let h = Math.imul(i ^ 0x27d4eb2d, 0x165667b1) ^ k;
@@ -87,6 +100,8 @@ export class MapObjectsRenderer {
   /** Polozenie przegladu mapy (GameState.sweep) - ulamek okresu od ostatnich odwiedzin pola. */
   private sweep = 0;
   private lastObj: Uint8Array;
+  private lastRoads: Uint8Array;
+  private rgb: [number, number, number] = [0, 0, 0];
   private dirtyChunks = new Set<number>();
   private needRebuild = true;
   private cw: number;
@@ -115,6 +130,7 @@ export class MapObjectsRenderer {
       this.buildChunk(c);
     }
     this.lastObj = new Uint8Array(map.obj);
+    this.lastRoads = new Uint8Array(map.roads);
   }
 
   setModel(kind: Kind, g: THREE.BufferGeometry): void {
@@ -128,6 +144,88 @@ export class MapObjectsRenderer {
     return (stage + Math.min(1, (this.map.objTimer[i] + since) / per)) / stages;
   }
 
+  /**
+   * Ozdoby na polu i (o - obiekt pola), kazdy rodzaj terenu inne:
+   * - laka: kepy trawy wokol drzew i skal, rzadziej na otwartej lace, czesciej na skraju lasu, tam tez krzaki;
+   *   na brzegu trzcina (wydluzone kepy) od strony wody;
+   * - pustynia: suche kepy przy lace, rzadko w glebi, kamyki;
+   * - gory: drobne kamienie, przy lace wiecej (piarg) i gorska trawa.
+   * Bez ozdob na drodze, na sniegu i obok flag i budynkow (plac, podworko). Nie naleza do pola (i = -1): sceny pracy
+   * ukrywajace obiekt pola zostawiaja je na miejscu.
+   */
+  private clutter(x: number, y: number, i: number, o: number, list: Inst[]): void {
+    const m = this.map;
+    const t = m.terrain[i];
+    if (t === T.WATER || t === T.SNOW || m.roads[i] !== 0) return;
+    if (o !== O.NONE && o !== O.TREE && o !== O.STUMP && !isStone(o)) return;
+    let trees = 0, grass = 0, water = -1;
+    for (let d = 0; d < 6; d++) {
+      const [nx, ny] = stepXY(x, y, d);
+      if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) return;
+      const j = ny * m.w + nx;
+      const n = m.obj[j];
+      if (n === O.FLAG || n === O.BUILDING || n === O.BUILDING_PART) return;
+      if (n === O.TREE) trees++;
+      if (m.terrain[j] === T.GRASS) grass++;
+      if (m.terrain[j] === T.WATER && water < 0) water = d;
+    }
+    grassColor(m, x, y, this.rgb);
+    const cx = vx(x, y), cz = vz(y);
+    const tuft = (a: number, r: number, s: number, sy: number, b: readonly number[]) => {
+      const px = cx + Math.cos(a) * r, pz = cz + Math.sin(a) * r;
+      list.push({ k: K.tuft, x: px, y: groundHeight(m, px, pz), z: pz, r: a * 3, s, sy, i: -1, g: i, tr: b[0], tg: b[1], tb: b[2] });
+    };
+    const pebble = (k: number) => {
+      const a = hashf(i, 50 + k) * Math.PI * 2, r = hashf(i, 53 + k) * 0.4;
+      const px = cx + Math.cos(a) * r, pz = cz + Math.sin(a) * r;
+      const s = 0.12 + hashf(i, 56 + k) * 0.1;
+      const c = tint(0.8 + hashf(i, 59 + k) * 0.2, (hashf(i, 62 + k) - 0.5) * 0.1);
+      list.push({ k: hashf(i, 65 + k) < 0.5 ? K.stone : K.stone2, x: px, y: groundHeight(m, px, pz) - 0.01, z: pz, r: a * 5, s, sy: s * 0.8, i: -1, g: i, tr: c[0], tg: c[1], tb: c[2] });
+    };
+    const grassTint = (b: number) => [this.rgb[0] * b, this.rgb[1] * b, this.rgb[2] * b];
+    if (t === T.MOUNTAIN) {
+      const stones = hashf(i, 20) < (grass > 0 ? 0.6 : 0.25) ? 1 + Math.floor(hashf(i, 21) * 2) : 0;
+      for (let k = 0; k < stones; k++) pebble(k);
+      if (grass > 0 && hashf(i, 22) < 0.5) tuft(hashf(i, 23) * Math.PI * 2, hashf(i, 24) * 0.38, 0.8, 0.7, grassTint(TUFT_LIGHT * 0.85));
+      return;
+    }
+    if (t === T.DESERT) {
+      const n = hashf(i, 20) < (grass > 0 ? 0.6 : 0.05) ? 1 + Math.floor(hashf(i, 21) * 2) : 0;
+      for (let k = 0; k < n; k++) {
+        const b = TUFT_LIGHT * (0.9 + hashf(i, 31 + k) * 0.2);
+        tuft(hashf(i, 22 + k) * Math.PI * 2, hashf(i, 25 + k) * 0.38, 0.7 + hashf(i, 28 + k) * 0.4, 0.8, DRY_TUFT.map((c) => c * b));
+      }
+      if (hashf(i, 34) < 0.06) pebble(0);
+      return;
+    }
+    if (water >= 0) {
+      // Trzcina na plazy: kilka wysokich kep od strony wody.
+      if (o !== O.NONE || hashf(i, 20) > 0.55) return;
+      const [wx, wy] = stepXY(x, y, water);
+      const aw = Math.atan2(vz(wy) - cz, vx(wx, wy) - cx);
+      for (let k = 0; k < 2 + Math.floor(hashf(i, 21) * 2); k++) {
+        tuft(aw + (hashf(i, 22 + k) - 0.5) * 1.4, 0.3 + hashf(i, 25 + k) * 0.15, 0.7 + hashf(i, 28 + k) * 0.3, 2.2 + hashf(i, 31 + k), grassTint(TUFT_LIGHT * 0.75));
+      }
+      return;
+    }
+    const around = o !== O.NONE;
+    const edge = o === O.NONE && trees > 0 && trees < 5;
+    const tufts = around ? 1 + Math.floor(hashf(i, 20) * 2.4) : hashf(i, 20) < (edge ? 0.8 : 0.3) ? 1 + Math.floor(hashf(i, 21) * 2) : 0;
+    const shade = trees > 0 || o === O.TREE ? TUFT_LIGHT * 0.8 : TUFT_LIGHT;
+    for (let k = 0; k < tufts; k++) {
+      // Wokol pnia albo skaly - poza nimi; na lace - gdziekolwiek w polu.
+      const s = 0.8 + hashf(i, 28 + k) * 0.6;
+      tuft(hashf(i, 22 + k) * Math.PI * 2, around ? 0.24 + hashf(i, 25 + k) * 0.16 : hashf(i, 25 + k) * 0.38, s, s, grassTint(shade * (0.9 + hashf(i, 31 + k) * 0.2)));
+    }
+    if (o === O.NONE && hashf(i, 34) < (edge ? 0.45 : 0.03)) {
+      const a = hashf(i, 35) * Math.PI * 2, r = hashf(i, 36) * 0.25;
+      const px = cx + Math.cos(a) * r, pz = cz + Math.sin(a) * r;
+      const s = 0.8 + hashf(i, 37) * 0.45;
+      const c = tint(0.85 + hashf(i, 38) * 0.2, (hashf(i, 39) - 0.5) * 0.12);
+      list.push({ k: K.bush, x: px, y: groundHeight(m, px, pz), z: pz, r: a, s, sy: s * (0.85 + hashf(i, 40) * 0.3), i: -1, g: i, tr: c[0], tg: c[1], tb: c[2] });
+    }
+  }
+
   private buildChunk(c: number): void {
     const m = this.map;
     const list: Inst[] = [];
@@ -137,6 +235,7 @@ export class MapObjectsRenderer {
       for (let x = cx * CHUNK; x < Math.min(m.w, (cx + 1) * CHUNK); x++) {
         const i = y * m.w + x;
         const o = m.obj[i];
+        this.clutter(x, y, i, o, list);
         if (o === O.NONE || o === O.FLAG || o === O.BUILDING || o === O.BUILDING_PART) continue;
         const px = vx(x, y) + (hashf(i, 1) - 0.5) * 0.2;
         const pz = vz(y) + (hashf(i, 2) - 0.5) * 0.2;
@@ -190,12 +289,20 @@ export class MapObjectsRenderer {
     const m = this.map;
     const obj = m.obj;
     const last = this.lastObj;
+    const lastRoads = this.lastRoads;
     this.sweep = s.sweep;
     for (let i = 0; i < obj.length; i++) {
-      if (obj[i] !== last[i]) {
+      if (obj[i] !== last[i] || m.roads[i] !== lastRoads[i]) {
         last[i] = obj[i];
+        lastRoads[i] = m.roads[i];
+        // Ozdoby sasiednich pol zaleza od tego pola (flaga, budynek) - takze w sasiednim chunku.
         const x = i % m.w, y = (i / m.w) | 0;
-        this.dirtyChunks.add(Math.floor(y / CHUNK) * this.cw + Math.floor(x / CHUNK));
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const cx = Math.floor((x + dx) / CHUNK), cy = Math.floor((y + dy) / CHUNK);
+            if (cx >= 0 && cy >= 0 && cx < this.cw && cy < this.ch) this.dirtyChunks.add(cy * this.cw + cx);
+          }
+        }
       }
     }
     if (s.tick - this.lastGrow >= GROW_TICKS || s.tick < this.lastGrow) {
@@ -218,10 +325,14 @@ export class MapObjectsRenderer {
 
   /** Pola ukryte przez sceny pracy w tej klatce (sceny rysuja je same, np. koszone zboze). */
   private hidden = new Set<number>();
+  /** Pola zaorane przez sceny pracy w tej klatce (siew, sciernisko) - bez ozdob terenu. */
+  private plowed = new Set<number>();
 
-  setHidden(cells: ReadonlySet<number>): void {
-    if (cells.size === this.hidden.size && [...cells].every((c) => this.hidden.has(c))) return;
+  setHidden(cells: ReadonlySet<number>, plowed: ReadonlySet<number>): void {
+    const same = (a: ReadonlySet<number>, b: ReadonlySet<number>) => a.size === b.size && [...a].every((c) => b.has(c));
+    if (same(cells, this.hidden) && same(plowed, this.plowed)) return;
     this.hidden = new Set(cells);
+    this.plowed = new Set(plowed);
     this.needRebuild = true;
   }
 
@@ -233,9 +344,9 @@ export class MapObjectsRenderer {
     for (const l of this.layers) l.begin();
     for (let c = 0; c < this.chunkInst.length; c++) {
       if (!this.frustum.intersectsBox(this.chunkBoxes[c])) continue;
-      const hide = this.hidden.size > 0;
+      const hide = this.hidden.size > 0 || this.plowed.size > 0;
       for (const it of this.chunkInst[c]) {
-        if (hide && this.hidden.has(it.i)) continue;
+        if (hide && (this.hidden.has(it.i) || (it.g !== undefined && this.plowed.has(it.g)))) continue;
         const layer = this.layers[it.k];
         const n = layer.push(it.x, it.y, it.z, it.r, it.s, it.sy);
         if (it.tr >= 0) layer.color(n, it.tr, it.tg, it.tb);

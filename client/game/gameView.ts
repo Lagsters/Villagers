@@ -5,8 +5,9 @@
 import '../../sim/index.ts';
 import { step } from '../../sim/step.ts';
 import { findRoadPath } from '../../sim/roads.ts';
-import { hexDist, spiral } from '../../sim/grid.ts';
+import { spiral } from '../../sim/grid.ts';
 import { Sound } from '../audio.ts';
+import { vx, vz } from '../render/coords.ts';
 import { Minimap } from '../ui/minimap.ts';
 import { Tutorial } from '../ui/tutorial.ts';
 import type { GameState } from '../../sim/types.ts';
@@ -35,6 +36,7 @@ export class GameView {
   private canvas: HTMLCanvasElement;
   private app: HTMLElement;
   private endShown = false;
+  private lastMix = 0;
   private onResize: () => void;
   private overlay: HTMLElement | null = null;
   readonly sound: Sound;
@@ -50,6 +52,7 @@ export class GameView {
     app.appendChild(this.canvas);
     this.view = new SceneRenderer(this.canvas, opts.graphics);
     this.view.setMap(state.map);
+    this.view.syncState(state, []);
     this.onResize = () => this.view.resize(app.clientWidth, app.clientHeight);
     this.onResize();
     window.addEventListener('resize', this.onResize);
@@ -57,6 +60,7 @@ export class GameView {
     this.session = new GameSession(state, driver, localPlayer);
     this.sound = new Sound(opts.volume);
     this.sound.ambient(true);
+    this.view.entities.audio = this.sound;
     this.hud = new Hud(app, this.session, {
       setPreview: (cells, ok) => this.view.overlay.setPreview(this.session.state, cells, ok),
       setSteps: (cells) => this.view.overlay.setSteps(this.session.state, cells),
@@ -116,10 +120,8 @@ export class GameView {
         const ev = this.session.takeEvents();
         this.view.syncState(this.session.state, ev);
         this.hud.onEvents(ev);
-        const center = this.view.centerIdx();
         const w = this.session.state.map.w;
-        const reach = Math.ceil(16 / this.view.cam.zoom);
-        this.sound.onEvents(ev, this.session.localPlayer, (pos) => hexDist(pos % w, (pos / w) | 0, center % w, (center / w) | 0) <= reach);
+        this.sound.onEvents(ev, this.session.localPlayer, (pos) => ({ x: vx(pos % w, (pos / w) | 0), z: vz((pos / w) | 0) }));
         if (this.session.state.winner !== -1 && !this.endShown) {
           this.endShown = true;
           this.showEnd(this.session.state.winner);
@@ -127,6 +129,12 @@ export class GameView {
       }
       const r0 = performance.now();
       this.view.render(dtMs / 1000, this.session.state, this.session.alpha, this.session.localPlayer, this.session.paused ? 0 : this.session.speed);
+      this.sound.setListener(this.view.audioListener());
+      if (now - this.lastMix > 500) {
+        this.lastMix = now;
+        this.sound.setMix(this.view.viewMix(this.session.state));
+      }
+      this.sound.update();
       this.perf.frames++;
       this.perf.frameMs += performance.now() - r0;
       if (this.session.state.tick !== t0) {

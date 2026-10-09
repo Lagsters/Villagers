@@ -1,19 +1,31 @@
 /** Paleta stylizowanego low-poly. */
 
-/** Soczysta zielen lak: ciemne i jasne laty. */
-export const GRASS_DARK: [number, number, number] = [0.12, 0.36, 0.05];
-export const GRASS_LIGHT: [number, number, number] = [0.3, 0.58, 0.1];
+/**
+ * Zielen lak: ciemne i jasne laty, przesuszona trawa (wzgorza, okolice plaz) i sciolka lasu. Z tej samej
+ * rodziny co korony drzew (art/scripts/nature.py) - las i laka maja wygladac jak jeden obraz.
+ */
+export const GRASS_DARK: [number, number, number] = [0.085, 0.2, 0.035];
+export const GRASS_LIGHT: [number, number, number] = [0.2, 0.36, 0.07];
+export const GRASS_DRY: [number, number, number] = [0.3, 0.33, 0.1];
+export const FOREST_FLOOR: [number, number, number] = [0.075, 0.14, 0.035];
+export const LITTER: [number, number, number] = [0.2, 0.12, 0.05];
 /** Ziemia na stromych zboczach lak. */
 export const EARTH: [number, number, number] = [0.36, 0.27, 0.15];
-/** Piasek pustyni i plaz. */
-export const SAND: [number, number, number] = [0.84, 0.7, 0.42];
-/** Skala gor: ciemniejsza i jasniejsza (plamy). */
-export const ROCK_DARK: [number, number, number] = [0.36, 0.31, 0.26];
-export const ROCK_LIGHT: [number, number, number] = [0.6, 0.55, 0.48];
+/** Ubita ziemia drog i wydeptanych placow przed budynkami. */
+export const PATH: [number, number, number] = [0.33, 0.22, 0.11];
+/** Zaorana ziemia pola: bruzda i grzbiet skiby. */
+export const SOIL_DARK: [number, number, number] = [0.11, 0.06, 0.025];
+export const SOIL_LIGHT: [number, number, number] = [0.24, 0.14, 0.065];
+/** Piasek pustyni i plaz: jasny i ciemniejszy, cieplejszy (laty, doliny wydm). */
+export const SAND: [number, number, number] = [0.78, 0.63, 0.37];
+export const SAND_DARK: [number, number, number] = [0.55, 0.4, 0.2];
+/** Skala gor: szczeliny i cienie, oswietlone sciany. */
+export const ROCK_DARK: [number, number, number] = [0.15, 0.13, 0.11];
+export const ROCK_LIGHT: [number, number, number] = [0.5, 0.46, 0.4];
 export const SNOW: [number, number, number] = [0.93, 0.95, 0.98];
 /** Woda: plycizna przy brzegu, otwarta woda, glebia (kolor tla przy brzegu mapy). */
-export const SHALLOW_WATER: [number, number, number] = [0.2, 0.5, 0.66];
-export const WATER: [number, number, number] = [0.12, 0.34, 0.6];
+export const SHALLOW_WATER: [number, number, number] = [0.14, 0.44, 0.52];
+export const WATER: [number, number, number] = [0.09, 0.3, 0.52];
 export const DEEP_WATER: [number, number, number] = [0.08, 0.25, 0.5];
 
 /** Kolory towarow (maly szescian na fladze / nad glowa tragarza). */

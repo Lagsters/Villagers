@@ -12,10 +12,11 @@ import { Fx } from './fx.ts';
 import { InstancedLayer } from './instanced.ts';
 import { getModel } from './models.ts';
 import { PropPool } from './props.ts';
-import { CARRY_Y, Rig, UNIT_SCALE, type Pose, type RigFrames } from './rig.ts';
+import { Rig, UNIT_SCALE, carryArms, carryMatrix, carryStyle, swingArm, type Pose, type RigFrames } from './rig.ts';
 import { animalScenes, buildingScenes, eventScenes, frameScenes, serfScenes, siteScenes } from './work/index.ts';
 import type { Origin, SerfAt, Vec3, WorkCtx } from './work/types.ts';
-import { yardRects, yardWeight, type Rect } from './yard.ts';
+import { BROT, FLAG_DIR, local, placement } from './placement.ts';
+import { doorOf, yardRects, yardWeight, type Door, type Rect } from './yard.ts';
 
 const tmpColor = new THREE.Color();
 
@@ -23,16 +24,10 @@ function playerColor(p: number): THREE.Color {
   return tmpColor.setHex(PLAYER_COLORS[p % PLAYER_COLORS.length]);
 }
 
-/** Budynki sa obrocone o 30 stopni (drzwi na flage). */
-export const BROT = Math.PI / 6;
-const COS30 = Math.cos(BROT);
-const SIN30 = Math.sin(BROT);
-
-/** Punkt lokalny modelu budynku (uklad Blendera x, y) -> przesuniecie w swiecie (x, z). */
-export function local(lx: number, ly: number): [number, number] {
-  const rx = lx * COS30 - ly * SIN30;
-  const ry = lx * SIN30 + ly * COS30;
-  return [rx, -ry];
+/** Odbiorca dzwiekow swiata (client/audio.ts: Sound). */
+export interface AudioSink {
+  play(name: string, x: number, z: number, key?: number, gain?: number): void;
+  loop(key: number, name: string, x: number, z: number, gain?: number): void;
 }
 
 /** Szczyt masztu flagi na budynkach wojskowych i zamku: [lx, ly, wysokosc]. */
@@ -44,31 +39,29 @@ const BANNER: Record<number, [number, number, number]> = {
   [B.GUARDHOUSE]: [-0.2, 0.12, 0.8],
 };
 
-/**
- * Ustawienie modelu budynku wzgledem jego pola (jak w pierwowzorze): budynek wiekszy niz pole,
- * przesuniety ku swojej fladze (pole SE), tak ze drzwi wychodza prawie wprost na flage, a reszta
- * budynku siega w gore i w lewo. Kazdy budynek stoi na jednym polu; duze wizualnie wychodza poza nie.
- */
-export const FLAG_DIR = local(0, -1); // kierunek z pola budynku do jego flagi (SE)
-const PLACEMENT: Record<number, { s: number; d: number }> = {
-  [SIZE.SMALL]: { s: 1.7, d: 0.22 },
-  [SIZE.MEDIUM]: { s: 1.55, d: 0.2 },
-  [SIZE.MINE]: { s: 1.6, d: 0.18 },
-  [SIZE.LARGE]: { s: 1.3, d: 0.1 },
-};
-function placement(size: number): { s: number; ox: number; oz: number } {
-  const pl = PLACEMENT[size] ?? PLACEMENT[SIZE.SMALL];
-  return { s: pl.s, ox: FLAG_DIR[0] * pl.d, oz: FLAG_DIR[1] * pl.d };
-}
 
 /**
  * Najwyzej tyle budynek stoi ponad swoim polem, gdy teren pod obrysem wznosi sie (pol jednostki wysokosci terenu):
- * na lagodnym stoku nie tonie, a przy urwisku nie stoi na wysokiej podmurowce - tam wbija sie w zbocze.
+ * przy urwisku nie stoi na wysokiej podmurowce - tam wbija sie w zbocze.
  */
 const MAX_LIFT = 0.5 * H_SCALE;
 
 /** Obrys konstrukcji modeli budynkow wg rodzaju (podworko - client/render/yard.ts). */
 const YARDS: readonly (readonly Rect[] | null)[] = BUILDINGS.map((_, k) => yardRects(`building_${k}`));
+/** Glowne drzwi modeli budynkow wg rodzaju (na przedniej scianie, zwrocone ku fladze). */
+const DOORS: readonly (Door | null)[] = BUILDINGS.map((_, k) => doorOf(`building_${k}`));
+
+/** Schody przed drzwiami (swiat): wysokosc i glebokosc stopnia, najwiecej stopni. */
+const STEP_RISE = 0.035;
+const STEP_DEPTH = 0.045;
+const MAX_STEPS = 10;
+
+/**
+ * Wejscie do budynku: srodek progu (x, z) na przedniej scianie, kierunek wyjscia (fx, fz - ku fladze), szerokosc
+ * schodow, wysokosc progu, liczba i wysokosc stopni (0 - prog modelu wystarcza) i podnoze (footX, footZ) - tam
+ * dochodzi sciezka od flagi.
+ */
+export interface Entrance { x: number; z: number; fx: number; fz: number; w: number; thr: number; steps: number; rise: number; footX: number; footZ: number }
 
 /** Od tego przyblizenia rysujemy czapki, narzedzia i drobne rekwizyty. */
 const DETAIL_ZOOM = 1.6;
@@ -99,8 +92,13 @@ export class EntitiesRenderer {
   private at: SerfAt = { x: 0, y: 0, z: 0, rot: 0, moving: false, t: 0, walk: 0, bob: 0, from: -1, to: -1 };
   private tmpV = new THREE.Vector3();
   private tmpO = { x: 0, y: 0, z: 0 };
+  private bend: [number, number] = [0, 0];
+  private carryM = new THREE.Matrix4();
+  private tmpOrigin: Origin = { x: 0, y: 0, z: 0, sc: 1, yard: null };
   /** Prostokat widocznosci (swiat x/z) - encje poza nim nie sa rysowane. */
   private vis = { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
+  /** Silnik dzwieku (client/audio.ts) albo null - bez dzwieku (np. tlo menu). */
+  audio: AudioSink | null = null;
   /** Drobne detale postaci (czapki, narzedzia) - tylko przy przyblizeniu, z daleka i tak niewidoczne. */
   private details = true;
   /** Kierunek ku kamerze na plaszczyznie (obrot postaci), zaokraglony do 60 stopni. */
@@ -108,12 +106,20 @@ export class EntitiesRenderer {
   private camDir = new THREE.Vector3();
   /** Pola, ktorych statyczne obiekty sceny ukryly w tej klatce (rysuja je same). */
   readonly hidden = new Set<number>();
+  /** Pola zaorane w tej klatce przez sceny pracy (WorkCtx.plowCell). */
+  readonly plowed = new Set<number>();
   private ray = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
   private hit = new THREE.Vector3();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  /** Poziom budynkow (najwyzszy teren pod obrysem) - liczony raz, do zmiany wysokosci terenu. */
-  private bases = new Map<number, { pos: number; kind: number; y: number }>();
+  /** Poziom i wejscie budynkow - liczone raz, do zmiany wysokosci terenu. */
+  private bases = new Map<number, { pos: number; kind: number; y: number; door: Entrance | null }>();
+  private steps: InstancedLayer;
+  private stepM = new THREE.Matrix4();
+  private stepQ = new THREE.Quaternion();
+  private stepP = new THREE.Vector3();
+  private stepS = new THREE.Vector3();
+  private stepAxis = new THREE.Vector3(0, 1, 0);
 
   /** Wyznacza prostokat widocznosci: rzut naroznikow ekranu na plaszczyzny terenu (y = 0 i y = 7). */
   setView(camera: THREE.Camera, zoom = 1): void {
@@ -137,6 +143,11 @@ export class EntitiesRenderer {
     this.vis = Number.isFinite(x0) ? { x0: x0 - M, x1: x1 + M, z0: z0 - M, z1: z1 + M } : { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
   }
 
+  /** Prostokat widocznosci (swiat x/z). */
+  get view(): Readonly<{ x0: number; x1: number; z0: number; z1: number }> {
+    return this.vis;
+  }
+
   inView(x: number, z: number): boolean {
     const v = this.vis;
     return x >= v.x0 && x <= v.x1 && z >= v.z0 && z <= v.z1;
@@ -147,6 +158,7 @@ export class EntitiesRenderer {
     for (let k = 0; k < BUILDINGS.length; k++) this.buildingLayers.push(this.layer(`building_${k}`, 16));
     this.sites = ['site_small', 'site_medium', 'site_large'].map((n) => this.layer(n, 16));
     this.fire = this.layer('fire', 16);
+    this.steps = this.layer('stair_step', 64);
     this.flagPole = this.layer('flag', 256);
     this.flagCloth = this.layer('flag_cloth', 256, true);
     for (let g = 0; g < GOODS_COUNT; g++) this.goods.push(this.layer(`good_${g}`, 32));
@@ -156,6 +168,10 @@ export class EntitiesRenderer {
     this.props = new PropPool(this.group, material);
     this.rig = new Rig((n, cap, color) => this.layer(n, cap, color), (n) => this.props.get(n), PLAYER_COLORS);
     this.fx = new Fx((n, cap, color) => this.layer(n, cap, color));
+    this.fx.sound = (name, key, x, z, gain, loop) => {
+      if (loop) this.audio?.loop(key, name, x, z, gain);
+      else this.audio?.play(name, x, z, key, gain);
+    };
     this.ctx = new Ctx(this);
   }
 
@@ -178,11 +194,20 @@ export class EntitiesRenderer {
     return this.details;
   }
 
+  /** Przesuniecia drog omijajacych drzewa i budynki (client/render/cells.ts). */
+  roadBends: { bendAt(i: number, out: [number, number]): boolean } | null = null;
+
+  /** Punkt pola w swiecie; na drodze omijajacej drzewo albo budynek - przesuniety srodek drogi (roadBend). */
   wp(s: GameState, i: number, out: { x: number; y: number; z: number }): typeof out {
-    const x = i % s.map.w, y = (i / s.map.w) | 0;
+    const m = s.map;
+    const x = i % m.w, y = (i / m.w) | 0;
     out.x = vx(x, y);
-    out.y = s.map.height[i] * H_SCALE;
     out.z = vz(y);
+    if (m.roads[i] !== 0 && this.roadBends?.bendAt(i, this.bend)) {
+      out.x += this.bend[0];
+      out.z += this.bend[1];
+      out.y = groundHeight(m, out.x, out.z);
+    } else out.y = m.height[i] * H_SCALE;
     return out;
   }
 
@@ -200,9 +225,11 @@ export class EntitiesRenderer {
   }
 
   /**
-   * Uklad modelu budynku: srodek, skala i poziom - najwyzszy punkt terenu pod obrysem konstrukcji (naroza, srodki
-   * bokow i srodki prostokatow obrysu, do tego pole budynku), najwyzej MAX_LIFT ponad polem. Nizej sciany
-   * schodza do terenu jako podmurowka (shader modeli), wiec budynek na zboczu nie wisi.
+   * Uklad modelu budynku: srodek, skala i poziom - srednia wysokosc terenu pod obrysem konstrukcji (naroza, srodki
+   * bokow i srodki prostokatow obrysu, do tego pole budynku), najwyzej MAX_LIFT ponad polem, ale nie nizej niz teren
+   * przed drzwiami. Na stoku gorna strona wchodzi w zbocze, a od dolnej sciany schodza do terenu jako podmurowka
+   * (shader modeli). Nie najwyzszy punkt: wtedy na stoku podmurowka od dolu bywa wysoka jak polowa sciany.
+   * Przy okazji liczy wejscie (schody, podnoze sciezki od flagi) - Entrance.
    */
   originOf(s: GameState, b: Building, out: Origin): Origin {
     const p = this.wp(s, b.pos, this.tmpO);
@@ -211,22 +238,64 @@ export class EntitiesRenderer {
     out.z = p.z + pl.oz;
     out.sc = pl.s;
     out.yard = YARDS[b.kind];
-    const c = this.bases.get(b.id);
-    if (c && c.pos === b.pos && c.kind === b.kind) {
+    const c = this.cachedBase(b);
+    if (c) {
       out.y = c.y;
       return out;
     }
-    let y = p.y;
+    let sum = p.y, n = 1;
     for (const r of out.yard ?? []) {
       for (let i = 0; i < 9; i++) {
         const [dx, dz] = local(r[0] + (r[2] - r[0]) * (i % 3) / 2, r[1] + (r[3] - r[1]) * Math.floor(i / 3) / 2);
-        y = Math.max(y, groundHeight(s.map, out.x + dx * pl.s, out.z + dz * pl.s));
+        sum += groundHeight(s.map, out.x + dx * pl.s, out.z + dz * pl.s);
+        n++;
       }
     }
-    y = Math.min(y, p.y + MAX_LIFT);
-    this.bases.set(b.id, { pos: b.pos, kind: b.kind, y });
+    let y = Math.min(sum / n, p.y + MAX_LIFT);
+    const d = DOORS[b.kind];
+    let door: Entrance | null = null;
+    if (d) {
+      const [dx, dz] = local(d.x, d.y);
+      const x = out.x + dx * pl.s, z = out.z + dz * pl.s;
+      const fx = FLAG_DIR[0], fz = FLAG_DIR[1];
+      // Prog nie nizej niz teren tuz przed drzwiami - wejscie nie moze byc zakopane w zboczu.
+      const g = groundHeight(s.map, x + fx * STEP_DEPTH, z + fz * STEP_DEPTH);
+      y = Math.max(y, g);
+      const thr = y + d.z * pl.s;
+      // Schody tylko, gdy budynek stoi wyzej niz teren przy drzwiach; inaczej wystarcza prog modelu.
+      const steps = y - g > STEP_RISE * 0.5 ? Math.min(MAX_STEPS, Math.max(1, Math.round((thr - g) / STEP_RISE))) : 0;
+      const run = steps * STEP_DEPTH + 0.04 * pl.s;
+      door = { x, z, fx, fz, w: (d.w + 0.06) * pl.s, thr, steps, rise: steps ? (thr - g) / steps : 0, footX: x + fx * run, footZ: z + fz * run };
+    }
+    this.bases.set(b.id, { pos: b.pos, kind: b.kind, y, door });
     out.y = y;
     return out;
+  }
+
+  private cachedBase(b: Building): { y: number; door: Entrance | null } | null {
+    const c = this.bases.get(b.id);
+    return c && c.pos === b.pos && c.kind === b.kind ? c : null;
+  }
+
+  /** Wejscie gotowego budynku (schody, podnoze sciezki od flagi) albo null - budynek bez drzwi albo w budowie. */
+  entrance(s: GameState, b: Building): Entrance | null {
+    if (b.stage !== STAGE.DONE) return null;
+    this.originOf(s, b, this.tmpOrigin);
+    return this.cachedBase(b)?.door ?? null;
+  }
+
+  /** Stopnie schodow: od progu (pierwszy na wysokosci progu) w dol, kazdy siega do terenu pod soba. */
+  private pushSteps(s: GameState, e: Entrance): void {
+    const rot = Math.atan2(e.fx, e.fz);
+    this.stepQ.setFromAxisAngle(this.stepAxis, rot);
+    for (let k = 0; k < e.steps; k++) {
+      const cx = e.x + e.fx * (k + 0.5) * STEP_DEPTH, cz = e.z + e.fz * (k + 0.5) * STEP_DEPTH;
+      const top = e.thr - k * e.rise;
+      const h = top - groundHeight(s.map, cx, cz) + 0.04;
+      this.stepP.set(cx, top, cz);
+      this.stepS.set(e.w, Math.max(0.01, h), STEP_DEPTH);
+      this.steps.pushMatrix(this.stepM.compose(this.stepP, this.stepQ, this.stepS));
+    }
   }
 
   /**
@@ -238,6 +307,7 @@ export class EntitiesRenderer {
     this.fx.time = this.time;
     this.ctx.frame(s, this.time, animDt, alpha);
     this.hidden.clear();
+    this.plowed.clear();
     for (const g of this.goods) g.begin();
     for (const l of this.rig.layers()) l.begin();
     for (const l of this.fx.layers()) l.begin();
@@ -271,6 +341,7 @@ export class EntitiesRenderer {
   private updateBuildings(s: GameState): void {
     for (const l of this.buildingLayers) l.begin();
     for (const l of this.sites) l.begin();
+    this.steps.begin();
     this.fire.begin();
     this.flagCloth.begin();
     this.flagPole.begin();
@@ -288,6 +359,8 @@ export class EntitiesRenderer {
       p.y = o.y;
       if (b.stage === STAGE.DONE) {
         layer.push(bx, p.y, bz, 0, sc);
+        const e = this.cachedBase(b)?.door;
+        if (e && e.steps) this.pushSteps(s, e);
         this.banner(b, o);
         buildingScenes[b.kind]?.(this.ctx, b, o);
       } else if (b.stage === STAGE.BURN) {
@@ -296,6 +369,9 @@ export class EntitiesRenderer {
         const flicker = 0.85 + Math.sin(this.time * 17 + b.id) * 0.15;
         this.fire.push(bx, p.y, bz, this.time * 2, sc * flicker * (0.6 + k * 0.6));
         this.fx.smoke(b.id * 16 + 9, bx, p.y + 0.5 * sc, bz, 1, 0x4a4542);
+        this.audio?.loop(0x6300000 + b.id, 'fire', bx, bz, 1.4);
+        const n = Math.floor(this.time * 1.7 + b.id);
+        if ((n * 7 + b.id) % 3 === 0) this.audio?.play('crackle', bx, bz, 0x6400000 + b.id * 4096 + (n & 4095));
       } else {
         const si = def.size === SIZE.LARGE ? 2 : def.size === SIZE.MEDIUM ? 1 : 0;
         this.sites[si].push(bx, p.y, bz, 0, sc);
@@ -313,6 +389,7 @@ export class EntitiesRenderer {
     }
     for (const l of this.buildingLayers) l.end();
     for (const l of this.sites) l.end();
+    this.steps.end();
     this.fire.end();
   }
 
@@ -399,10 +476,15 @@ export class EntitiesRenderer {
       armL = Math.PI;
       armR = Math.PI;
     }
-    return {
+    const p: Pose = {
       x: at.x, y: at.y, z: at.z, rot: at.rot, bob: at.bob, owner: serf.owner, type: serf.type,
       legL: legSwing, legR: -legSwing, armL, armR, carry: serf.carry, tool: carrying ? null : undefined,
     };
+    if (serf.anim === 0 && !carrying) {
+      swingArm(p, -1, armL);
+      swingArm(p, 1, armR);
+    }
+    return p;
   }
 
   private updateSerfs(s: GameState, alpha: number): void {
@@ -416,6 +498,9 @@ export class EntitiesRenderer {
       if (sc && sc(this.ctx, serf, at)) continue;
       if (serf.type === S.DONKEY) {
         this.donkey.push(at.x, at.y + at.bob, at.z, at.rot, 1.1 * UNIT_SCALE);
+        // Osiol na drodze z rzadka ryczy (okienka po 9 s, w co siodmym).
+        const n = Math.floor(this.time / 9 + serf.id * 0.31);
+        if (((n * 2654435761 + serf.id * 40503) >>> 0) % 7 === 0) this.audio?.play('donkey_bray', at.x, at.z, 0x6500000 + serf.id * 4096 + (n & 4095), 0.8);
         if (serf.carry >= 0) this.pushGood(serf.carry, at.x, at.y + 0.34 * UNIT_SCALE + at.bob, at.z, at.rot, UNIT_SCALE);
         continue;
       }
@@ -432,10 +517,16 @@ export class EntitiesRenderer {
     }
   }
 
-  /** Postac w pozie wraz z towarem na glowie (pole carry). */
+  /**
+   * Postac w pozie wraz z niesionym towarem (pole carry): sposob niesienia wg towaru (carryStyle); poza towarem
+   * na glowie rece ustawia tu (wolna reka zachowuje wymach do kroku z legL).
+   */
   drawPose(p: Pose): RigFrames {
+    const g = p.carry ?? -1;
+    const st = g >= 0 ? carryStyle(g) : 'head';
+    if (g >= 0 && st !== 'head') carryArms(p, st, -(p.legL ?? 0) * 0.8);
     const f = this.rig.figure(p);
-    if (p.carry !== undefined && p.carry >= 0) this.pushGood(p.carry, p.x, p.y + (p.bob ?? 0) + CARRY_Y * UNIT_SCALE, p.z, p.rot, UNIT_SCALE);
+    if (g >= 0 && g < GOODS_COUNT) this.goods[g].pushMatrix(carryMatrix(this.carryM, f, st));
     return f;
   }
 
@@ -674,6 +765,18 @@ class Ctx implements WorkCtx {
 
   hideObject(cell: number): void {
     this.r.hidden.add(cell);
+  }
+
+  sfx(name: string, x: number, z: number, key = -1, gain = 1): void {
+    this.r.audio?.play(name, x, z, key, gain);
+  }
+
+  sfxLoop(key: number, name: string, x: number, z: number, gain = 1): void {
+    this.r.audio?.loop(key, name, x, z, gain);
+  }
+
+  plowCell(cell: number): void {
+    this.r.plowed.add(cell);
   }
 
   workerInside(b: Building): Serf | null {

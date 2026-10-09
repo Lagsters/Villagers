@@ -110,6 +110,15 @@ export function isBorder(map: MapData, idx: number): boolean {
 /**
  * Generuje mape. `players` - liczba pozycji startowych do wyznaczenia.
  */
+/**
+ * Reczne poprawki konkretnych map (kod/rozmiar) na zyczenie wlasciciela - mapa pokazowa swiata botow. massif:
+ * przesuniecie srodka wzniesienia gorskiego przy startach (pola x, y); water: jezioro zawierajace pole `at`
+ * przesuniete o `by` (pola x, y; odslonieta woda staje sie niska laka).
+ */
+const MAP_TWEAKS: Record<string, { massif?: readonly [number, number]; water?: readonly { at: readonly [number, number]; by: readonly [number, number] }[] }> = {
+  'DOLINA/64': { massif: [1, 1], water: [{ at: [48, 38], by: [0, 2] }] },
+};
+
 export function generateMap(code: string, size: number, players: number): GeneratedMap {
   const seed = mapSeed(code);
   const w = size;
@@ -224,7 +233,9 @@ export function generateMap(code: string, size: number, players: number): Genera
   }
 
   const starts = pickStarts(map, players, rng);
-  for (const s of starts) prepareStart(map, s, rng);
+  const tweak = MAP_TWEAKS[`${code}/${size}`];
+  for (const s of starts) prepareStart(map, s, rng, tweak?.massif);
+  for (const t of tweak?.water ?? []) moveWater(map, t.at[1] * w + t.at[0], t.by[0], t.by[1]);
   return { map, starts };
 }
 
@@ -376,7 +387,40 @@ function forceGrass(map: MapData, idx: number): void {
 }
 
 /** Gwarantuje wokol startu wolne miejsce, las, skaly i gory. */
-function prepareStart(map: MapData, s: number, rng: RngHolder): void {
+/** Przesuwa cialo wody zawierajace pole `at` o (dx, dy) pol; odslonieta woda staje sie niska laka bez obiektow. */
+function moveWater(map: MapData, at: number, dx: number, dy: number): void {
+  const { w, h } = map;
+  if (map.terrain[at] !== T.WATER) return;
+  const nb = neighborTable(w, h);
+  const body = new Set<number>([at]);
+  for (const c of body) {
+    for (let d = 0; d < 6; d++) {
+      const j = nb[c * 6 + d];
+      if (j >= 0 && map.terrain[j] === T.WATER && !isBorder(map, j)) body.add(j);
+    }
+  }
+  const target = new Set<number>();
+  for (const c of body) {
+    const x = (c % w) + dx, y = ((c / w) | 0) + dy;
+    if (x > 0 && y > 0 && x < w - 1 && y < h - 1) target.add(y * w + x);
+  }
+  for (const c of body) {
+    if (target.has(c)) continue;
+    map.terrain[c] = T.GRASS;
+    map.height[c] = SEA_HEIGHT + 1;
+    map.res[c] = RES.NONE;
+    map.resAmt[c] = 0;
+  }
+  for (const c of target) {
+    map.terrain[c] = T.WATER;
+    map.height[c] = SEA_HEIGHT;
+    map.obj[c] = O.NONE;
+    map.res[c] = RES.NONE;
+    map.resAmt[c] = 0;
+  }
+}
+
+function prepareStart(map: MapData, s: number, rng: RngHolder, massifShift?: readonly [number, number]): void {
   const { w, h } = map;
   const x = s % w;
   const y = (s / w) | 0;
@@ -411,14 +455,18 @@ function prepareStart(map: MapData, s: number, rng: RngHolder): void {
     // Maly masyw gorski z weglem i zelazem.
     const far = spiral(w, h, x, y, 13).filter((j) => hexDist(j % w, (j / w) | 0, x, y) >= 10 && !isBorder(map, j));
     const c = far[randInt(rng, far.length)];
-    const cxm = c % w;
-    const cym = (c / w) | 0;
-    for (const j of spiral(w, h, cxm, cym, 2)) {
+    const cxm = Math.max(1, Math.min(w - 2, (c % w) + (massifShift?.[0] ?? 0)));
+    const cym = Math.max(1, Math.min(h - 2, ((c / w) | 0) + (massifShift?.[1] ?? 0)));
+    // Lagodne wzniesienie nad wysokoscia srodka: +3 w srodku i pierwszym pierscieniu, dalej pietra o 1 nizsze ku
+    // skrajowi (uwaga wlasciciela: blok na stalej wysokosci bylby na nizszej lace urwiskiem). Promien 3 (37 pol)
+    // daje botom dosc miejsc pod kopalnie.
+    const base = map.height[cym * w + cxm];
+    for (const j of spiral(w, h, cxm, cym, 3)) {
       if (isBorder(map, j) || hexDist(j % w, (j / w) | 0, x, y) < 8) continue;
-      map.terrain[j] = T.MOUNTAIN;
-      map.height[j] = Math.min(MAX_HEIGHT, Math.max(map.height[j], 15) + 2);
-      map.obj[j] = O.NONE;
       const k = hexDist(j % w, (j / w) | 0, cxm, cym);
+      map.terrain[j] = T.MOUNTAIN;
+      map.height[j] = Math.min(MAX_HEIGHT, base + Math.min(3, 4 - k));
+      map.obj[j] = O.NONE;
       map.res[j] = k === 0 ? RES.GOLD : (j & 1) === 0 ? RES.COAL : RES.IRON;
       map.resAmt[j] = 10;
     }

@@ -38,7 +38,14 @@ export interface FxOptions {
   sway?: number;
   /** czesc zycia na koncu, w ktorej czasteczka maleje do zera (dym nie znika nagle) */
   fade?: number;
+  /** dzwiek (client/sfx.ts): przy burst - raz w chwili wyrzutu, przy stream - petla, dopoki wyplyw trwa */
+  sound?: string;
+  /** mnoznik glosnosci dzwieku */
+  soundGain?: number;
 }
+
+/** Odbiorca dzwiekow czasteczek: nazwa, klucz zdarzenia (to samo uderzenie gra raz), polozenie, glosnosc, petla. */
+export type FxSound = (name: string, key: number, x: number, z: number, gain: number, loop: boolean) => void;
 
 function hash(a: number, b: number, c: number): number {
   let h = Math.imul(a ^ 0x27d4eb2d, 0x165667b1) ^ Math.imul(b + 0x3c6ef372, 0x85ebca6b) ^ Math.imul(c + 0x6a09e667, 0xc2b2ae35);
@@ -52,6 +59,8 @@ const cB = new THREE.Color();
 
 export class Fx {
   time = 0;
+  /** Dzwieki wyrzutow i wyplywow (gra podlacza silnik dzwieku). */
+  sound: FxSound | null = null;
   readonly puff: InstancedLayer;
   readonly bit: InstancedLayer;
 
@@ -70,6 +79,7 @@ export class Fx {
    * rate (0..1) przerzedza wyplyw (losowo pomija czasteczki); 0 gasi wyplyw od razu, razem z czasteczkami w powietrzu.
    */
   stream(key: number, x: number, y: number, z: number, o: FxOptions, rate = 1): void {
+    if (o.sound && rate > 0) this.sound?.(o.sound, key * 977 + 13, x, z, (o.soundGain ?? 1) * Math.min(1, rate), true);
     const n = o.n ?? 6;
     const life = o.life ?? 2;
     for (let k = 0; k < n; k++) {
@@ -84,6 +94,7 @@ export class Fx {
   burst(key: number, age: number, x: number, y: number, z: number, o: FxOptions): void {
     const life = o.life ?? 0.6;
     if (age < 0 || age > life) return;
+    if (o.sound && age < 0.12) this.sound?.(o.sound, key * 977 + 7, x, z, o.soundGain ?? 1, false);
     const n = o.n ?? 6;
     for (let k = 0; k < n; k++) this.particle(key * 131 + k, -1, age, x, y, z, o);
   }

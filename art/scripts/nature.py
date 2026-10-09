@@ -1,6 +1,6 @@
 """
 Natura i obiekty mapy: drzewa (po dwie odmiany iglastych i lisciastych), pien, skaly (dwie odmiany), pola zboza
-(rosnace i dojrzale, z rzedami klosow), znak geologa, ruina, ogien, slupek graniczny, flaga.
+(rosnace i dojrzale, z rzedami klosow), kepa trawy i krzak, znak geologa, ruina, ogien, slupek graniczny, flaga.
 Styl: gladkie, zaokraglone bryly (korony i glazy z kilku zlepionych kul), kolor malowany w wierzcholkach - ciemny
 dol, jasna gora - i drobny wzor rysowany w grze shaderem (kepy lisci, igliwie, kora, skala, zdzbla, klosy;
 MODEL_PATTERNS w client/render/scene.ts). Budzety: drzewo <= 150 trojkatow, reszta <= 300.
@@ -16,16 +16,18 @@ from mathutils import Vector
 sys.path.insert(0, os.path.dirname(__file__))
 from lib import BARK, EARS, FOLIAGE, NEEDLES, PALETTE, PATTERN_STRIDE, PLAIN, ROCK, STALKS, build, color  # noqa: E402
 
+# Zielenie koron z tej samej rodziny co trawa terenu (GRASS_* w client/render/palette.ts): las i laka to jeden obraz.
 PALETTE.update({
-    'leaf_deep': '#24561c', 'leaf_mid': '#4a8f2b', 'leaf_sun': '#93c844',
-    'birch_deep': '#3f7a26', 'birch_mid': '#6fae35', 'birch_sun': '#b9dc5c',
-    'pine_deep': '#123622', 'pine_mid': '#25603a', 'pine_sun': '#4f8f48',
-    'scots_deep': '#173d2e', 'scots_mid': '#2f6646', 'scots_sun': '#5d9455',
+    'leaf_deep': '#2b5220', 'leaf_mid': '#4e7f2e', 'leaf_sun': '#8bb04c',
+    'birch_deep': '#3f6b26', 'birch_mid': '#6a9a3c', 'birch_sun': '#a8c463',
+    'pine_deep': '#18361f', 'pine_mid': '#2f5a30', 'pine_sun': '#5a8445',
+    'scots_deep': '#1d3f27', 'scots_mid': '#38633a', 'scots_sun': '#6b9050',
     'bark_dark': '#3f2a17', 'birch_bark': '#ece6d6', 'birch_mark': '#3a3530', 'scots_bark': '#93583a',
     'rock_deep': '#56514b', 'rock_mid': '#837d73', 'rock_sun': '#b4ad9f', 'moss': '#6f8a3a',
-    'wheat_deep': '#a77c26', 'wheat_mid': '#dcb24c', 'wheat_sun': '#f7df86',
-    'sprout_deep': '#3e7322', 'sprout_mid': '#6ea83a', 'sprout_sun': '#a6d25a',
-    'soil_furrow': '#4a321d', 'soil_top': '#7a5434', 'ash': '#5a5550', 'char': '#26211d', 'sign_board': '#d9c49a',
+    'wheat_deep': '#8a6a2c', 'wheat_mid': '#c4a252', 'wheat_sun': '#e2cc88',
+    'sprout_deep': '#3b6524', 'sprout_mid': '#5d8a36', 'sprout_sun': '#8db052',
+    'ash': '#5a5550', 'char': '#26211d', 'sign_board': '#d9c49a',
+    'tuft_base': '#8c8c8c', 'tuft_mid': '#c4c4c4',
 })
 
 R = math.pi / 2
@@ -230,6 +232,25 @@ def stump(m):
         m.cyl(0.035, 0.12, 5, x=math.cos(a) * 0.05, y=math.sin(a) * 0.05, z=0.05, col='bark_dark', r_top=0.006, rz=a, ry=2.05, bottom=False)
 
 
+# ---------------------------------------------------------------- ozdoby laki (client/render/mapObjects.ts)
+
+def tuft(m):
+    """Kepa trawy (~0.1): dziewiec krotkich zdzbel-stozkow rozchylonych na boki, srodkowe wyzsze. Kolor
+    wierzcholkow szary u nasady, bialy na czubkach - gra barwi kepe kolorem trawy pod nia, wiec zlewa sie z laka."""
+    for k in range(9):
+        a = k * 2.4 + 0.3
+        r = 0.006 + 0.026 * hsh(k, 1)
+        h = 0.085 - r * 1.2 + 0.02 * hsh(k, 2)
+        ob = m.cone(0.017, h, 3, x=math.cos(a) * r, y=math.sin(a) * r, col='white', rz=a, ry=0.2 + 12.0 * r * (0.6 + 0.4 * hsh(k, 3)), bottom=False)
+        paint_loops(ob, lambda co, no: ramp(('tuft_base', 'tuft_mid', 'white'), co.z / 0.08))
+
+
+def bush(m):
+    """Krzak (~0.3): dwie zlepione bryly lisci jak korona drzewa lisciastego, osadzone w ziemi."""
+    blobs(m, [Blob(0.0, 0.0, 0.08, 0.15, 0.13, 0.11, 7, 4, 0.1), Blob(0.1, 0.05, 0.05, 0.09, 0.08, 0.07, 6, 4, 0.12)],
+          FOLIAGE, ('leaf_deep', 'leaf_mid', 'leaf_sun'), seed=31)
+
+
 # ---------------------------------------------------------------- skaly
 
 def rock_shade(co, no, t):
@@ -259,58 +280,81 @@ def stone2(m):
 # ---------------------------------------------------------------- pola
 
 # Rzedy pola (jak ROWS w client/render/work/field.ts): przesuniecie w x, dlugosc wzdluz y. Kazdy rzad to dwa
-# grzbiety klosow (srodki co RIDGE_GAP) - z kamery szesc rownych pasow z waska bruzda miedzy nimi.
-FIELD_ROWS = ((-0.22, 0.42), (0.0, 0.64), (0.22, 0.42))
-RIDGE_W, RIDGE_GAP, ROW_H, ROW_Z = 0.084, 0.11, 0.14, 0.03
+# grzbiety klosow (srodki co RIDGE_GAP) - z kamery szesc rownych pasow z waska bruzda miedzy nimi. Ziemie pola
+# z bruzdami w tym samym rozstawie rysuje teren (client/render/terrain.ts), model ma same zboze. Rozstaw 0.125
+# miesci sie 4 razy w pol pola, wiec bruzdy sasiednich pol (srodki przesuniete o pol pola) leza na jednej siatce.
+FIELD_ROWS = ((-0.25, 0.42), (0.0, 0.64), (0.25, 0.42))
+RIDGE_W, RIDGE_GAP, ROW_H, ROW_Z = 0.09, 0.125, 0.075, 0.0
 RIPE = ('wheat_deep', 'wheat_mid', 'wheat_sun')
 SPROUT = ('sprout_deep', 'sprout_mid', 'sprout_sun')
+# Przekroj grzbietu: (x / polowa szerokosci, czy na wysokosci zboza, uniesienie wierzchu). Sciany 0 i 5 - zdzbla.
+RIDGE_PROFILE = ((-1.0, 0, 0.0), (-1.0, 1, 0.0), (-0.62, 1, 0.024), (0.0, 1, 0.034), (0.62, 1, 0.024), (1.0, 1, 0.0), (1.0, 0, 0.0))
+RIDGE_SEGS = 3
 
 
-def field_plot(m):
-    """Zaorana ziemia pola (szesciokat r = 0.42), ciemniejsza ku brzegowi; bez koloru instancji (gra barwi nim
-    tylko dojrzewajace zboze)."""
-    ob = m.cyl(0.42, 0.03, 6, col='soil')
-    paint_loops(ob, lambda co, no: ramp(('soil_furrow', 'soil', 'soil_top'), 0.3 + 0.6 * co.z / 0.03 - 0.25 * math.hypot(co.x, co.y)))
-    uv_plain(ob)
-
-
-def ridge(m, x, y, length, cols, h):
-    """Grzbiet zboza wzdluz Y: zdzbla (wzor na scianach) i zaokraglony wierzch z klosami."""
-    body = m.block(RIDGE_W, length, h, x=x, y=y, z=ROW_Z, col=cols[1], bevel=0.0, open_sides=('-z', '+z'), wall=STALKS)
-    paint_loops(body, lambda co, no: ramp(cols, 0.1 + 0.55 * (co.z - ROW_Z) / h))
+def ridge(m, x, y, length, cols, h, seed=0):
+    """
+    Grzbiet zboza wzdluz Y: sciany ze zdzblami i zaokraglony wierzch z klosami. Wysokosc faluje wzdluz grzbietu
+    (RIDGE_SEGS odcinkow, kazdy przekroj na innej wysokosci) - kepy zboza, nie rowna listwa.
+    """
+    hw = RIDGE_W / 2
     bm = bmesh.new()
-    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=6, radius1=1.0, radius2=1.0, depth=length)
-    for v in bm.verts:
-        v.co = Vector((v.co.x * RIDGE_W * 0.62, v.co.z, v.co.y * 0.04))
-    bmesh.ops.translate(bm, vec=(x, y, ROW_Z + h), verts=bm.verts)
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    crown = m._add(bm, cols[2], 0.0)
-    paint_loops(crown, lambda co, no: ramp(cols, 0.55 + 0.45 * no.z))
-    me = crown.data
+    rings = []
+    for j in range(RIDGE_SEGS + 1):
+        yj = y + length / 2 - length * j / RIDGE_SEGS
+        top = ROW_Z + h * (1.0 + 0.6 * (hsh(j, seed, 7) - 0.5))
+        rings.append([bm.verts.new((x + px * hw, yj, top + lift if up else ROW_Z)) for px, up, lift in RIDGE_PROFILE])
+    crown = []
+    for j in range(RIDGE_SEGS):
+        for i in range(len(RIDGE_PROFILE) - 1):
+            f = bm.faces.new((rings[j][i], rings[j][i + 1], rings[j + 1][i + 1], rings[j + 1][i]))
+            if 0 < i < len(RIDGE_PROFILE) - 2:
+                crown.append(f)
+    bm.faces.new(rings[0])
+    bm.faces.new(rings[-1])
+    bm.faces.index_update()
+    bm.normal_update()
+    # Sciany na zewnatrz grzbietu (os grzbietu w polowie wysokosci).
+    for f in bm.faces:
+        c = f.calc_center_median()
+        if f.normal.dot(c - Vector((x, c.y, ROW_Z + h / 2))) < 0 and abs(f.normal.y) < 0.5:
+            f.normal_flip()
+        elif abs(f.normal.y) >= 0.5 and f.normal.y * (c.y - y) < 0:
+            f.normal_flip()
+    crown_ids = {f.index for f in crown}
+    ob = m._add(bm, cols[1], 0.0)
+    me = ob.data
+    attr = me.color_attributes['Col']
     lay = me.uv_layers.new(name='UVMap')
     for poly in me.polygons:
+        top = poly.index in crown_ids
+        end = abs(poly.normal.y) > 0.5
         for li in poly.loop_indices:
             co = me.vertices[me.loops[li].vertex_index].co
-            # Klosy: u wzdluz grzbietu, v w poprzek.
-            lay.data[li].uv = (EARS * PATTERN_STRIDE + co.y, math.atan2(co.z - ROW_Z - h, co.x - x) * 0.03)
+            if top:
+                c = ramp(cols, 0.62 + 0.38 * poly.normal.z)
+                # Klosy: u wzdluz grzbietu, v w poprzek.
+                lay.data[li].uv = (EARS * PATTERN_STRIDE + co.y, (co.x - x) * 0.6)
+            else:
+                c = ramp(cols, 0.1 + 0.55 * (co.z - ROW_Z) / h)
+                lay.data[li].uv = (STALKS * PATTERN_STRIDE + (co.x if end else co.y), co.z)
+            attr.data[li].color = (c[0], c[1], c[2], 1.0)
 
 
 def wheat_row(m, x, y, length, cols, h=ROW_H):
     """Rzad zboza wzdluz Y (od y + length/2 do y - length/2): dwa grzbiety po bokach osi x."""
     for s in (-1, 1):
-        ridge(m, x + s * RIDGE_GAP / 2, y, length, cols, h)
+        ridge(m, x + s * RIDGE_GAP / 2, y, length, cols, h, seed=round(x * 100) * 2 + s)
 
 
 def field(m):
     """Pole rosnace (gra skaluje wysokosc wg wzrostu i podbarwia ku zlotu przed dojrzaloscia): zielone rzedy."""
-    field_plot(m)
     for x, length in FIELD_ROWS:
         wheat_row(m, x, 0.0, length, SPROUT)
 
 
 def field_ripe(m):
     """Pole dojrzale: zlote rzedy klosow."""
-    field_plot(m)
     for x, length in FIELD_ROWS:
         wheat_row(m, x, 0.0, length, RIPE)
 
@@ -372,7 +416,7 @@ BUILDERS = {
     'tree_pine': tree_pine, 'tree_pine2': tree_pine2, 'tree_leaf': tree_leaf, 'tree_leaf2': tree_leaf2, 'stump': stump,
     'stone': stone, 'stone2': stone2, 'field': field, 'field_ripe': field_ripe, 'sign': sign, 'ruin': ruin, 'fire': fire,
     'border': border, 'flag': flag, 'flag_cloth': flag_cloth, 'animal': animal, 'felled_trunk': felled_trunk,
-    'felled_branches': felled_branches,
+    'felled_branches': felled_branches, 'tuft': tuft, 'bush': bush,
 }
 
 if __name__ == '__main__':

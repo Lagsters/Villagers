@@ -19,8 +19,8 @@ describe('M6: pelne partie bot kontra bot', () => {
       expect(r.stalls, `${r.code} zakleszczenie`).toEqual([]);
       expect(r.ticks).toBeLessThanOrEqual(MAX_TICKS);
     }
-    // Trudny bot powinien wygrywac czesciej niz latwy.
+    // Prog ustalony przez wlasciciela: trudny bot wygrywa co najmniej polowe partii.
     const hardWins = results.filter((r) => r.winner === 0).length;
-    expect(hardWins).toBeGreaterThan(GAMES / 2);
+    expect(hardWins).toBeGreaterThan(9);
   }, 600_000);
 });

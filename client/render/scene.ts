@@ -8,11 +8,15 @@ import { CameraController } from './camera.ts';
 import { stepXY } from '../../sim/grid.ts';
 import { H_SCALE, ROW_H, nearestIdx, vx, vz } from './coords.ts';
 import { MapObjectsRenderer } from './mapObjects.ts';
-import { TerrainRenderer } from './terrain.ts';
-import { RoadsRenderer } from './roads.ts';
+import { SUN, TerrainRenderer } from './terrain.ts';
+import { CellMap } from './cells.ts';
+import { CURVE_COMMON, CURVE_PROJECT, curveDrop, curveUniform } from './curve.ts';
+import { OceanRenderer, skyTexture } from './ocean.ts';
 import { EntitiesRenderer } from './entities.ts';
 import { OverlayRenderer } from './overlay.ts';
 import type { GameEvent, GameState } from '../../sim/types.ts';
+import { O, T } from '../../sim/defs.ts';
+import type { Listener, ViewMix } from '../audio.ts';
 
 export interface GraphicsOptions {
   quality: 'low' | 'medium';
@@ -193,27 +197,25 @@ float groundAt(vec2 p) {
  * albo wchodzi na teren), y = 1 na spodzie konstrukcji (sciana siega w dol do nizszego terenu, zamiast wisiec);
  * `yardAt` - punkt modelu (x, z), w ktorym brac wysokosc terenu (srodek zwartego sprzetu albo sam wierzcholek).
  * Przesuniecie liczone w swiecie wzgledem wysokosci instancji, dzielone przez jej skale pionowa.
- * vFound: x > 0 na scianach przy spodzie konstrukcji, y = wysokosc w modelu - ponizej zera sciana jest podmurowka.
+ * vFound: x = 1 na spodzie konstrukcji, y = wysokosc w modelu - ponizej zera sciana jest podmurowka.
  */
 const YARD_VERTEX = /* glsl */ `
-vFound = vec2(0.0, 1.0);
 #ifdef USE_INSTANCING
 if (yard.x > 0.0 || yard.y > 0.5) {
   vec4 yw = instanceMatrix * vec4(yardAt.x, 0.0, yardAt.y, 1.0);
   float yd = groundAt(yw.xz) - instanceMatrix[3].y;
   transformed.y += (yard.x * yd + yard.y * min(yd, 0.0)) / instanceMatrix[1][1];
-  vFound = vec2(yard.y, transformed.y);
 }
 #endif
+vFound = vec2(yard.y, transformed.y);
 `;
 
-/** Podmurowka (sciana wydluzona w dol do terenu): kamien w pasach co 0,05 wysokosci modelu, ciemniejszy u dolu. */
+/**
+ * Podmurowka (sciana wydluzona w dol do terenu): lity kamien w kolorze cokolu budynkow przy ziemi i stopni schodow
+ * (plinth i stone_step w art/scripts/lib.py) - jeden kolor od cokolu po teren.
+ */
 const FOUNDATION_FRAGMENT = /* glsl */ `
-if (vFound.x > 0.001 && vFound.y < 0.0) {
-  float row = fract(vFound.y / 0.05);
-  float k = mix(0.62, 1.0, smoothstep(0.0, 0.16, min(row, 1.0 - row)));
-  diffuseColor.rgb = vec3(0.6, 0.56, 0.5) * k * (0.8 + 0.2 * clamp(1.0 + vFound.y * 4.0, 0.0, 1.0));
-}
+if (vFound.x > 0.001 && vFound.y < 0.0) diffuseColor.rgb = vec3(0.245, 0.229, 0.201);
 `;
 
 export class SceneRenderer {
@@ -223,7 +225,8 @@ export class SceneRenderer {
   readonly modelMaterial: THREE.MeshLambertMaterial;
   terrain!: TerrainRenderer;
   objects!: MapObjectsRenderer;
-  roads = new RoadsRenderer();
+  cells!: CellMap;
+  private ocean = new OceanRenderer();
   entities!: EntitiesRenderer;
   overlay = new OverlayRenderer();
   map!: MapData;
@@ -235,6 +238,8 @@ export class SceneRenderer {
   private sun: THREE.DirectionalLight;
   /** Wysokosci pol (swiat) dla shadera modeli - podworka budynkow na terenie (GROUND_GLSL). */
   private groundMap: { value: THREE.DataTexture | null } = { value: null };
+  /** Czas rzeczywisty (s) dla animacji wody. */
+  private clock = 0;
   width = 1;
   height = 1;
 
@@ -253,21 +258,23 @@ export class SceneRenderer {
     });
     this.renderer.setClearColor(0x1d2a1f);
     this.renderer.shadowMap.enabled = false;
-    // Ocean wokol mapy to po prostu kolor tla (kolor oswietlonej glebokiej wody) - bez dodatkowej
-    // plaszczyzny pod mapa, ktora podwajala koszt wypelniania ekranu.
-    // Kolor oswietlonej glebokiej wody (DEEP_WATER pod swiatlem sceny) - brzeg mapy zlewa sie z tlem.
-    this.scene.background = new THREE.Color().setRGB(17 / 255, 51 / 255, 95 / 255, THREE.LinearSRGBColorSpace);
-    this.scene.add(new THREE.HemisphereLight(0xdfeeff, 0x4a4030, 1.2));
+    // Morze wokol mapy z krzywizna swiata i niebo nad horyzontem (client/render/ocean.ts).
+    this.scene.background = skyTexture();
+    this.scene.add(this.ocean.mesh);
+    // Swiatlo odbite od ziemi zielonkawe jak laka: spody koron, okapy i sciany biora kolor trawy.
+    this.scene.add(new THREE.HemisphereLight(0xdfeeff, 0x4d5a2c, 1.2));
     this.sun = new THREE.DirectionalLight(0xfff1d6, 2.0);
-    this.sun.position.set(-30, 60, 20);
+    this.sun.position.set(SUN[0], SUN[1], SUN[2]);
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
     // Normalne z modeli: gladkie krzywizny, ostre krawedzie bryl (zastepniki licza normalne plaskie).
     this.modelMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.modelMaterial.onBeforeCompile = (sh) => {
       sh.uniforms.groundMap = this.groundMap;
+      sh.uniforms.uCurve = curveUniform;
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec2 pat;\nattribute vec2 yard;\nattribute vec2 yardAt;\nvarying vec2 vPat;\nvarying vec2 vFound;\n' + GROUND_GLSL)
+        .replace('#include <common>', '#include <common>\nattribute vec2 pat;\nattribute vec2 yard;\nattribute vec2 yardAt;\nvarying vec2 vPat;\nvarying vec2 vFound;\n' + GROUND_GLSL + CURVE_COMMON)
+        .replace('#include <project_vertex>', CURVE_PROJECT)
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPat = pat;\n' + YARD_VERTEX)
         // Kolor gracza tylko na koszulce: sciany PLAIN (skora, spodnie) zostaja w kolorze wierzcholkow.
         .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_INSTANCING_COLOR\nif (abs(floor((pat.x + 500.0) / 1000.0) - 6.0) < 0.5) vColor.xyz = color.xyz;\n#endif');
@@ -297,12 +304,14 @@ export class SceneRenderer {
     tex.magFilter = tex.minFilter = THREE.NearestFilter;
     this.groundMap.value = tex;
     this.refreshGround();
-    this.terrain = new TerrainRenderer(map);
+    this.cells?.dispose();
+    this.cells = new CellMap(map);
+    this.terrain = new TerrainRenderer(map, this.cells.texture, this.cells.paths, this.cells.bends);
     this.scene.add(this.terrain.group);
     this.objects = new MapObjectsRenderer(map, this.modelMaterial);
     this.scene.add(this.objects.group);
-    this.scene.add(this.roads.mesh);
     this.entities = new EntitiesRenderer(this.modelMaterial);
+    this.entities.roadBends = this.cells;
     this.scene.add(this.entities.group);
     this.scene.add(this.overlay.group);
     this.cam.bounds = { minX: 2, maxX: map.w - 2, minZ: 2, maxZ: (map.h - 2) * ROW_H };
@@ -340,7 +349,7 @@ export class SceneRenderer {
       const idx = nearestIdx(m, p.x, p.z);
       if (idx < 0) { if (prevIdx >= 0) break; continue; }
       prevIdx = idx;
-      const gy = m.height[idx] * H_SCALE;
+      const gy = m.height[idx] * H_SCALE - curveDrop(p.x, p.z, this.cam.target.x, this.cam.target.z);
       if (p.y <= gy) return idx;
     }
     return prevIdx;
@@ -379,14 +388,13 @@ export class SceneRenderer {
     this.entities?.clearBases();
   }
 
-  /** Po tickach symulacji: zmiany obiektow mapy, drog, wysokosci terenu. */
+  /** Po tickach symulacji: zmiany obiektow mapy, drog (stan pol terenu), wysokosci terenu. */
   syncState(s: GameState, events: GameEvent[]): void {
     if (events.length) this.entities.onEvents(events);
     for (const e of events) {
       if (e.type === 'height') {
         this.terrain.markDirty(e.pos);
         this.objects.markHeight(e.pos);
-        this.roads.invalidate();
         const tex = this.groundMap.value;
         if (tex) {
           (tex.image.data as Float32Array)[e.pos] = s.map.height[e.pos] * H_SCALE;
@@ -394,8 +402,8 @@ export class SceneRenderer {
         }
       }
     }
+    this.cells.sync(s, (b) => this.entities.entrance(s, b));
     this.objects.sync(s);
-    this.roads.sync(s);
   }
 
   /** Pozycja pola na ekranie (piksele CSS wzgledem okna). */
@@ -405,6 +413,48 @@ export class SceneRenderer {
     v.project(this.cam.camera);
     const r = this.canvas.getBoundingClientRect();
     return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+  }
+
+  /** Sluchacz dzwieku: srodek widoku, polowa szerokosci widoku w swiecie, przyblizenie, kierunek "w prawo" ekranu. */
+  audioListener(): Listener {
+    const c = this.cam.camera;
+    const e = c.matrixWorld.elements;
+    const len = Math.hypot(e[0], e[2]) || 1;
+    return { x: this.cam.target.x, z: this.cam.target.z, half: c.right, zoom: this.cam.zoom, rx: e[0] / len, rz: e[2] / len };
+  }
+
+  /** Co widac w kadrze (udzialy z siatki 12 x 12 punktow) - do miksu otoczenia. */
+  viewMix(s: GameState): ViewMix {
+    const v = this.entities.view;
+    const m = this.map;
+    let trees = 0, water = 0, shore = 0, mountain = 0, grass = 0, n = 0;
+    const N = 12;
+    for (let a = 0; a < N; a++) {
+      for (let b = 0; b < N; b++) {
+        const i = nearestIdx(m, v.x0 + (v.x1 - v.x0) * (a + 0.5) / N, v.z0 + (v.z1 - v.z0) * (b + 0.5) / N);
+        if (i < 0) { water++; n++; continue; }
+        n++;
+        const t = m.terrain[i];
+        if (m.obj[i] === O.TREE) trees++;
+        if (t === T.WATER) {
+          water++;
+          const x = i % m.w, y = (i / m.w) | 0;
+          for (let d = 0; d < 6; d++) {
+            const [nx, ny] = stepXY(x, y, d);
+            if (nx >= 0 && ny >= 0 && nx < m.w && ny < m.h && m.terrain[ny * m.w + nx] !== T.WATER) { shore++; break; }
+          }
+        } else if (t === T.MOUNTAIN || t === T.SNOW) mountain++;
+        else if (t === T.GRASS) grass++;
+      }
+    }
+    let people = 0;
+    for (const serf of s.serfs) {
+      if (!serf) continue;
+      const x = serf.pos % m.w, y = (serf.pos / m.w) | 0;
+      const wx = vx(x, y), wz = vz(y);
+      if (wx >= v.x0 && wx <= v.x1 && wz >= v.z0 && wz <= v.z1) people++;
+    }
+    return { trees: trees / n, water: water / n, shore: shore / n, mountain: mountain / n, grass: grass / n, people: people / 25 };
   }
 
   /** Pole mapy pod srodkiem widoku. */
@@ -418,11 +468,17 @@ export class SceneRenderer {
    */
   render(dt: number, s?: GameState, alpha = 0, me = 0, animScale = 1): boolean {
     const moved = this.cam.update(dt);
+    curveUniform.value.x = this.cam.target.x;
+    curveUniform.value.y = this.cam.target.z;
+    this.ocean.update(this.cam.target.x, this.cam.target.z);
     this.terrain.update();
+    this.clock += dt;
+    this.terrain.setTime(this.clock);
     if (s) {
       if (moved) this.entities.setView(this.cam.camera, this.cam.zoom);
       this.entities.update(s, alpha, dt, dt * animScale);
-      this.objects.setHidden(this.entities.hidden);
+      this.objects.setHidden(this.entities.hidden, this.entities.plowed);
+      this.cells.setPlowed(this.entities.plowed);
       this.overlay.updateSites(s, me, this.centerIdx(), Math.ceil(14 / this.cam.zoom));
     }
     this.objects.update(this.cam.camera, moved);

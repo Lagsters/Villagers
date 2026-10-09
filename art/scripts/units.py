@@ -73,10 +73,24 @@ def serf_leg(m):
     m.sphere(0.03, 7, 4, y=-0.012, z=-0.142, col='wellies', sy=1.45, sz=1.7, half='flat')
 
 
-def serf_arm(m, sleeve='cloth'):
-    # Poczatek w barku (gora reki schowana w barku tuniki): rekaw tuniki (kolor gracza), nizej naga reka
-    # zakonczona dlonia (dlon w z = HAND).
-    m.sphere(0.02, 6, 4, z=-0.085, col='skin', sz=3.25, paint=lambda c: sleeve if c.z > 0 else None, plain=lambda c: c.z <= 0)
+# Lokiec: staw miedzy ramieniem a przedramieniem (wzgledem barku, jak ELBOW w client/render/rig.ts).
+ELBOW = -0.078
+
+
+def serf_upperarm(m, sleeve='cloth'):
+    """Ramie: poczatek w barku (gora schowana w barku tuniki), obly rekaw tuniki (kolor gracza) do lokcia; dol chowa
+    sie w kulce lokcia przedramienia."""
+    m.sphere(0.022, 6, 3, z=-0.04, col=sleeve, sz=1.95)
+
+
+def serf_forearm(m):
+    """Przedramie z dlonia, uklad jak ramie (poczatek w barku): kulka lokcia, naga reka do nadgarstka (okragla, 6 scian)
+    i dlon w z = HAND. Gra obraca je wokol lokcia (ELBOW)."""
+    m.sphere(0.019, 4, 2, z=ELBOW, col='skin', plain=lambda c: True)
+    m.cyl(0.0165, 0.064, 6, z=HAND + 0.006, r_top=0.018, col='skin', bottom=False, top=False)
+    # Dlon jak rekawica bez palcow: plaska (wnetrze ku tulowiowi), dluzsza niz szersza, z kciukiem z przodu.
+    m.sphere(0.017, 4, 3, z=-0.156, col='skin', sx=0.7, sy=1.05, sz=1.35, plain=lambda c: True)
+    m.sphere(0.0075, 4, 2, y=-0.015, z=-0.15, col='skin', sz=1.5, rx=0.5, plain=lambda c: True)
 
 
 def mustache(m, col='beard'):
@@ -349,7 +363,8 @@ def figure(m, tunic, hat=None, tool=None):
     for x in (-0.035, 0.035):
         place(m, serf_leg, (x, 0, HIP_AT))
     for x in (-ARM_X, ARM_X):
-        place(m, lambda mm: serf_arm(mm, tunic), (x, 0, SHOULDER_AT))
+        place(m, lambda mm: serf_upperarm(mm, tunic), (x, 0, SHOULDER_AT))
+        place(m, serf_forearm, (x, 0, SHOULDER_AT))
     if hat:
         big(hat)(m)
     if tool:
@@ -381,7 +396,7 @@ TOOLS = {
     'tool_rolling_pin': tool_rolling_pin, 'tool_cleaver': tool_cleaver, 'tool_tongs': tool_tongs, 'tool_bucket': tool_bucket,
 }
 BUILDERS = {
-    'serf_torso': serf_torso, 'serf_head': big(serf_head), 'serf_leg': serf_leg, 'serf_arm': serf_arm,
+    'serf_torso': serf_torso, 'serf_head': big(serf_head), 'serf_leg': serf_leg, 'serf_upperarm': serf_upperarm, 'serf_forearm': serf_forearm,
     'knight_helmet': big(knight_helmet), 'knight_shield': knight_shield, 'knight_sword': knight_sword, 'donkey': donkey,
     **HATS, **TOOLS,
 }

@@ -40,7 +40,6 @@ const C = {
   stoneDark: [0.5, 0.48, 0.46] as RGB,
   wheat: [0.86, 0.72, 0.3] as RGB,
   wheatGreen: [0.5, 0.68, 0.3] as RGB,
-  soil: [0.45, 0.33, 0.2] as RGB,
   wood: [0.6, 0.43, 0.26] as RGB,
   roof: [0.64, 0.25, 0.18] as RGB,
   wall: [0.88, 0.82, 0.7] as RGB,
@@ -64,14 +63,10 @@ const builders: Record<string, () => THREE.BufferGeometry> = {
     colored(at(new THREE.DodecahedronGeometry(0.28, 0), 0, 0.14, 0), C.stone),
     colored(at(new THREE.DodecahedronGeometry(0.18, 0), 0.22, 0.08, 0.1), C.stoneDark),
   ]),
-  field: () => merge([
-    colored(at(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 6), 0, 0.02, 0), C.soil),
-    ...[-0.2, 0, 0.2].map((x) => colored(at(new THREE.BoxGeometry(0.08, 0.3, 0.6), x, 0.15, 0), C.wheatGreen)),
-  ]),
-  field_ripe: () => merge([
-    colored(at(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 6), 0, 0.02, 0), C.soil),
-    ...[-0.2, 0, 0.2].map((x) => colored(at(new THREE.BoxGeometry(0.1, 0.36, 0.62), x, 0.18, 0), C.wheat)),
-  ]),
+  field: () => merge([-0.25, 0, 0.25].map((x) => colored(at(new THREE.BoxGeometry(0.2, 0.1, 0.5), x, 0.05, 0), C.wheatGreen))),
+  tuft: () => merge([colored(at(new THREE.ConeGeometry(0.03, 0.08, 3), 0, 0.04, 0), C.white)]),
+  bush: () => merge([colored(at(new THREE.IcosahedronGeometry(0.14, 0), 0, 0.08, 0), C.leaf)]),
+  field_ripe: () => merge([-0.25, 0, 0.25].map((x) => colored(at(new THREE.BoxGeometry(0.2, 0.1, 0.5), x, 0.05, 0), C.wheat))),
   sign: () => merge([
     colored(at(new THREE.BoxGeometry(0.03, 0.4, 0.03), 0, 0.2, 0), C.wood),
     colored(at(new THREE.BoxGeometry(0.2, 0.14, 0.02), 0, 0.36, 0), C.white),

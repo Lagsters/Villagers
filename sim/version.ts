@@ -1,2 +1,2 @@
 /** Wersja protokolu symulacji; peery z roznymi wersjami nie moga grac razem. */
-export const SIM_VERSION = 2;
+export const SIM_VERSION = 4;

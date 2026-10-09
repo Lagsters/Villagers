@@ -17,11 +17,11 @@ import bmesh
 
 sys.path.insert(0, os.path.dirname(__file__))
 from lib import PALETTE, STALKS, build  # noqa: E402
-from nature import RIDGE_GAP, RIDGE_W, RIPE, ROW_Z, field_plot, wheat_row  # noqa: E402
+from nature import RIDGE_GAP, RIDGE_W, RIPE, ROW_Z, wheat_row  # noqa: E402
 
 PALETTE.update({
     'wicker': '#c8a46a', 'wicker_dark': '#9c7a44', 'linen': '#e9dfc8', 'cork': '#c79a5e', 'float_red': '#d23a2a',
-    'straw': '#d8bf72', 'stubble': '#9c8448', 'soil_dark': '#4e3520', 'soil_ridge': '#7a5636', 'net': '#ece4cc',
+    'straw': '#d8bf72', 'stubble': '#9c8448', 'soil_dark': '#4e3520', 'net': '#ece4cc',
     'net_gap': '#5d5a50', 'leather': '#7a5230', 'fletch': '#c0392b', 'deer_dark': '#6e4527', 'antler': '#e6dcc4',
     'hoof': '#3a2f28', 'eye': '#1c1c1c',
 })
@@ -30,18 +30,11 @@ R = math.pi / 2
 HAND = -0.15
 
 
-# ---------------------------------------------------------------- lesnik, rolnik: ziemia
+# ---------------------------------------------------------------- rolnik: zniwa
 
 # Rzedy zniw maja dlugosc ROW_LEN (jak ROW_MODEL_LEN w client/render/work/field.ts) - gra skaluje je do dlugosci
 # rzedu pola (0.42-0.64), wiec wzor zdzbel i klosow jest prawie taki jak na polu `field_ripe`.
 ROW_LEN = 0.5
-
-
-def fld_soil(m):
-    """Zaorana ziemia pola (jak pod polem `field`) z grzedami pod rzedami - pod siew i pod skoszone zboze."""
-    field_plot(m)
-    for x in (-0.22, 0.0, 0.22):
-        m.box(0.2, 0.64 - abs(x), 0.008, x=x, z=0.03, col='soil_ridge', jitter=0.0)
 
 
 def fld_wheat_row(m):
@@ -58,8 +51,8 @@ def fld_stubble(m):
 
 def fld_swath(m):
     """Pokos: sciete zboze lezace na ziemi (dlugosc ROW_LEN wzdluz -Y), klosy po prawej stronie (+X)."""
-    m.box(0.09, ROW_LEN, 0.03, x=-0.015, y=-ROW_LEN / 2, z=0.03, col='straw', jitter=0.0)
-    m.box(0.04, ROW_LEN, 0.04, x=0.05, y=-ROW_LEN / 2, z=0.03, col='wheat_mid', jitter=0.0)
+    m.box(0.09, ROW_LEN, 0.03, x=-0.015, y=-ROW_LEN / 2, col='straw', jitter=0.0)
+    m.box(0.04, ROW_LEN, 0.04, x=0.05, y=-ROW_LEN / 2, col='wheat_mid', jitter=0.0)
 
 
 # ---------------------------------------------------------------- kamieniarz
@@ -278,7 +271,7 @@ def fld_netrack(m):
 
 
 BUILDERS = {
-    'fld_soil': fld_soil, 'fld_wheat_row': fld_wheat_row, 'fld_stubble': fld_stubble, 'fld_swath': fld_swath,
+    'fld_wheat_row': fld_wheat_row, 'fld_stubble': fld_stubble, 'fld_swath': fld_swath,
     'fld_lumps': fld_lumps, 'fld_rod': fld_rod, 'fld_float': fld_float, 'fld_line': fld_line, 'fld_ripple': fld_ripple,
     'fld_basket': fld_basket, 'fld_net': fld_net, 'fld_bow': fld_bow, 'fld_arrow': fld_arrow, 'fld_quiver': fld_quiver,
     'fld_deer_body': fld_deer_body, 'fld_deer_head': fld_deer_head, 'fld_deer_leg': fld_deer_leg,

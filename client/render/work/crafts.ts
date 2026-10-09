@@ -12,6 +12,7 @@
  *    czeka (ogien w piecu migocze, z komina bije dym), wyjmuje upieczone po jednym na stol i pakuje je do kosza.
  *  - Rzeznia: rzeznik przynosi tusze na ramieniu, kladzie ja na pniu, odrabuje tasakiem kawalki i zsuwa je na deske.
  *  - Chlewnia: hodowca sypie pasze z wiadra do koryta zza plotu, swinie podbiegaja i jedza; potem dolewa wody.
+ *    Miedzy karmieniami swinie chodza po wybiegu: ryja w ziemi, rozgladaja sie, taplaja sie w blocie, ocieraja sie o plot.
  *  - Studnia: studniarz kreci korba, wiadro wyjezdza ze studni, przelewa wode do beczki, wiadro spada z powrotem.
  *    Studniarz stoi przy korbie takze miedzy cyklami (studnia nie ma drzwi), a wode na flage niesie obok beczki.
  *  - Browar: piwowar wsypuje slod do kotla i miesza wioslem w parujacym kotle; beczke z piwem toczy na flage.
@@ -420,7 +421,7 @@ const DOOR_DUST: FxOptions = {
 };
 const SACK_DUST: FxOptions = {
   kind: 'puff', n: 7, life: 1.0, vy: 0.12, spread: 0.1, spreadY: 0.05, gravity: -0.04, size: 0.03, sizeEnd: 0.085,
-  color: FLOUR, colorEnd: 0xebe7de, jitter: 0.03, fade: 0.5,
+  color: FLOUR, colorEnd: 0xebe7de, jitter: 0.03, fade: 0.5, sound: 'swish', soundGain: 0.5,
 };
 
 /** Skrzydla mlynow: kat i predkosc (rozpedzaja sie i zwalniaja plynnie), czas ostatniej klatki. */
@@ -437,6 +438,8 @@ function millSails(c: WorkCtx, b: Building, o: Origin, milling: boolean): void {
   st.v += ((milling ? 2.3 : 0.3) - st.v) * Math.min(1, dt * 0.7);
   st.a += st.v * dt;
   const hub = c.at(o, MILL.hub.x, MILL.hub.y, MILL.hub.z, w1);
+  // Skrzypienie osi co cwierc obrotu rozpedzonych skrzydel.
+  if (st.v > 1) c.sfx('creak', hub.x, hub.z, b.id * 4096 + Math.floor(st.a / (Math.PI / 2)), 0.6);
   mA.makeTranslation(hub.x, hub.y, hub.z).multiply(mB.makeRotationY(BROT)).multiply(mB.makeRotationZ(st.a)).multiply(mB.makeScale(o.sc, o.sc, o.sc));
   c.propM('crf_sails', mA);
 }
@@ -609,7 +612,7 @@ const LOAF_PEEL = 0.55;
 const PEEL_LOAVES = [-0.017, 0.28, 0.017, 0.28, -0.017, 0.318, 0.017, 0.318];
 const FLOUR_PUFF: FxOptions = {
   kind: 'puff', n: 4, life: 0.7, vy: 0.08, spread: 0.06, spreadY: 0.03, gravity: -0.02, size: 0.018, sizeEnd: 0.05,
-  color: FLOUR, jitter: 0.02, fade: 0.5,
+  color: FLOUR, jitter: 0.02, fade: 0.5, sound: 'slap',
 };
 
 function tableLoaf(c: WorkCtx, o: Origin, k: number, color: number, s = LOAF_TABLE): void {
@@ -1018,7 +1021,7 @@ const TRAY_SLOTS = [-0.03, -0.018, 0.03, -0.018, -0.03, 0.02, 0.03, 0.02];
 const CARCASS_S = 1.3;
 const CARCASS_LEN = 0.11 * CARCASS_S;
 const CHOP_BITS: FxOptions = {
-  kind: 'bit', n: 4, life: 0.45, vy: 0.45, spread: 0.3, gravity: 2.4, size: 0.012, sizeEnd: 0.008, color: MEAT_BIT,
+  kind: 'bit', n: 4, life: 0.45, vy: 0.45, spread: 0.3, gravity: 2.4, size: 0.012, sizeEnd: 0.008, color: MEAT_BIT, sound: 'cleaver',
 };
 
 /** Tusza: tylny koniec w punkcie (x, y, z) swiata, lezy w kierunku yaw; dlugosc len (1 = cala). */
@@ -1160,12 +1163,11 @@ function butcher(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
 
 /**
  * Chlewnia (uklad modelu): koryto przy lewym plocie (srodek, wierzch, dlugosc i szerokosc wnetrza), miejsce
- * hodowcy za plotem, swinie: miejsca odpoczynku (lx, ly, obrot), miejsca przy korycie (lx, ly[]).
+ * hodowcy za plotem, miejsca swin przy korycie (lx, ly[]); poza karmieniem swinie chodza po wybiegu (PEN).
  */
 const PIGFARM = {
   trough: { x: -0.045, y: -0.29, top: 0.047, len: 0.176, w: 0.04 },
   pour: { x: -0.155, y: -0.22 },
-  rest: [0.36, -0.28, 2.6, 0.47, -0.38, -2.2, 0.22, -0.17, 0.9],
   eatX: 0.05,
   eatY: [-0.35, -0.29, -0.23],
 };
@@ -1176,66 +1178,189 @@ const PIG_FROM_FENCE = [-0.155, -0.22, -0.3, -0.15, -0.3, -0.06];
 /** Droga hodowcy ze swinia od drzwi domu, wzdluz lewego plotu i przed zagroda, na flage. */
 const PIGFARM_EXIT = [-0.3, -0.03, -0.3, -0.15, -0.17, -0.3, -0.16, -0.55];
 const PIG_S = 0.8;
-const FEED_BITS: FxOptions = { kind: 'bit', n: 9, life: 0.32, vy: -0.15, spread: 0.05, spreadY: 0.02, gravity: 2.0, size: 0.011, color: FEED };
+const FEED_BITS: FxOptions = { kind: 'bit', n: 9, life: 0.32, vy: -0.15, spread: 0.05, spreadY: 0.02, gravity: 2.0, size: 0.011, color: FEED, sound: 'pour', soundGain: 0.5 };
 const WATER_DROPS: FxOptions = {
-  kind: 'puff', n: 9, life: 0.3, vy: -0.15, spread: 0.04, spreadY: 0.02, gravity: 2.2, size: 0.016, sizeEnd: 0.01, color: 0x7fb2dc,
+  kind: 'puff', n: 9, life: 0.3, vy: -0.15, spread: 0.04, spreadY: 0.02, gravity: 2.2, size: 0.016, sizeEnd: 0.01, color: 0x7fb2dc, sound: 'pour',
 };
 /** Krople spadajace z wiadra wynurzajacego sie z wody. */
-const DRIPS: FxOptions = { kind: 'puff', n: 4, life: 0.25, vy: -0.15, spread: 0.04, spreadY: 0.02, gravity: 2.2, size: 0.014, sizeEnd: 0.01, color: 0x7fb2dc };
+const DRIPS: FxOptions = { kind: 'puff', n: 4, life: 0.25, vy: -0.15, spread: 0.04, spreadY: 0.02, gravity: 2.2, size: 0.014, sizeEnd: 0.01, color: 0x7fb2dc, sound: 'pour', soundGain: 0.3 };
 
-/** Swinia: punkt na ziemi, obrot, pochylenie (+ = ryjem w dol); nogi w fazie ph z wymachem amp. */
-function drawPig(c: WorkCtx, x: number, y: number, z: number, yaw: number, pitch: number, ph: number, amp: number, s = PIG_S): void {
-  ypr(mBody, x, y, z, yaw, pitch, 0, s);
+/** Ulozenie swini: pochylenie tulowia (+ = ryjem w dol), przechyl na bok, glowa (pochylenie, skret), nogi (faza ph,
+ *  wymach amp), lezenie 0..1 (na boku, nogi podkurczone), oddech, skala. */
+interface PigPose { pitch?: number; roll?: number; head?: number; headYaw?: number; ph?: number; amp?: number; lie?: number; breathe?: number; s?: number }
+
+/** Staw szyi w ukladzie tulowia (jak crf_pig_head w art/scripts/props_crafts.py; przod na +z). */
+const PIG_NECK = { y: 0.085, z: 0.055 };
+
+/** Swinia: punkt na ziemi, obrot i ulozenie. */
+function drawPig(c: WorkCtx, x: number, y: number, z: number, yaw: number, o: PigPose = {}): void {
+  const s = o.s ?? PIG_S;
+  const lie = o.lie ?? 0;
+  const roll = (o.roll ?? 0) + lie * 1.25;
+  // Na boku tulow schodzi do ziemi: najnizszy punkt elipsoidy (promien w bok 0.045) tuz nad terenem.
+  const lift = Math.max(0, 0.047 - 0.075 * Math.cos(roll)) * s;
+  ypr(mBody, x, y + lift, z, yaw, o.pitch ?? 0, roll, s);
+  const br = 1 + (o.breathe ?? 0) * 0.04;
+  if (br !== 1) mBody.multiply(mB.makeScale(br, br, 1));
   c.propM('crf_pig', mBody);
+  mA.copy(mBody).multiply(mB.makeTranslation(0, PIG_NECK.y, PIG_NECK.z));
+  if (o.headYaw) mA.multiply(mB.makeRotationY(o.headYaw));
+  if (o.head) mA.multiply(mB.makeRotationX(o.head));
+  c.propM('crf_pig_head', mA);
+  const ph = o.ph ?? 0, amp = o.amp ?? 0;
   for (let k = 0; k < 4; k++) {
     const side = k & 1 ? 1 : -1, fore = k < 2 ? 1 : -1;
-    const sw = Math.sin(ph + (side * fore > 0 ? 0 : Math.PI)) * amp;
+    const sw = Math.sin(ph + (side * fore > 0 ? 0 : Math.PI)) * amp - fore * lie * 0.7;
     mA.copy(mBody).multiply(mB.makeTranslation(side * 0.024, 0.05, fore * 0.045)).multiply(mB.makeRotationX(sw)).multiply(mB.makeScale(0.48, 0.48, 0.48));
     c.propM('crf_leg', mA, PIG);
   }
 }
 
-/** Polozenie swini i w cyklu karmienia: odpoczynek, bieg do koryta, jedzenie, powrot. */
+function hashf(a: number, b: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 13), 0x27d4eb2d);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Wybieg chlewni (uklad modelu, wewnatrz plotow i przed chlewem); kazda swinia ma swoj pas wzdluz x. */
+const PEN = { x0: 0.07, x1: 0.53, y0: -0.4, y1: -0.15 };
+/** Predkosc swini (uklad modelu na sekunde): spacer i bieg do koryta. */
+const PIG_WALK = 0.09;
+const PIG_RUN = 0.55;
+type PigAct = 'root' | 'look' | 'wallow' | 'scratch';
+/** Kaluze blota na wybiegu (jak w modelu chlewni, art/scripts/buildings.py: pigfarm): srodek i promien. */
+const MUD = [[0.37, -0.3, 0.11], [0.25, -0.36, 0.06]] as const;
+
+/** Co swinia i robi w odcinku k swojego planu i dokad wtedy idzie (przy scratch - pod przedni plot). */
+function pigStep(seed: number, i: number, k: number): { act: PigAct; x: number; y: number } {
+  const h = hashf(seed, k * 7 + 1);
+  const act: PigAct = h < 0.35 ? 'root' : h < 0.55 ? 'look' : h < 0.8 ? 'wallow' : 'scratch';
+  if (act === 'wallow') {
+    // Kazda swinia ma swoja kaluze i swoje miejsce w niej - nie wchodza na siebie.
+    const [mx, my, mr] = MUD[i === 2 ? 1 : 0];
+    const a = (i === 1 ? 2.4 : 0.3) + (hashf(seed, k * 7 + 5) - 0.5) * 0.8;
+    return { act, x: mx + Math.cos(a) * mr * 0.45, y: my + Math.sin(a) * mr * 0.3 };
+  }
+  const w = (PEN.x1 - PEN.x0) / 3;
+  const x = PEN.x0 + (i + 0.5) * w + (hashf(seed, k * 7 + 2) - 0.5) * w * 0.85;
+  const y = act === 'scratch' ? PEN.y0 : lerp(PEN.y0, PEN.y1, hashf(seed, k * 7 + 3));
+  return { act, x, y };
+}
+
+/** Kierunek swini w czynnosci odcinka k: po przyjsciu, a przy ocieraniu sie - wzdluz przedniego plotu. */
+function pigActYaw(seed: number, i: number, k: number): number {
+  const a = pigStep(seed, i, k - 1), b = pigStep(seed, i, k);
+  if (b.act === 'scratch') return faceL(hashf(seed, k * 7 + 4) < 0.5 ? 1 : -1, 0);
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  return d > 1e-3 ? faceL(b.x - a.x, b.y - a.y) : faceL(-1, 0);
+}
+
+/**
+ * Swinia i na wybiegu w chwili t (bez karmienia): kolejne odcinki planu (dlugosc L) - przejscie spacerem do nowego
+ * miejsca i czynnosc: rycie ryjem w ziemi, rozgladanie sie, taplanie sie w blocie (lezy w kaluzy i tarza sie
+ * z boku na bok), ocieranie sie o plot. Poza marszem nogi stoja - bez przestepowania w miejscu. Bezstanowo (z t).
+ */
+function pigAt(seed: number, i: number, t: number): { x: number; y: number; yaw: number; pose: PigPose } {
+  const L = 7 + 4 * hashf(seed, 99);
+  const tt0 = t + hashf(seed, 98) * L;
+  const k = Math.floor(tt0 / L), tt = tt0 - k * L;
+  const a = pigStep(seed, i, k - 1), b = pigStep(seed, i, k);
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  const walkT = Math.min(d / PIG_WALK, L * 0.45);
+  const actYaw = pigActYaw(seed, i, k);
+  if (tt < walkT) {
+    const u = tt / walkT;
+    const moveYaw = faceL(b.x - a.x, b.y - a.y);
+    // Najpierw obrot z ostatniej czynnosci w strone marszu.
+    const yaw = lerpAngle(pigActYaw(seed, i, k - 1), moveYaw, smooth(clamp01(tt / 0.5)));
+    const ph = u * d * 70;
+    return { x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), yaw, pose: { ph, amp: 0.5, head: 0.12 + Math.sin(ph * 2) * 0.05 } };
+  }
+  const u = tt - walkT, A = L - walkT, ts = t + seed;
+  const turn = smooth(clamp01(u / 0.6));
+  const arrive = d > 1e-3 ? faceL(b.x - a.x, b.y - a.y) : actYaw;
+  const yaw = lerpAngle(arrive, actYaw, turn);
+  if (b.act === 'root') {
+    // Stoi i ryje ryjem w ziemi.
+    return { x: b.x, y: b.y, yaw, pose: { pitch: 0.1, head: 0.55 + 0.15 * Math.sin(ts * 7), headYaw: 0.3 * Math.sin(ts * 0.8) } };
+  }
+  if (b.act === 'look') {
+    // Unosi glowe i rozglada sie, czasem weszy (szybkie kiwniecia ryjem).
+    const sniff = Math.max(0, Math.sin(ts * 0.7)) ** 6;
+    return { x: b.x, y: b.y, yaw, pose: { pitch: -0.04, head: -0.2 + Math.sin(ts * 14) * 0.06 * sniff, headYaw: 0.7 * Math.sin(ts * 0.5) } };
+  }
+  if (b.act === 'wallow') {
+    // Kladzie sie w kaluzy, tarza sie z boku na bok (co chwile na grzbiet i z powrotem), oddycha; na koniec wstaje.
+    const lie = smooth(clamp01((u - 0.3) / 1.2)) * (1 - smooth(clamp01((u - (A - 1.4)) / 1.2)));
+    const roll = Math.sin(ts * 1.6) * 0.55 * Math.max(0, Math.sin(ts * 0.45)) * lie;
+    return { x: b.x, y: b.y, yaw, pose: { lie, roll, head: 0.15 * lie, headYaw: 0.25 * Math.sin(ts * 0.9) * lie, breathe: lie * Math.sin(ts * 2.2) } };
+  }
+  // Stoi bokiem przy plocie i ociera sie o niego, przechylajac sie ku sztachetom.
+  const rub = smooth(clamp01((u - 0.6) / 0.5)) * (1 - smooth(clamp01((u - (A - 0.6)) / 0.5)));
+  return { x: b.x, y: b.y, yaw, pose: { roll: (0.18 + 0.08 * Math.sin(ts * 4)) * rub, head: -0.1 * rub } };
+}
+
+/**
+ * Glos swini: kwik na poczatku biegu do koryta, czeste chrzakanie przy jedzeniu, z rzadka na wybiegu. Klucz dzwieku
+ * to numer okienka czasu - wolanie co klatke gra kazde chrzakniecie raz.
+ */
+function pigVoice(c: WorkCtx, seed: number, x: number, z: number, mood: 'squeal' | 'eat' | 'idle'): void {
+  const key = 0x4000000 + seed * 4096;
+  if (mood === 'squeal') {
+    c.sfx('pig_squeal', x, z, key);
+    return;
+  }
+  const win = mood === 'eat' ? 0.9 : 2.6;
+  const n = Math.floor(c.time / win + hashf(seed, 97));
+  if (hashf(seed, n) < (mood === 'eat' ? 0.6 : 0.25)) c.sfx('pig_grunt', x, z, key + 1 + (n & 2047), mood === 'eat' ? 0.8 : 0.6);
+}
+
+/** Swinia i w cyklu karmienia (p - postep cyklu chlewni albo -1): bieg do koryta, jedzenie, powrot; poza nim wybieg. */
 function pig(c: WorkCtx, b: Building, o: Origin, i: number, p: number): void {
   const t = c.time;
-  const r = PIGFARM.rest;
   const seed = b.id * 3 + i;
-  // Odpoczynek: lekkie przestepowanie i rycie ryjem.
-  const rx = r[i * 3] + 0.025 * Math.sin(t * 0.21 + seed * 2.1), ry = r[i * 3 + 1] + 0.018 * Math.sin(t * 0.29 + seed);
-  const restYaw = BROT + r[i * 3 + 2] + 0.5 * Math.sin(t * 0.13 + seed * 1.3);
-  const root = 0.14 + 0.07 * Math.sin(t * 1.9 + seed);
+  const cs = cycleSec(B.PIGFARM);
   const ex = PIGFARM.eatX, ey = PIGFARM.eatY[i];
   const runTo = 0.075 + 0.014 * i, eatEnd = 0.6 + 0.025 * i;
-  const runDur = (Math.hypot(rx - ex, ry - ey) * o.sc) / 0.85 / cycleSec(B.PIGFARM);
-  const walkDur = (Math.hypot(rx - ex, ry - ey) * o.sc) / 0.3 / cycleSec(B.PIGFARM);
-  let lx = rx, ly = ry, yaw = restYaw, pitch = root, ph = 0, amp = 0, bob = 0;
-  if (p >= runTo && p < eatEnd + walkDur) {
+  let lx: number, ly: number, yaw: number, pose: PigPose;
+  // Skad biegnie i dokad wraca: miejsce na wybiegu w chwili startu biegu i w chwili powrotu.
+  const start = p >= runTo ? pigAt(seed, i, t - (p - runTo) * cs) : null;
+  const runDur = start ? (Math.hypot(start.x - ex, start.y - ey) / PIG_RUN) / cs : 0;
+  const backAt = start ? t + (eatEnd - p) * cs : 0;
+  const home = start ? pigAt(seed, i, backAt + 2) : null;
+  const walkDur = home ? (Math.hypot(home.x - ex, home.y - ey) / (PIG_WALK * 1.5)) / cs : 0;
+  if (start && home && p < eatEnd + walkDur) {
     if (p < runTo + runDur) {
       const u = smooth(span(p, runTo, runTo + runDur));
-      lx = lerp(rx, ex, u);
-      ly = lerp(ry, ey, u);
-      yaw = faceL(ex - rx, ey - ry);
-      ph = u * Math.hypot(rx - ex, ry - ey) * o.sc * 55;
-      amp = 0.7;
-      bob = Math.abs(Math.sin(ph)) * 0.012;
-      pitch = -0.05 + Math.sin(ph * 2) * 0.05;
+      lx = lerp(start.x, ex, u);
+      ly = lerp(start.y, ey, u);
+      yaw = lerpAngle(start.yaw, faceL(ex - start.x, ey - start.y), smooth(clamp01((p - runTo) * cs / 0.3)));
+      const ph = u * Math.hypot(start.x - ex, start.y - ey) * 85;
+      pose = { ph, amp: 0.8, pitch: -0.05 + Math.sin(ph * 2) * 0.05, head: -0.1 };
     } else if (p < eatEnd) {
       lx = ex + 0.004 * Math.sin(t * 3 + seed);
       ly = ey;
       yaw = faceL(-1, 0) + 0.15 * Math.sin(t * 0.9 + seed);
-      pitch = 0.32 + 0.07 * Math.sin(t * 9 + seed * 3);
+      pose = { pitch: 0.08, head: 0.75 + 0.12 * Math.sin(t * 9 + seed * 3), headYaw: 0.15 * Math.sin(t * 1.3 + seed) };
     } else {
       const u = span(p, eatEnd, eatEnd + walkDur);
-      lx = lerp(ex, rx, u);
-      ly = lerp(ey, ry, u);
-      yaw = faceL(rx - ex, ry - ey);
-      ph = u * Math.hypot(rx - ex, ry - ey) * o.sc * 40;
-      amp = 0.45;
-      pitch = 0.04;
+      lx = lerp(ex, home.x, u);
+      ly = lerp(ey, home.y, u);
+      yaw = faceL(home.x - ex, home.y - ey);
+      const ph = u * Math.hypot(home.x - ex, home.y - ey) * 70;
+      pose = { ph, amp: 0.5, pitch: 0.03, head: 0.1 };
     }
+  } else {
+    const w = pigAt(seed, i, t);
+    lx = w.x;
+    ly = w.y;
+    yaw = w.yaw;
+    pose = w.pose;
   }
   const q = c.at(o, lx, ly, 0, w3);
-  drawPig(c, q.x, q.y + bob, q.z, yaw, pitch, ph, amp);
+  pigVoice(c, seed, q.x, q.z, start && p < runTo + runDur && (p - runTo) * cs < 0.5 ? 'squeal' : start && p < eatEnd ? 'eat' : 'idle');
+  const bob = pose.amp ? Math.abs(Math.sin(pose.ph ?? 0)) * 0.008 * pose.amp : 0;
+  drawPig(c, q.x, q.y + bob, q.z, yaw, pose);
 }
 
 /** Hodowca za plotem z wiadrem: dochodzi, unosi wiadro nad plot, przechyla (sypie / leje), opuszcza. */
@@ -1319,7 +1444,8 @@ function pigfarmer(c: WorkCtx, serf: Serf, at: SerfAt): boolean {
     reach(fig, 1, k.x + Math.cos(fig.rot) * 0.04, k.y + 0.03, k.z - Math.sin(fig.rot) * 0.04);
     reach(fig, -1, k.x - Math.cos(fig.rot) * 0.04, k.y + 0.03, k.z + Math.sin(fig.rot) * 0.04);
     c.figure(fig);
-    drawPig(c, k.x, k.y, k.z, fig.rot + Math.PI / 2, 0, c.time * 9, 0.35, 0.62);
+    // Swinia na rekach przebiera nogami i kreci glowa.
+    drawPig(c, k.x, k.y, k.z, fig.rot + Math.PI / 2, { ph: c.time * 9, amp: 0.35, s: 0.62, head: -0.15 + 0.12 * Math.sin(c.time * 2.3), headYaw: 0.4 * Math.sin(c.time * 1.7) });
   } else c.figure(fig);
   return true;
 }
@@ -1353,7 +1479,7 @@ const WELL_TO_CRANK = [-0.21, -0.07, -0.255, 0.035];
 const WELL_TO_GRAB = [-0.255, 0.035, -0.21, -0.07];
 /** Droga studniarza z woda od korby, obok beczki, na flage (flage dopisuje doorWalk). */
 const WELL_TO_FLAG = [-0.255, 0.035, -0.3, -0.08, -0.3, -0.2, -0.2, -0.32];
-const SPLASH: FxOptions = { kind: 'puff', n: 7, life: 0.55, vy: 0.35, spread: 0.12, spreadY: 0.08, gravity: 1.6, size: 0.016, sizeEnd: 0.01, color: 0x8fc0e6 };
+const SPLASH: FxOptions = { kind: 'puff', n: 7, life: 0.55, vy: 0.35, spread: 0.12, spreadY: 0.08, gravity: 1.6, size: 0.016, sizeEnd: 0.01, color: 0x8fc0e6, sound: 'splash' };
 const BUCKET_S = 0.9;
 
 /** Kat korby (rad) dla wysokosci uchwytu wiadra z (sznur nawija sie na walek). */
@@ -1384,6 +1510,8 @@ function wellerCranking(c: WorkCtx, b: Building, o: Origin, a: number, grip: num
   const fig = pose(st.x, st.y, st.z, rot, b.owner, S.WELLER);
   fig.tool = null;
   const h = winch(c, o, a, w4);
+  // Kolowrot skrzypi co pol obrotu korby.
+  c.sfx('creak', st.x, st.z, 0x6700000 + b.id * 4096 + (Math.floor(a / Math.PI) & 4095), 0.5);
   if (grip > 0) {
     const ca = Math.cos(a);
     fig.bob = 0.008 * ca * grip;
@@ -1556,9 +1684,9 @@ const BREW_OUT = [-0.27, -0.212, -0.18, -0.21, 0.1, -0.215, 0.12, -0.13];
 const BREWERY_EXIT = [0.12, -0.12, 0.1, -0.25];
 const STEAM_FX: FxOptions = {
   kind: 'puff', n: 6, life: 2.4, vx: OUT_X * 0.025, vz: OUT_Z * 0.025, vy: 0.1, spread: 0.02, spreadY: 0.02, gravity: -0.02,
-  size: 0.025, sizeEnd: 0.085, color: STEAM, colorEnd: 0xdcdad6, jitter: 0.04, sway: 0.03, fade: 0.35,
+  size: 0.025, sizeEnd: 0.085, color: STEAM, colorEnd: 0xdcdad6, jitter: 0.04, sway: 0.03, fade: 0.35, sound: 'bubbles', soundGain: 0.6,
 };
-const MALT_BITS: FxOptions = { kind: 'bit', n: 10, life: 0.3, vy: -0.1, spread: 0.04, gravity: 2.0, size: 0.01, color: MALT };
+const MALT_BITS: FxOptions = { kind: 'bit', n: 10, life: 0.3, vy: -0.1, spread: 0.04, gravity: 2.0, size: 0.01, color: MALT, sound: 'pour', soundGain: 0.5 };
 
 /** Pusty worek po slodzie lezacy plasko przy kotle (macierz w `out`). */
 function emptySack(c: WorkCtx, o: Origin, out: THREE.Matrix4): THREE.Matrix4 {
@@ -1808,6 +1936,9 @@ function donkeybreeder(c: WorkCtx, b: Building, o: Origin): void {
   }
   const dq = c.at(o, dx, dy, 0, w4);
   drawDonkey(c, dq.x, dq.y + (amp ? Math.abs(Math.sin(ph)) * 0.006 : 0), dq.z, dyaw, 1, nod, ph, amp);
+  // Stukot kopyt co krok, a na postoju miedzy okrazeniami oslica ryczy.
+  if (walking) c.sfx('hoof', dq.x, dq.z, 0x6100000 + b.id * 4096 + (Math.floor(ph / Math.PI) & 4095), 0.5);
+  if (p >= T.lap1 + 0.02 && p < T.pause) c.sfx('donkey_bray', dq.x, dq.z, 0x6200000 + b.id);
   const hal = halter(nod, w5);
   const neck = pt(mA.copy(mBody).multiply(mB.makeTranslation(0, 0.19, 0.09)), 0, 0.02, 0, NECK);
   if (p < 0) return;

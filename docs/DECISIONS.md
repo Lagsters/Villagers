@@ -371,3 +371,217 @@ Drogi wodne z łodziami zostają (część pierwsza).
   kopalnie bez wyrównywania (zmieniałoby góry); (2) wyrównanie pod chatą tylko pola budynku i flagi - mniejsza
   zmiana terenu i tempa; (3) powrót limitu różnicy wysokości przy stawianiu chat - sprzeczne z przyjętymi zasadami
   pierwowzoru. Po zmianach w renderze żaden nie jest potrzebny.
+
+## 2026-10-09 — Teren, drogi, drzewa i pola jako jeden obraz (uwaga właściciela)
+Uwaga: trawa, ścieżki i drzewa za mocno się od siebie różnią, nie są ze sobą zintegrowane. Przyczyny: każda warstwa
+miała własną paletę (jaskrawa limonkowa trawa, ciemnoturkusowe świerki, pomarańczowe drogi), obiekty nie
+zostawiały na ziemi żadnego śladu (cienia, ściółki, wydeptania), drogi były osobną wstęgą o ostrych brzegach,
+a pola - płytami z pionowymi bokami.
+- **Stan pól w teksturze** (`client/render/cells.ts`): tekstura RGBA8 rozmiaru mapy - drzewo, inna bryła rzucająca
+  cień (budynek, skała), bity dróg (`map.roads` z symulacji), flaga, pole zboża, wydeptana ziemia. Przeliczana po
+  tickach, wysyłana tylko po zmianie. Shader terenu bierze trójkąt siatki pod pikselem (ten sam podział co
+  `groundHeight`) i interpoluje wartości jego trzech pól, a z szumem granic robi z nich malowane plamy.
+  Bez nowych wywołań rysowania; koszt to 6 odczytów tekstury stanu i do 18 odległości od odcinków dróg na piksel
+  terenu.
+- **Ziemia pod obiektami**: ściółka lasu (ciemna, z rudymi plamami) pod drzewami i między nimi, łąka przy lesie
+  ciemniejsza; cień drzew i budynków na terenie - stan pola przesunięty od słońca (cień pada w tę samą stronę co
+  oświetlenie modeli) - i ciemniejsza plama tuż przy pniu i ścianie; wydeptana ziemia przy budynkach, placach
+  budowy i flagach w kolorze podłoża (na piasku ciemniejszy piasek, na skale żwir).
+- **Drogi w shaderze terenu** zamiast osobnej siatki (`client/render/roads.ts` usunięty): odległość od odcinków
+  drogi wychodzących z wierzchołków trójkąta, postrzępiony brzeg, dwie koleiny, przydeptana trawa przy brzegu;
+  szerokość jak dotąd. Droga zawsze leży dokładnie na terenie (bez przycinania wstęgi do trójkątów).
+- **Wspólna paleta**: trawa przygaszona (z dużymi łatami i przesuszeniem na wzgórzach i przy plażach), korony
+  drzew z tej samej rodziny zieleni, światło odbite od ziemi zielonkawe (spody koron i okapy łapią kolor łąki).
+  Kwiaty jako rzadkie plamki w łatach łąki (z daleka gasną).
+- **Pola**: ziemię z bruzdami rysuje teren, model ma samo zboże - niższe grzbiety o falującej wysokości,
+  stonowane kolory. Rozstaw grzbietów 0,125 mieści się 4 razy w pół pola, więc bruzdy sąsiednich pól leżą na
+  jednej siatce (bez szwów). Siew i ściernisko oznaczają pole jako zaorane na czas klatki (`WorkCtx.plowCell`) -
+  rekwizyt `fld_soil` usunięty, ziemia przy pracy rolnika wygląda tak samo jak pod polem.
+- **Ozdoby łąki** (`tuft` 27 trójkątów, `bush` 72): kępy trawy w kolorze trawy pod nimi, wokół drzew i skał,
+  częściej na skraju lasu (tam też krzaki); bez ozdób na drogach, przy wodzie i obok flag i budynków. Dwie warstwy
+  instancji (+2 wywołania rysowania, gdy są w kadrze). Ozdoby nie należą do obiektu pola - sceny pracy ukrywające
+  drzewo czy zboże ich nie chowają; znikają z pola zaoranego przez scenę.
+- Symulacja bez zmian (`SIM_VERSION` bez zmian, boty 20/20).
+
+## 2026-10-09 — Plaża, góry, śnieg i woda jako część tego samego obrazu (uwaga właściciela)
+Uwaga: to samo, co z trawą, drogami i drzewami, trzeba zrobić z plażą, górami, śniegiem i wodą. Przyczyny:
+granice rodzajów terenu szły schodkami po trójkątach siatki (wagi rodzajów w wierzchołkach), skała miała
+regularną siatkę spękań jak wyschnięte błoto i pionowe smugi na urwiskach, śnieg - szare linie jak kafelki,
+piasek był płaskim beżem bez wydm i mokrego brzegu, a woda - płaską, nieruchomą plamą.
+- **Rodzaje terenu w teksturze** (`kindMap` w `client/render/terrain.ts`, zamiast atrybutu wierzchołków): shader
+  czyta wagi w punkcie przesuniętym szumem (do ~0,2 pola), więc granice trawa/piasek/skała/śnieg/woda falują
+  niezależnie od siatki. Rodzaje pól się nie zmieniają (wyrównanie zmienia tylko wysokość) - tekstura statyczna.
+- **Skała**: faktura z garbatego szumu i pól drobnych głazów (bez siatki spękań), rzutowana z trzech stron wg
+  normalnej (bez rozciągnięć na urwiskach), ciemniejsza paleta, ciepły albo chłodny odcień w dużych łatach,
+  warstwy na urwiskach, mech i górska trawa na płaskich półkach, piarg przy łące. Filtrowanie anizotropowe
+  faktury terenu (stoki widziane pod ostrym kątem bez niego rozmazują się w smugi).
+- **Śnieg**: miękkie zaspy (relief z szumu), stoki odwrócone od słońca niebieskawe, bez faktury skały.
+- **Piasek**: wydmy, łaty cieplejszego piasku, mokry, ciemniejszy pas przy wodzie, rzadkie kamyki.
+- **Woda**: dwie warstwy fal płynące w czasie (`uTime`, czas rzeczywisty - także przy pauzie) i błyski, na
+  płyciźnie prześwituje piaszczyste dno, piana przy brzegu faluje (z daleka słabsza); kolor płycizny i otwartej
+  wody bliżej zieleni lądu.
+- **Ozdoby** w istniejących warstwach (bez nowych wywołań rysowania): trzcina na brzegu (wydłużona kępa trawy) od
+  strony wody, suche kępy na pustyni przy łące i rzadko w głębi, drobne kamienie w górach (więcej przy łące) z kępami
+  górskiej trawy, kamyki na pustyni.
+- Koszt: na piksel terenu 3 odczyty rodzajów, 2 szumu przesunięcia, 2 rzuty skały z boku, 2 fale; bez nowych
+  wywołań rysowania. Symulacja bez zmian.
+
+## 2026-10-09 — Niższe fundamenty, nasyp pod drewnianymi budynkami (uwaga właściciela)
+Uwaga: fundamenty bywają bardzo wysokie; może drewniane powinny stać na górce z ziemi, a kamienne mieć schody.
+Przyczyna: budynek stał na najwyższym punkcie terenu pod obrysem, a od dołu ściana schodziła pionowo do terenu
+kamienną podmurówką (na stoku przy plaży - jak pół ściany).
+- **Poziom budynku = średnia wysokość terenu pod obrysem** (dalej najwyżej `MAX_LIFT` nad polem, `originOf`
+  w `client/render/entities.ts`): na stoku górna strona wchodzi w zbocze, od dołu odsłania się mniej muru.
+- **Nasyp pod drewnianymi budynkami**: Blender oznacza spód konstrukcji, nad którą stoją ściany z desek albo bali
+  (także modelowany cokół takiej ściany), jako nasyp (`BASE_BERM` w `art/scripts/lib.py`), murowane i kamienne -
+  podmurówka (`BASE_STONE`). Na każdej części konstrukcji jest pierścień wierzchołków 1,2 cm nad ziemią, na którym
+  skarpa się zgina (ściana nad nim zostaje pionowa; ~10-40 trójkątów na budynek). Shader modeli (`YARD_NORMAL`
+  w `client/render/scene.ts`) zsuwa spód do terenu i rozchyla go na zewnątrz 1,3 raza tyle, ile zszedł (skarpa
+  ~40°), wysokość terenu bierze w odsuniętym punkcie, przechyla normalną (skarpa oświetlona jak stok) i maluje ją
+  kolorem wydeptanej ziemi wokół budynku z plamami trawy. Bez nowych modeli i wywołań rysowania.
+- Chata rybaka: kamienna platforma w modelu niższa (8 → 5 cm) - była dwa razy wyższa niż cokoły innych chat.
+- Schody przy drzwiach budynków kamiennych - odłożone (wymagają położenia drzwi zapisanego w modelach).
+
+## 2026-10-09 — Wspólna podmurówka, schody i ścieżka do drzwi, limit stoku pod chatą, woda na swoim poziomie (uwagi właściciela)
+- **Nasyp pod drewnianymi budynkami wycofany** (poprzednia sekcja): wszystkie budynki mają z powrotem jednolitą
+  szarą podmurówkę, bez skośnej ziemi po bokach. Zostaje poziom budynku ze średniej wysokości terenu pod obrysem.
+- **Schody przed drzwiami, gdy są potrzebne.** Blender zapisuje główne drzwi każdego budynku (środek progu na
+  przedniej ścianie, wysokość progu, szerokość) w `art/models/yards.json` (`door()` i `double_door()`
+  w `art/scripts/buildings.py`, bramy zamku i warowni, otwory tartaku i narzędziowni dopisane ręcznie; studnia
+  i otwarta szopa stoczni bez drzwi). Budynek nie stoi niżej niż teren tuż przed drzwiami (wejście nie bywa
+  zakopane). Gdy stoi wyżej, przed drzwiami powstają stopnie (wysokość ~0,035, głębokość 0,045, najwyżej 10)
+  od progu do terenu, każdy sięga do terenu pod sobą - model `stair_step` (`art/scripts/props.py`), jedna
+  warstwa instancji (+1 wywołanie rysowania, gdy schody są w kadrze). Na płaskim terenie wystarcza próg modelu.
+- **Ścieżka od flagi pod same drzwi** (albo pod schody): druga tekstura stanu pól (`paths` w
+  `client/render/cells.ts`) z odcinkiem od flagi do podnóża wejścia na polu flagi i na polu budynku; shader terenu
+  rysuje go jak drogę.
+- **Limit stoku pod chatą (zmiana symulacji, `SIM_VERSION` 3):** chata tylko tam, gdzie żaden z 6 sąsiadów nie
+  różni się wysokością od jej pola o więcej niż 1 (`HUT_HEIGHT_STEP` w `sim/world.ts`). Odstępstwo od
+  pierwowzoru na prośbę właściciela - chata nie ma kopacza, więc na stromym stoku stała na wysokiej podmurówce
+  ze schodami. Kopalnie bez limitu (z natury stoją w zboczu). Boty: 20/20 partii kończy się zwycięstwem.
+- **Woda tylko na poziomie swojego lustra:** shader terenu przygasza wodę, gdzie teren wznosi się nad poziom
+  najbliższej wody (atrybut wierzchołków `wlevel` - poziom wody pola albo najniższej wody w promieniu 2 pól),
+  z szumem, żeby brzeg nie szedł prosto po trójkątach; w głąb wody szum wcina się tylko przy brzegu. Poziom
+  liczony per woda, więc jezioro może leżeć wyżej niż morze; generator map stawia dziś każdą wodę na tej samej
+  wysokości (`SEA_HEIGHT`) - jeziora położone wyżej wymagałyby zmiany w `sim/mapgen.ts`.
+
+## 2026-10-09 — Łagodne wzniesienie przy zamku, niższa kamera, krzywizna świata (uwagi właściciela)
+- **Masyw górski przy starcie** (`prepareStart` w `sim/mapgen.ts`, gdy w pobliżu zamku brak gór): był blokiem na
+  wysokości co najmniej 17 na niskiej łące - urwisko, na którego krawędzi boty stawiały kopalnie. Teraz to łagodne
+  wzniesienie piętrami od wysokości środka (+3, +2, +1). Próba globalnego łagodzenia gór (niższe góry, spadek
+  najwyżej 1 na całej mapie) wycofana - „za łagodnie”, właściciel chciał poprawić tylko to jedno miejsce.
+- **Kopalnie bez limitu stoku**: limit 1 (jak chaty), 2, 3 i 5 sprawdzone - w górach sąsiednie pola różnią się
+  zwykle o 2-3 i boty nie znajdowały miejsc na kopalnie (partie bez zwycięzcy) albo zmieniał się wynik partii.
+- **Wzniesienie z kopalniami powiększone** do promienia 3 (37 pól; +3 w środku i pierwszym pierścieniu, dalej +2, +1).
+- **Równowaga botów (otwarte):** trudny bot wygrywa z łatwym mniej więcej połowę partii - po zmianach terenu przy
+  zamku 8, 10 albo 9 z 20 (promień wzniesienia 2, 3, 4; test wymaga ponad 10). Wszystkie partie kończą się
+  zwycięzcą. Korekty bota (próg ataku 1,35, 5 rycerzy w zamku) nie pomogły - zmiany terenu przestawiają wyniki
+  losowo; potrzebne wzmocnienie trudnego bota (osobne zadanie).
+- **Kamera**: pochylenie od 10° nad horyzontem (było od 22°).
+- **Krzywizna świata** (`client/render/curve.ts`): w shaderach terenu i modeli każdy punkt opada o d² / (2R),
+  R = 90 pól, d - odległość od środka widoku; wybieranie pola uwzględnia to samo opadanie. Morze wokół mapy to
+  siatka z krzywizną podążająca za widokiem (`client/render/ocean.ts`, materiał bez oświetlenia, mgiełka przy
+  horyzoncie), w tle niebo - przy kamerze z góry morze zakrywa ekran jak dawniej kolor tła.
+
+## 2026-10-09 — Mapa świata botów, plac budowy na stoku, porządek przy drwalu i tartaku (uwagi właściciela)
+- **Ręczne poprawki mapy DOLINA/64** (`MAP_TWEAKS` w `sim/mapgen.ts`): wzniesienie z kopalniami przy niebieskim
+  zamku przesunięte o pole w prawo i rząd do przodu, jezioro nad nim o 2 rzędy do przodu (odsłonięta woda staje
+  się niską łąką). Inne mapy, w tym partie botów w testach, bez zmian.
+- **Ziemia placu budowy kładzie się na terenie**: gęsta siatka (7×7) zamiast płaskiej płyty, każdy wierzchołek
+  na wysokości terenu pod nim (`Model.draped` w `art/scripts/lib.py`) - płyta na wysokości budynku chowała się
+  w trawie po stronie zbocza.
+- **Drwal**: kłody leżą wzdłuż lewej ściany chaty (jak przy tartaku), pieniek do okrzesywania (z siekierą) z prawej,
+  bliżej drzwi niż dotąd (`CHOP_BLOCK` w `client/render/work/wood.ts`; drwal stoi przy nim od zewnątrz).
+- **Leśnik**: grządka sadzonek bliżej drzwi (`SEEDBED` w `client/render/work/field.ts`).
+- **Dobudówki z dachem jednospadowym** (tartak, rybak; `lean_to` w `art/scripts/buildings.py`): wierzch ścian
+  opada razem z dachem - wcześniej ściany kończyły się na stałej wysokości i pod dachem była szpara.
+- **Plac budowy bez kozła** z przodu po lewej - w tym miejscu po budowie stoi zwykle stanowisko pracy zawodu.
+- **Stanowiska pracy w stałym miejscu (do zrobienia):** właściciel chce je blisko drzwi, po ich lewej stronie.
+  Właściciel zrezygnował - stanowiska zostają na swoich miejscach.
+
+## 2026-10-09 — Świnki, tragarze, kłody na stoku, drogi przez drzewa, zamek (uwagi właściciela)
+- **Świnki** (`client/render/work/crafts.ts`, model `crf_pig` + osobna głowa `crf_pig_head`): między karmieniami
+  każda chodzi po swoim pasie wybiegu i robi coś innego - ryje ryjem, rozgląda się i węszy, tapla się w błotnych
+  kałużach (leży na boku i tarza się), ociera się o płot. Poza marszem stoją (bez przestępowania w miejscu - było
+  „krok w przód, krok w tył”). Do koryta biegną z miejsca, w którym są; po jedzeniu wracają na wybieg. Głowa
+  pochyla się sama (jedzenie, rycie), tułów zostaje poziomo. Plan zachowań liczony z czasu (bez stanu).
+- **Tragarze niosą towar wg ciężaru** (`carryStyle` w `client/render/rig.ts`): na głowie lekkie, na prawym ramieniu
+  pnie i deski (druga ręka macha do kroku), oburącz przed sobą ciężkie (kamień, rudy, węgiel, stal, beczka, świnia;
+  tułów odchylony), wiadro z wodą w ręce u boku. Pod górę pochylają się do przodu, z góry odchylają. Bez pracy
+  co kilka sekund inna drobna czynność: drapanie się w głowę, przeciąganie z ziewnięciem, wypatrywanie z dłonią przy
+  czole, ręce za plecami, przytupywanie.
+- **Kłody na stoku nie spłaszczają się**: długa część podwórka (bal, żerdź płotu) idzie za terenem tylko wzdłuż
+  swojej osi (punkt na osi części), więc jej przekrój zostaje okrągły (`Model.yard` w `art/scripts/lib.py`).
+- **Zamek**: bez skalnego kopczyka pod murami (jego ukośne ścianki wydłużone do terenu dawały ciemne trójkąty),
+  pod murami zwykły cokół.
+- **Drogi przez drzewa (zmiana symulacji, `SIM_VERSION` 4)**: droga gracza może przejść przez pole z drzewem
+  (także sadzonką i pieńkiem, `isRoadPassable` w `sim/world.ts`); drzewo zostaje, a droga omija je w grze łagodnym
+  łukiem - środek drogi na tym polu przesunięty w poprzek od pnia (`client/render/roadBend.ts`; teren rysuje łuk,
+  postacie chodzą po nim). Flagi na takim polu postawić się nie da. Boty dalej prowadzą drogi po wolnych polach
+  (`findRoadPath(..., throughTrees = false)`): z drogami przez las 3 z 20 partii kończyły się bez zwycięzcy (długich
+  dróg przez las nie da się dzielić flagami). Partie botów: 20/20 ze zwycięzcą, trudny 10/20 (bez zmian).
+- **Drogi omijają też budynki**: gdy model budynku w promieniu 2 pól (zamek z basztami sięga dalej niż sąsiednie
+  pole) wystaje nad drogę, środek drogi na tym polu
+  odsuwa się w poprzek drogi od obrysu budynku (prostokąty konstrukcji z `art/models/yards.json`) - najmniejsze
+  przesunięcie, przy którym droga mija ścianę, najwyżej 0,3 pola. Tylko wygląd: przesunięcie liczy
+  `client/render/roadBend.ts`, teren rysuje łuk (tekstura `bends`), postacie chodzą po nim (`EntitiesRenderer.wp`).
+  Ustawienie modeli budynków przeniesione do `client/render/placement.ts` (wspólne z drogami).
+- **Łokieć i dłonie**: ręka postaci z dwóch części - ramię z rękawem (kolor gracza, walec równej grubości)
+  i przedramię z kulką łokcia i dłonią (walce zamiast zwężających się kul, które w łokciu były cienkie jak kreska)
+  (`serf_upperarm`, `serf_forearm` w `art/scripts/units.py`), zgięcie w łokciu w pozie (`elbowL`, `elbowR`).
+  Układ przedramienia jest dawnym układem ręki (dłoń w `(0, HAND, 0)`), więc narzędzia i rekwizyty scen idą za
+  zgiętym przedramieniem bez zmian w scenach. Łokcie zginają się przy chodzie (mocniej przy wymachu do przodu),
+  przy noszeniu towaru (na głowie, na ramieniu, oburącz) i w czynnościach bez pracy (drapanie się, daszek
+  z dłoni). Ramię to obła bryła rękawa (dół chowa się w kulce łokcia), przedramię - okrągły walec (6 ścian);
+  walce z mniejszą liczbą ścian wyglądały na kwadratowe, a otwarty walec ramienia miał przy wymachu dziurę.
+  Dłoń jak rękawica bez palców: płaska, dłuższa niż szersza, z kciukiem z przodu.
+  **Budżet postaci podniesiony z 400 do 460 trójkątów** (rycerz 459, osadnik z czapką i narzędziem ok. 405): kulka
+  dłoni nie czytała się jako dłoń, a ręka z łokciem potrzebuje dwóch obłych brył; postacie rysują się instancjami
+  (kilka warstw na wszystkie postacie), więc dodatkowe trójkąty nie dokładają wywołań rysowania.
+
+## 2026-10-09 — Dźwięk z położeniem, praca zawodów, głosy i otoczenie (prośba właściciela, kroki 1–3 z docs/AUDIO.md)
+- **Model odległości** (`Sound.place` w `client/audio.ts`): słuchacz w środku widoku, `r` = odległość źródła od
+  środka w połowach szerokości widoku; głośność `Z(zoom) / (1 + (r / 0,45)²)`, cisza od `r > 1,3`; wyrazistość
+  przez filtr dolnoprzepustowy (1,5 kHz z daleka do ok. 16 kHz z bliska) i udział pogłosu; panorama z wektora
+  „w prawo” kamery. Kamera jest ortograficzna, więc „bliżej” to przybliżenie i środek ekranu, nie odległość 3D.
+- **Wyzwalacze w scenach pracy**: cząsteczki uderzeń (`fx.burst`) i wypływy (`fx.stream`) mają pole `sound` -
+  wyrzut gra dźwięk raz, wypływ trzyma pętlę, dopóki scena go rysuje. Tam, gdzie nie ma cząsteczek (piła, upadek
+  drzewa, kowadło przy zimnym pręcie, skrzydła wiatraka, kołowrót, świnie, osioł, jeleń, cięciwa, tragarz),
+  `c.sfx` z kluczem: wołane co klatkę, gra raz na zdarzenie (klucz zapamiętany na 0,25 s od ostatniego wołania).
+  Dzięki temu dźwięk zgadza się z animacją co do klatki i nie wymaga stanu ani zmian w symulacji.
+- **Limity**: 18 dźwięków naraz, 3 jednakowe, 10 pętli - dwudziestu drwali w kadrze to nie dwadzieścia uderzeń.
+- **Głosy syntetyczne zamiast próbek** (na razie, wg właściciela): ton krtaniowy przez filtry formantowe
+  z chrapliwością, oddechem i lekkim vibrato. Generatory głosów mają szeroką przestrzeń parametrów (wysokość,
+  barwa, rytm, rodzaj zawołania); `scripts/sounds.ts` renderuje 100 ziaren każdego głosu, liczy cechy nagrania
+  i wybiera 6 najbliższych wzorcowi prawdziwego odgłosu, możliwie różnych. Agent nie słyszy, więc ranking to tylko
+  sito - o tym, co zostaje w grze, decyduje odsłuch właściciela; zatwierdzone ziarna wpisuje się do `PICKS`, a gra
+  losuje spośród nich.
+- **Otoczenie** wg kadru (`viewMix` w `client/render/scene.ts`, co 0,5 s, siatka 12 × 12 punktów widoku): udział
+  drzew, wody, brzegu, gór, trawy i osadników ustawia głośność pętli wiatru, lasu, morza, jeziora i gwaru; ptaki
+  i świerszcze losowane wg tych udziałów.
+- **Wybór właściciela wpisany do `PICKS`** (odsłuch 2026-10-09): chrząkanie świni 9 i 13, ryk osła 27, jeleń 89,
+  ptaki 52, 74 i 76, świerszcze 5, 60, 74 i 76, okrzyk 66 i 86, upadek rycerza 1 i 66, trzask pnia 1, upadek
+  drzewa 1. Przy dźwiękach pracy z zaznaczonymi wszystkimi trzema wariantami gra losuje z całej przestrzeni
+  (próbki były losowe, więc „wszystkie dobre” znaczy „generator dobry”). Kwik świni nie ma zaznaczenia, więc zostaje
+  bez ograniczenia do decyzji właściciela. Procedurę opisuje README („Odsłuch dźwięków”), bo będzie powtarzana;
+  strona odsłuchu pokazuje warianty już grające obok nowych.
+- **Tło najniższym priorytetem** (uwaga właściciela: „za bardzo słychać morze i las”): las i morze są prawie
+  w każdym kadrze, więc ich poziom spadł do ok. 40%, a całe tło przycisza się wraz z liczbą grających dźwięków
+  świata i pętli (`duck` w `updateBeds`, najwyżej do 35%) - praca i zwierzęta zawsze wybijają się ponad tło.
+- **Młotek budowniczego był niesłyszalny** (uwaga właściciela): w scenie budowniczego punkt deski (`wp`) i miejsce
+  pracy dzieliły ten sam wektor roboczy, więc punkt uderzenia liczył się z już przeliczonych współrzędnych świata
+  i wypadał ok. 80 pól dalej - poza kadrem (cisza, a wióry i odpryski rysowały się tam, gdzie nikt nie patrzy).
+  Sprawdzone logiem: żaden dźwięk w pokazie zawodów ani przy budowie nie pada dalej niż kadr.
+- **Rycerze szarpali w marszu** (uwaga właściciela: „teleport w przód i w tył”): krok rycerza zaczynał się od
+  zapamiętanego położenia (żeby po pojedynku ruszał z boku pola, nie ze środka), ale pamięć odświeżała się co
+  klatkę, także w marszu - każda klatka zaczynała krok od poprzedniej, rycerz wyrywał się do przodu, a po
+  oddaleniu się o 0,3 pola od startu wracał skokiem na właściwy tor. Początek kroku ustalany jest teraz raz na krok
+  (`stepCell`, `sx`, `sz` w `KnightMem`) i kasowany, gdy rycerz stoi. Pomiar w stałym kroku 60 klatek/s, 418 klatek
+  marszu: przed 76 cofnięć i 8 skoków (do 0,25 pola), po 0 i 0, równy krok.
+- **Kwik świni wybrany pomiarem** (właściciel: „sam wybierz najlepszy”): z 200 wariantów 173 mieściło się
+  w luźnym wzorcu odsłuchu, więc ranking zawężony do profilu kwiku: 0,55-0,95 s, ton 1000-1500 Hz w środku
+  i 900-1600 Hz na początku, bez skoków wysokości (stosunek do 2,2), barwa 1500-2800 Hz, głośny. Ze spektrogramów
+  najlepszych ośmiu wybrane 55, 99 i 133 - wyraźny łuk tonu w górę i w dół, chropowatość widoczna jako
+  „paciorki” na tonie podstawowym, najgłośniejsze. Wpis w `PICKS`; właściciel może je zmienić zwykłym odsłuchem.
+- **Próg testu botów: trudny bot wygrywa co najmniej 10 z 20 partii** (decyzja właściciela: „więcej niż 9”).
+  Wcześniej test wymagał ponad 10, a po zmianach terenu trudny bot wygrywał 8-10 z 20; wzmocnienie bota odłożone.

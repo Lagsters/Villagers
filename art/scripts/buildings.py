@@ -11,6 +11,8 @@ import math
 import os
 import sys
 
+import bmesh
+
 sys.path.insert(0, os.path.dirname(__file__))
 from lib import LOGS, PLANKS, TARPAPER, TILES, build  # noqa: E402
 
@@ -94,10 +96,11 @@ def window(m, x, y, z, face='front', w=0.075, h=0.08, shutters=True):
 
 
 def door(m, x, y, z=0.05, w=0.1, h=0.17, col='wood'):
+    m.doors.append((x, y, z, w))
     m.cbox(w + 0.03, 0.014, h + 0.02, x=x, y=y - 0.004, z=z + h / 2 + 0.005, col='wood_dark')
     m.block(w, 0.018, h, x=x, y=y - 0.009, z=z, col=col, bevel=0.0, open_sides=('+y', '-z'), wall=PLANKS)
     m.cbox(0.012, 0.02, 0.012, x=x + w * 0.3, y=y - 0.02, z=z + h * 0.45, col='metal_dark')
-    m.cbox(w + 0.06, 0.05, 0.03, x=x, y=y - 0.03, z=0.015, col='stone_dark')
+    m.cbox(w + 0.06, 0.05, 0.03, x=x, y=y - 0.03, z=0.015, col='plinth')
 
 
 def chimney(m, x, y, z, h=0.2, col='whitewash'):
@@ -258,7 +261,7 @@ def house(m, w, d, h, style='white', roof_col=None, front=False, x=0.0, y=0.0, r
     span = w if front else d
     h *= 1.5  # wysokie sciany, niskie dachy - czytelne z kamery z gory
     roof_h = roof_h if roof_h is not None else span * 0.3
-    m.block(w + 0.03, d + 0.03, found, x=x, y=y, col='stone_dark', bevel=0.008, open_sides=('-z',))
+    m.block(w + 0.03, d + 0.03, found, x=x, y=y, col='plinth', bevel=0.008, open_sides=('-z',))
     if detail:
         wall(m, style, w, d, h, x, y, found)
     else:
@@ -288,7 +291,11 @@ def lean_to(m, w, d, h, x, y, col='tarpaper', posts=True, style='plank'):
         for (px, py) in ((x - w / 2 + 0.02, y - d / 2 + 0.02), (x + w / 2 - 0.02, y - d / 2 + 0.02)):
             m.block(0.03, 0.03, h * 0.8, x=px, y=py, col='plank_dark', bevel=0.005)
     else:
-        wall(m, style, w, d, h * 0.8, x, y)
+        # Sciany do dachu: wierzch opada razem z nim (z tylu wyzej), bez szpary pod dachem z bokow i z tylu.
+        ob = wall(m, style, w, d, h * 0.8, x, y)
+        for v in ob.data.vertices:
+            if v.co.z > h * 0.8 - 1e-4:
+                v.co.z = h * 0.8 + h * 0.35 * (v.co.y - (y - d / 2)) / d
     ang = math.atan2(h * 0.35, d)
     W, L = w + 0.06, d / math.cos(ang) + 0.06
     m.block(W, L, 0.03, x=x, y=y, z=h * 0.8 + h * 0.175, col=col, rx=ang, center=True, bevel=0.0, open_sides=('-z',),
@@ -296,6 +303,7 @@ def lean_to(m, w, d, h, x, y, col='tarpaper', posts=True, style='plank'):
 
 
 def double_door(m, x, y, z=0.04, w=0.16, h=0.17):
+    m.doors.append((x, y, z, w))
     m.cbox(w + 0.03, 0.014, h + 0.02, x=x, y=y - 0.004, z=z + h / 2, col='plank_dark')
     for s in (-1, 1):
         m.block(w / 2 - 0.006, 0.018, h, x=x + s * w / 4, y=y - 0.01, z=z - 0.005, col='plank', bevel=0.0, open_sides=('+y', '-z'), wall=PLANKS)
@@ -370,12 +378,13 @@ def round_bastion(m, r, h, x, y, col='whitewash'):
 # =====================================================================
 
 def castle(m):
-    m.ico(0.62, z=-0.02, col='rock', sub=1, sz=0.2)
     for (x, y) in ((-0.5, -0.3), (0.45, -0.42), (-0.3, -0.48)):
         m.ico(0.07, x=x, y=y, z=0.02, col='leaf', sub=0, sz=0.6)
+    m.box(1.03, 0.85, 0.04, col='plinth')
     wall(m, 'white', 1.0, 0.82, 0.32, 0, 0, 0.04, step=0.12, top=True)
     crenels(m, 1.0, 0.82, 0.36, n=4, col='whitewash')
     m.cbox(0.15, 0.03, 0.2, y=-0.42, z=0.14, col='plank_dark')
+    m.doors.append((0.0, -0.41, 0.04, 0.15))  # brama
     m.cbox(0.19, 0.035, 0.03, y=-0.425, z=0.255, col='stone')
     wall(m, 'white', 0.44, 0.34, 0.86, 0, 0.12, 0.04, step=0.1)
     for sx in (-1, 1):
@@ -392,7 +401,7 @@ def castle(m):
 
 def warehouse(m):
     """Magazyn: bielony blok z trzema rownoleglymi dachami, okragle baszty, komin-wieza, schody."""
-    m.box(0.64, 0.5, 0.04, col='stone_dark')
+    m.box(0.64, 0.5, 0.04, col='plinth')
     wall(m, 'white', 0.6, 0.46, 0.34, 0, 0, 0.04, step=0.09)
     for x in (-0.2, 0.0, 0.2):
         roof(m, 0.46, 0.2, 0.14, x=x, z=0.38, col='terracotta', gable_col='whitewash', over=0.015, front=True)
@@ -409,20 +418,22 @@ def warehouse(m):
 
 
 def woodcutter(m):
-    """Chata drwala: bale, kamienny komin, pieniek do okrzesywania (siekiere w pienku dorysowuje gra) i sagi."""
+    """Chata drwala: bale, kamienny komin, klody wzdluz lewej sciany (jak przy tartaku) i pieniek do okrzesywania
+    z prawej, blisko drzwi (siekiere w pienku dorysowuje gra)."""
     cabin(m, 0.44, 0.36, 0.2, wins=(), side_wins=True, has_door=False)
     double_door(m, 0.02, -0.18, w=0.14)
     chimney(m, -0.14, 0.08, 0.36, 0.2)
-    log_pile(m, -0.34, -0.32, n=3, length=0.2, rz=R)
-    m.cyl(0.055, 0.07, 10, x=0.32, y=-0.28, col='log', bottom=False)
-    m.cyl(0.05, 0.004, 10, x=0.32, y=-0.28, z=0.07, col='wood_light')
+    m.cyl(0.028, 0.28, 8, x=-0.31, y=-0.17, z=0.028, col='log', rx=-R)
+    m.cyl(0.026, 0.26, 8, x=-0.31, y=-0.15, z=0.078, col='log', rx=-R)
+    m.cyl(0.055, 0.07, 10, x=0.22, y=-0.29, col='log', bottom=False)
+    m.cyl(0.05, 0.004, 10, x=0.22, y=-0.29, z=0.07, col='wood_light')
     return ROT
 
 
 def woodcutter_axe(m):
     """Siekiera wbita w pieniek przed chata drwala (uklad modelu chaty) - widoczna, gdy drwal jest w domu."""
-    m.beam((0.31, -0.28, 0.07), (0.35, -0.28, 0.18), 0.012, 'wood')
-    m.cbox(0.05, 0.008, 0.035, x=0.305, y=-0.28, z=0.09, col='metal', ry=0.4)
+    m.beam((0.21, -0.29, 0.07), (0.25, -0.29, 0.18), 0.012, 'wood')
+    m.cbox(0.05, 0.008, 0.035, x=0.205, y=-0.29, z=0.09, col='metal', ry=0.4)
     return ROT
 
 
@@ -440,6 +451,7 @@ def sawmill(m):
     """Tartak: bielony dom szczytem do kamery z lukowym otworem, niska dobudowka z desek."""
     house(m, 0.36, 0.5, 0.26, 'white', front=True, x=0.1, y=0.04, wins=(), side_wins=True, has_door=False)
     m.cbox(0.16, 0.014, 0.2, x=0.1, y=-0.213, z=0.16, col='coal')  # lukowy otwor
+    m.doors.append((0.1, -0.21, 0.04, 0.16))
     m.cyl(0.08, 0.014, 10, x=0.1, y=-0.213, z=0.26, col='coal', rx=R)
     lean_to(m, 0.3, 0.3, 0.22, x=-0.26, y=-0.08, posts=False)
     m.cyl(0.028, 0.28, 8, x=-0.5, y=-0.24, z=0.028, col='log', rx=-R)
@@ -467,9 +479,9 @@ def stonecutter(m):
 def fisher(m):
     """Rybak: chata z desek na kamiennej podmurowce, szczyt z oknem i przybudowka. Zerdz z suszaca sie siecia
     rysuje gra na wysokosci terenu (fld_netrack, fld_net, NET_BAR w client/render/work/field.ts)."""
-    m.box(0.52, 0.44, 0.08, col='stone')
-    house(m, 0.34, 0.36, 0.2, 'plank', front=True, found=0.08, wins=(), side_wins=True, y=0.02, x=-0.06)
-    window(m, -0.06, -0.16, 0.26, 'front', shutters=False)
+    m.box(0.52, 0.44, 0.05, col='plinth')
+    house(m, 0.34, 0.36, 0.2, 'plank', front=True, found=0.05, wins=(), side_wins=True, y=0.02, x=-0.06)
+    window(m, -0.06, -0.16, 0.23, 'front', shutters=False)
     lean_to(m, 0.18, 0.3, 0.24, x=0.2, y=0.02, posts=False)
     return ROT
 
@@ -564,7 +576,7 @@ def pigfarm(m):
 
 def butcher(m):
     """Rzeznia: dlugi dom - bielona czesc pod dachowka i nizsza przybudowka z desek pod papa, komin."""
-    m.box(0.73, 0.43, 0.04, col='stone_dark')
+    m.box(0.73, 0.43, 0.04, col='plinth')
     wall(m, 'plank', 0.3, 0.4, 0.24, -0.21, 0, 0.04)
     wall(m, 'white', 0.4, 0.4, 0.3, 0.14, 0, 0.04)
     m.cbox(0.1, 0.014, 0.09, x=-0.22, y=-0.203, z=0.17, col='coal')
@@ -652,7 +664,7 @@ def steelworks(m):
 def mint(m):
     """Mennica: dol z kamienia, gora z desek, dach z papy, szyld ze zlotem na slupku. Pien mincerza z kowadelkiem,
     stosik monet i mincerza rysuje gra (MINT w industry.ts)."""
-    m.box(0.52, 0.44, 0.04, col='stone_dark')
+    m.box(0.52, 0.44, 0.04, col='plinth')
     wall(m, 'stone', 0.5, 0.42, 0.2, 0, 0, 0.04)
     door(m, -0.02, -0.21, 0.04, col='plank')
     window(m, -0.16, -0.21, 0.15, 'front', shutters=False)
@@ -673,6 +685,7 @@ def toolmaker(m):
     przed domem oraz kowala rysuje gra (TOOLSHOP w industry.ts)."""
     house(m, 0.6, 0.36, 0.24, 'white', x=0.0, y=-0.04, wins=(-1,), side_wins=True, has_door=False)
     m.cbox(0.14, 0.014, 0.18, x=0.1, y=-0.223, z=0.13, col='coal')
+    m.doors.append((0.1, -0.22, 0.04, 0.14))  # wejscie do kuzni
     m.cbox(0.17, 0.02, 0.025, x=0.1, y=-0.226, z=0.23, col='wood_dark')
     wall(m, 'stone', 0.18, 0.18, 0.56, 0.02, 0.24, 0)
     m.cbox(0.05, 0.012, 0.06, x=0.02, y=0.147, z=0.46, col='coal')
@@ -741,7 +754,7 @@ def shipyard(m):
 
 def guardhut(m):
     """Wachhutte: kwadratowa kamienna chata pod czterospadowym dachem."""
-    m.box(0.36, 0.34, 0.04, col='stone_dark')
+    m.box(0.36, 0.34, 0.04, col='plinth')
     wall(m, 'stone', 0.32, 0.3, 0.24, 0, 0, 0.04)
     door(m, 0.06, -0.15, 0.04, w=0.08, h=0.15, col='plank')
     window(m, -0.08, -0.15, 0.2, 'front', shutters=False)
@@ -766,10 +779,11 @@ def tower_building(m):
 
 def fortress(m):
     """Wachburg: wysoki blok z czerwonym dachem, okragle baszty z blankami, brama."""
-    m.box(0.98, 0.84, 0.04, col='stone_dark')
+    m.box(0.98, 0.84, 0.04, col='plinth')
     wall(m, 'stone', 0.94, 0.8, 0.3, 0, 0, 0.04, step=0.1, top=True)
     crenels(m, 0.94, 0.8, 0.34, n=4, col='stone_light')
     m.cbox(0.16, 0.03, 0.2, y=-0.41, z=0.14, col='plank_dark')
+    m.doors.append((0.0, -0.4, 0.04, 0.16))  # brama
     wall(m, 'white', 0.5, 0.36, 0.56, -0.12, 0.14, 0.04, step=0.09)
     for z in (0.34, 0.5):
         for sx in (-1, 1):
@@ -885,12 +899,19 @@ def catapult(m):
 
 def site(size):
     """Plac budowy: wyrownana ziemia z belkami podwaliny (obrys przyszlego budynku), slupki z zerdziami z tylu
-    i z lewej, przod otwarty (tam pracuje budowniczy), z przodu po lewej koziol. Materialy (deski, kamienie)
+    i z lewej, przod otwarty (tam pracuje budowniczy); przed placem nic nie stoi - tam pojawi sie stanowisko pracy
+    budynku. Materialy (deski, kamienie)
     i budowniczego rysuje scena (client/render/work/people.ts, siteOf - ten sam obrys podwaliny)."""
     def f(m):
         w = {'small': 0.55, 'medium': 0.72, 'large': 1.2}[size]
         hx, hy = w * 0.42, w * 0.36
-        m.block(w * 0.98, w * 0.86, 0.012, col='#8d6c47', bevel=0.004, open_sides=('-z',))
+        # Ziemia placu: gesta siatka kladziona na terenie (Model.draped) - plaska plyta na stoku chowalaby sie w trawie.
+        bm = bmesh.new()
+        bmesh.ops.create_grid(bm, x_segments=7, y_segments=7, size=1.0)
+        span = max(v.co.x for v in bm.verts) - min(v.co.x for v in bm.verts)
+        bmesh.ops.scale(bm, vec=(w * 0.98 / span, w * 0.86 / span, 1.0), verts=bm.verts)
+        bmesh.ops.translate(bm, vec=(0.0, 0.0, 0.012), verts=bm.verts)
+        m.draped.add(m._add(bm, '#8d6c47', 0.0).name)
         for sy in (-1, 1):
             m.cbox(2 * hx + 0.03, 0.03, 0.026, y=sy * hy, z=0.025, col='plank_dark')
         for sx in (-1, 1):
@@ -900,12 +921,6 @@ def site(size):
         m.beam((-hx, hy, 0.38), (hx, hy, 0.38), 0.02, 'plank')
         m.beam((-hx, hy, 0.06), (hx * 0.2, hy, 0.37), 0.014, 'plank_dark')
         m.beam((-hx, -hy, 0.27), (-hx, hy, 0.37), 0.018, 'plank')
-        # Koziol z przodu po lewej (poza obrysem).
-        tx, ty = -hx - 0.02, -hy - 0.1
-        for sx in (-1, 1):
-            m.beam((tx + sx * 0.06, ty - 0.03, 0.0), (tx + sx * 0.06, ty, 0.09), 0.014, 'wood_dark')
-            m.beam((tx + sx * 0.06, ty + 0.03, 0.0), (tx + sx * 0.06, ty, 0.09), 0.014, 'wood_dark')
-        m.cbox(0.17, 0.035, 0.022, x=tx, y=ty, z=0.1, col='wood')
         return ROT
     return f
 
