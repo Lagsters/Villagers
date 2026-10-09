@@ -91,6 +91,8 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
   pracy wszystkich zawodów, głosy zwierząt i rycerzy, otoczenie mieszane wg kadru; odsłuch wariantów
   `scripts/sounds.ts` i strona odsłuchu `scripts/sounds-page.py`, wybór właściciela w `PICKS`, kwik świni wybrany pomiarem (README, docs/AUDIO.md,
   docs/DECISIONS.md).
+- Serwer lobby gry wieloosobowej na `api.kwasnypp.ovh/osada/` (repozytorium `vps01`, wydanie `signal-v*`),
+  limit połączeń odporny na podrobiony nagłówek, panel budowy z nazwami w jednej linii (docs/DECISIONS.md).
 
 ## Dalej
 M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.

@@ -585,3 +585,21 @@ kamienną podmurówką (na stoku przy plaży - jak pół ściany).
   „paciorki” na tonie podstawowym, najgłośniejsze. Wpis w `PICKS`; właściciel może je zmienić zwykłym odsłuchem.
 - **Próg testu botów: trudny bot wygrywa co najmniej 10 z 20 partii** (decyzja właściciela: „więcej niż 9”).
   Wcześniej test wymagał ponad 10, a po zmianach terenu trudny bot wygrywał 8-10 z 20; wzmocnienie bota odłożone.
+
+## 2026-10-09 — Serwer lobby na api.kwasnypp.ovh, panel budowy
+- **Serwer lobby na maszynie właściciela zamiast DuckDNS + Caddy**: konfiguracja w repozytorium `pkwasny/vps01`
+  (kroki: konto `osada`, Node.js z nodejs.org z przypiętą sumą, usługa `osada-signal` za nginx pod `/osada/`).
+  Nie publiczny serwer PeerJS: ten nie ma pokoi ani limitów, identyfikator gracza jest tam adresem, a przekaźnik
+  ma wspólne hasło. Na serwer trafia jeden plik `osada-signal.cjs` z wydania `signal-v*` (CI buduje go
+  rolldownem razem z `ws`); serwer odrzuca plik o innej sumie SHA-256 niż wpisana w `vps01`.
+- **Limit połączeń na adres liczony z `X-Real-IP` tylko za zaufanym proxy** (`TRUST_PROXY=1`): wcześniej serwer
+  brał pierwszy wpis `X-Forwarded-For`, który klient może podać sam i tak obejść limit.
+- **Bez przekaźnika TURN**: wymaga otwarcia portów UDP w konsoli Oracle, czego agent nie może zrobić (blokada
+  zmian zapory w chmurze) - właściciel zdecydował zrobić tylko to, co działa bez tego. Gracze za restrykcyjnym
+  NAT-em zobaczą lobby, ale partia im nie wystartuje (docs/DEPLOY.md). Usunięte `server/install.sh`, Caddyfile
+  i szablon coturn.
+- **Panel budowy**: koszt pod nazwą budynku zamiast obok, panel 340 px (był 320). Pomiar w przeglądarce: przy
+  koszcie obok nazwy 9 z 31 nazw łamało się na dwie linie przy 320 px i wszystkie mieściły się dopiero przy
+  400 px; z kosztem pod nazwą wszystkie mieszczą się już przy 320 px, a przycisk nie rośnie (dwie linie tekstu
+  mieszczą się w wysokości ikony).
+

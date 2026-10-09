@@ -103,4 +103,34 @@ describe('M7: serwer sygnalizacyjny', () => {
     expect(c.username).toBe('4600:abc');
     expect(c.credential).toBe(createHmac('sha1', 'sekret').update('4600:abc').digest('base64'));
   });
+
+  it('limit polaczen na adres: X-Real-IP tylko za zaufanym proxy', async () => {
+    const opened = async (port: number, ip: string): Promise<boolean> => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { 'x-real-ip': ip } });
+      const ok = await new Promise<boolean>((res) => {
+        ws.on('message', () => res(true));
+        ws.on('close', () => res(false));
+      });
+      if (ok) ws.close();
+      return ok;
+    };
+    const proxied = await startServer({ port: 0, host: '127.0.0.1', log: () => {}, maxConnPerIp: 1, trustProxy: true });
+    const direct = await startServer({ port: 0, host: '127.0.0.1', log: () => {}, maxConnPerIp: 1 });
+    try {
+      // Za proxy dwaj klienci z roznych adresow mieszcza sie w limicie 1 na adres.
+      const keep = new WebSocket(`ws://127.0.0.1:${proxied.port}`, { headers: { 'x-real-ip': '1.1.1.1' } });
+      await new Promise((res) => keep.on('message', res));
+      expect(await opened(proxied.port, '2.2.2.2')).toBe(true);
+      expect(await opened(proxied.port, '1.1.1.1')).toBe(false);
+      keep.close();
+      // Bez proxy naglowek nie omija limitu - liczy sie adres gniazda.
+      const keep2 = new WebSocket(`ws://127.0.0.1:${direct.port}`, { headers: { 'x-real-ip': '1.1.1.1' } });
+      await new Promise((res) => keep2.on('message', res));
+      expect(await opened(direct.port, '2.2.2.2')).toBe(false);
+      keep2.close();
+    } finally {
+      await proxied.close();
+      await direct.close();
+    }
+  });
 });

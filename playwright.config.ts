@@ -41,7 +41,7 @@ export default defineConfig({
   webServer: [
     {
       // Lokalny serwer sygnalizacyjny dla testu lobby (klient na localhost laczy sie z ws://localhost:8787).
-      command: 'node server/signal.ts',
+      command: 'node server/main.ts',
       port: 8787,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

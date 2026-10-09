@@ -3,7 +3,7 @@
  * TURN (coturn: use-auth-secret), limity polaczen, sprzatanie pokoi, healthcheck /health.
  * Serwer NIE liczy symulacji gry - po zestawieniu polaczen peery rozmawiaja bezposrednio.
  *
- * Uruchomienie: node server/signal.ts   (zmienne srodowiskowe opisane w docs/DEPLOY.md)
+ * Uruchomienie: node server/main.ts   (zmienne srodowiskowe opisane w docs/DEPLOY.md)
  */
 import { createHmac, randomInt, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
@@ -14,7 +14,7 @@ export interface ServerOptions {
   host?: string;
   /** sekret wspoldzielony z coturn (static-auth-secret); pusty = bez TURN */
   turnSecret?: string;
-  /** adresy TURN, np. turn:przyklad.duckdns.org:3478?transport=udp */
+  /** adresy TURN, np. turn:example.org:3478?transport=udp */
   turnUrls?: string[];
   turnTtlSec?: number;
   maxRooms?: number;
@@ -24,6 +24,11 @@ export interface ServerOptions {
   roomIdleMs?: number;
   /** dozwolone Origin (puste = wszystkie) */
   allowedOrigins?: string[];
+  /**
+   * Serwer stoi za wlasnym proxy (nginx), ktore podaje adres klienta w X-Real-IP. Bez proxy naglowek
+   * ustawia sam klient, wiec limit polaczen na adres liczy sie wtedy z adresu gniazda.
+   */
+  trustProxy?: boolean;
   log?: (msg: string) => void;
 }
 
@@ -212,7 +217,8 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       ws.close(1008, 'origin');
       return;
     }
-    const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() || req.socket.remoteAddress || '?';
+    const real = o.trustProxy ? (req.headers['x-real-ip'] as string | undefined)?.trim() : '';
+    const ip = real || req.socket.remoteAddress || '?';
     const n = (perIp.get(ip) ?? 0) + 1;
     if (n > o.maxConnPerIp) {
       ws.close(1008, 'too many');
@@ -265,20 +271,5 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         }),
       });
     });
-  });
-}
-
-// Uruchomienie z linii polecen.
-if (process.argv[1]?.replace(/\\/g, '/').endsWith('server/signal.ts')) {
-  const env = process.env;
-  startServer({
-    port: Number(env.PORT ?? 8787),
-    host: env.HOST ?? '0.0.0.0',
-    turnSecret: env.TURN_SECRET ?? '',
-    turnUrls: (env.TURN_URLS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
-    allowedOrigins: (env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
-  }).catch((e) => {
-    console.error(e);
-    process.exit(1);
   });
 }

@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "test:perf": "playwright test tests/perf --project=chromium",
     "bots": "node ai/harness.ts 20 64 2,1 108000",
-    "server": "node server/signal.ts",
+    "server": "node server/main.ts",
+    "build:server": "rolldown server/main.ts --platform node --format cjs --file dist-server/osada-signal.cjs",
     "art": "node art/build.ts"
   },
   "dependencies": {

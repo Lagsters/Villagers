@@ -212,7 +212,7 @@ sim/     deterministyczna symulacja (liczby całkowite, własny PRNG, zero DOM)
 net/     WebRTC, lockstep, klient sygnalizacji
 client/  rendering three.js, interfejs, wejście, dźwięk
 ai/      boty i narzędzia do partii testowych
-server/  serwer sygnalizacyjny, konfiguracja coturn i Caddy, install.sh
+server/  serwer sygnalizacyjny (lobby gry wieloosobowej)
 art/     skrypty Blendera, wygenerowane modele, podglądy, ikony
 tests/   testy jednostkowe, sieciowe, e2e, wydajnościowe
 docs/    GDD, decyzje, postęp prac, instrukcja publikacji
@@ -220,8 +220,8 @@ docs/    GDD, decyzje, postęp prac, instrukcja publikacji
 
 ## Publikacja
 
-Instrukcja krok po kroku (GitHub Pages, darmowa domena DuckDNS, serwer na Oracle Cloud Free Tier):
-[docs/DEPLOY.md](docs/DEPLOY.md).
+Strona gry na GitHub Pages, serwer lobby na `api.kwasnypp.ovh` (Oracle Cloud, konfiguracja w prywatnym
+repozytorium `pkwasny/vps01`): [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Licencja
 
