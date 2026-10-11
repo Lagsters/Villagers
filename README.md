@@ -38,6 +38,12 @@ przez budynki wojskowe i pojedynki rycerzy. Gra z botami albo **multiplayer P2P 
   flagi pod same drzwi budynku (albo pod schody), zaorane pola z bruzdami.
 - **Kula ziemska**: świat zakrzywia się z odległością od środka widoku (`client/render/curve.ts`) - przy mocno
   pochylonej kamerze daleki ląd i morze opadają za horyzont, nad nim widać niebo (`client/render/ocean.ts`).
+- **Świat wokół mapy** (`client/render/outland.ts`): dookoła mapy otwarte morze w kolorze wody mapy, a w oddali
+  inne kontynenty z plażami, lasami i wysokimi górami ze śniegiem, zamglone odległością. Ląd po stronie kamery
+  opada do poziomu morza, więc góry nigdy nie zasłaniają mapy. Jedna siatka z fakturami terenu mapy, bez drzew,
+  obiektów i cieni (tania w rysowaniu); kształt kontynentów wynika z kodu mapy. Krawędź mapy nie odcina się od
+  świata: woda i fale przechodzą przez nią bez szwu, a ląd dochodzący do krawędzi kończy się plażą schodzącą do
+  morza już za mapą (skrajny pierścień pól jest w grze wodą - nieprzechodnią krawędzią świata).
 - **Teren generowany z kodu mapy**: łąki, pustynie, góry ze złożami, śnieg, jeziora i morze; przy każdym zamku
   łagodne wzniesienie górskie z węglem, żelazem i złotem.
 - **Natura** (`art/scripts/nature.py`): po dwie odmiany drzew iglastych, liściastych i skał, pola z rzędami
@@ -135,8 +141,8 @@ Na `https://lagsters.github.io/Villagers/` lobby działa przez serwer `wss://api
 3. Gospodarz: **Rozpocznij grę**.
 
 Na jednym komputerze drugi gracz to okno incognito. Wszyscy muszą mieć tę samą wersję strony (po aktualizacji gry
-odświeżyć). Bez przekaźnika TURN gracz za restrykcyjną siecią (część sieci firmowych i komórkowych) widzi lobby,
-ale partia mu nie startuje (`docs/DEPLOY.md`).
+odświeżyć). Gracze łączą się bezpośrednio, a gdy sieć na to nie pozwala (część sieci firmowych i komórkowych) -
+przez przekaźnik TURN na tym samym serwerze (`docs/DEPLOY.md`).
 
 ## Testy
 

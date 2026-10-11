@@ -613,3 +613,67 @@ kamienną podmurówką (na stoku przy plaży - jak pół ściany).
   płaskiego miejsca) 1-3 z 20 partii kończyły się bez zwycięzcy, a trudny bot wygrywał 9; chaty na stokach
   czekają na kopacza i zajmują miejsca domów. Po ograniczeniu: 20/20 ze zwycięzcą, trudny 10/20.
 
+## 2026-10-10 — Świat wokół mapy: morze i dalekie kontynenty (uwagi właściciela)
+- **Uwaga właściciela**: teren mapy i to, co poza nią, mocno się różniły (płaskie ciemne morze bez cieniowania tuż za
+  poszarpanym brzegiem mapy); poza mapą ma być łatwy do rysowania ląd, a morze jednolite. Pierwsza wersja - ląd
+  pokrywający wszystko wokół, za wąską cieśniną - odrzucona: „miały być po prostu inne kontynenty, najlepiej
+  z wysokimi górami, i daleko”.
+- **Mniejsza krzywizna** (uwagi właściciela: „za bardzo kolista ta ziemia”, „łuk ma być niewielki”): promień
+  „planety” 700 pól (było 90, potem 320).
+  Mgiełka nie zależy już od promienia - stałe odległości (woda 27-99, ląd 22-81 pól od środka widoku).
+- **Kontynenty** (`client/render/outland.ts`): jedna siatka wokół mapy (co 1 pole w pasie 6 pól, dalej coraz
+  rzadsza, najwyżej co 2,5 pola - rzadsza dawała kanciaste góry; zasięg 160 pól), przy mapie tylko morze, ląd od ok. 55 pól - osobne lądy z szumu o niskiej częstotliwości
+  (próg maleje z odległością, więc dalej więcej lądu), w głębi góry do 30 jednostek wysokości ze śniegiem na górnej
+  części. Kamera jest ortograficzna (dalekie nie maleje), więc o tym, jak daleko wyglądają góry, decyduje część
+  wystająca ponad horyzont: przy stałej wysokości im dalej, tym mniej. Góry podnoszone z odległością „za krzywiznę”
+  wyrastały w oddali jak ściany - dalszy teren wypada przy pochylonej kamerze wyżej na ekranie.
+- **Odległość widać też po mgiełce**: ląd mocno zamgla się z odległością (do 80%, od zera - przy mapie ląd nie
+  blednie); woda zamgla się słabiej, jak dawne morze.
+- **Ląd po stronie kamery opada do poziomu morza** (w shaderze, od 4 do 20 pól za środkiem widoku): kamera stoi
+  80 jednostek od środka widoku, przy niskim pochyleniu nad morzem za brzegiem mapy - góra kontynentu wyrastała
+  przed obiektywem i zasłaniała mapę.
+- **Woda według wysokości punktu**, nie według wierzchołka: na rzadkiej siatce trójkąt od morza do zbocza góry
+  rozmazywał wodę po całym zboczu. Śnieg bez warunku nachylenia (na stromych ścianach robił pionowe pasy), skała od
+  wysokości 12 - trawa wyżej dawała płaskie zielone płaty na zboczach.
+- **Wygląd jak teren mapy w prostszej wersji**: te same faktury (wspólna tekstura), granice rodzajów falujące
+  szumem, bez obiektów, stanu pól, cieni. Wewnątrz prostokąta mapy siatka leży pod jej terenem.
+- **Woda jednolita**: woda mapy nie ciemnieje już ku krawędzi (było przejście w kolor tła), woda wokół ma te same
+  kolory (przy krawędzi mapy płycizna liczona z pól mapy). Dawne morze zostaje tylko za zasięgiem siatki, wyraźnie
+  pod jej wodą (blisko niej migało na przemian z nią).
+- **Fale idą przez krawędź mapy** (uwaga właściciela: „tam, gdzie kończy się mapa, kończy się animacja wody”): woda
+  wokół ma ten sam wzór fal, ten sam czas (`TerrainRenderer.time`) i błyski co woda mapy - wzór liczony od położenia
+  w świecie, więc przechodzi bez szwu.
+- **Granica mapy niewidoczna** (uwaga właściciela ze zrzutu przy oddalonej kamerze: „dalej mam granicę widoczną”):
+  - mgiełka krainy liczy się od środka widoku, ale nie więcej niż od brzegu mapy - teren mapy jest bez mgiełki, więc
+    przy oddalonej kamerze zamglona woda tuż za brzegiem obrysowywała prostokąt mapy;
+  - lewa i prawa krawędź terenu prosta (skrajne wierzchołki wierszy przesuniętych o pół pola na krawędzi prostokąta,
+    ostatnia kolumna domknięta trójkątem) - zęby heksów znikają;
+  - skrajny pierścień mapy jest w symulacji wodą (krawędź świata), więc ląd urywał się prostą linią brzegu ze
+    ścianką wzdłuż całej krawędzi. Tylko w rysowaniu: pole pierścienia przy lądzie pokazuje plażę tuż nad morzem
+    (`shownIdx`, `shownHeight` w `client/render/coords.ts`), a za krawędzią plaża schodzi do wody pasem szerokości
+    0,8-2,9 pola zmiennej szumem (pod górą skała). Symulacja i minimapa bez zmian;
+  - siatka krainy ma węzły dokładnie na krawędziach mapy i bierze na nich wysokość krawędzi terenu - bez stopnia.
+  - Odrzucone: przedłużanie lądu mapy szerszym stokiem albo z płaskim wierzchołkiem - wyglądało jak fartuch
+    doklejony do mapy (pierwsza próba, wtedy szary od mgiełki; druga, płaski pas trawy ze szwem koloru).
+  - Pełne ukrycie prostokątnego kształtu wymagałoby zmiany generatora mapy (szerszy pas wody przy krawędzi) - to
+    zmiana symulacji, czeka na decyzję właściciela.
+- **Plaża kontynentu tylko przy samym brzegu**: szeroka na niskiej równinie wybrzeża dawała w mgiełce jasny pas nad
+  wodą.
+- **Spłaszczanie po stronie kamery tylko dla kontynentów** - obejmowało też ląd przy mapie i robiło z niego płaskie
+  szare łaty na wodzie.
+
+## 2026-10-11 — Przekaźnik TURN dla gry wieloosobowej
+- **coturn na maszynie serwera lobby** (krok `0020` w `vps01`), zamiast zewnętrznej usługi: bez kosztów i bez
+  wspólnego hasła u obcego dostawcy. Hasła krótkotrwałe (`use-auth-secret`) - serwer lobby już je wydawał, więc gra
+  i serwer lobby bez zmian. Sekret generuje krok na serwerze i podaje usłudze lobby osobnym, opcjonalnym
+  `EnvironmentFile` - bez niego lobby działa jak dotąd, tylko bez przekaźnika.
+- **Przekaźnik nie jest furtką do sieci serwera**: zablokowane adresy prywatne, loopback i metadane chmury jako cel,
+  bez przekazywania TCP do celu; wyjątek tylko dla adresu prywatnego maszyny (ruch między dwoma graczami, którzy
+  obaj idą przez przekaźnik). Limity: 64 kB/s na sesję, 10 przydziałów na gracza (7 rywali w pokoju z 8 osobami),
+  180 na serwer, 200 portów przekazywania.
+- **Bez TLS na 5349**: sieci przepuszczające tylko HTTPS na 443 i tak by nie przeszły (443 zajmuje nginx), a TLS
+  wymagałby udostępnienia klucza certyfikatu drugiej usłudze.
+- **Sprawdzone**: konfiguracja w kontenerze Ubuntu 24.04 (ta sama wersja coturn) - przydział z hasłem HMAC,
+  przekaz klient-klient przez przekaźnik, złe hasło odrzucone; po wdrożeniu z przeglądarki na stronie gry dwa
+  połączenia tylko przez przekaźnik (`iceTransportPolicy: relay`) wymieniły wiadomość po UDP i po TCP.
+  Security List w konsoli Oracle przepuszcza porty przekaźnika bez zmian.

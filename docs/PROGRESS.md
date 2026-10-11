@@ -6,7 +6,7 @@
 - [x] M2 Drogi i tragarze
 - [x] M3 Budowa i pierwsze łańcuchy
 - [x] M4 Pełna gospodarka
-- [ ] M5 Terytorium i wojsko
+- [x] M5 Terytorium i wojsko
 - [x] M6 AI
 - [x] M7 Sieć
 - [x] M8 Grafika
@@ -94,9 +94,12 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 - Serwer lobby gry wieloosobowej na `api.kwasnypp.ovh/osada/` (repozytorium `vps01`, wydanie `signal-v*`),
   limit połączeń odporny na podrobiony nagłówek, panel budowy z nazwami w jednej linii (docs/DECISIONS.md).
 - Chata wszędzie tam, gdzie dom, na stoku z wyrównaniem terenu (SIM_VERSION 5) (docs/DECISIONS.md).
+- Świat wokół mapy: morze w kolorze wody mapy i dalekie kontynenty z wysokimi górami, granica mapy niewidoczna
+  (prosta krawędź terenu, plaża za krawędzią, mgiełka od brzegu mapy) (docs/DECISIONS.md).
+- Przekaźnik TURN dla gry wieloosobowej za restrykcyjnymi sieciami (krok `0020` w `vps01`, docs/DEPLOY.md).
 
 ## Dalej
-M5: budynki wojskowe (obsada rycerzami, strefy), terytorium, atak, pojedynki, przejęcia, zwycięstwo.
+- Wzmocnienie trudnego bota (wygrywa z łatwym około połowy partii, docs/DECISIONS.md).
 
 ## Znane problemy
 - Test lobby WebRTC tylko w Chromium (ograniczenie Playwright-Firefox na http://localhost).

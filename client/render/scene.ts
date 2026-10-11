@@ -12,6 +12,7 @@ import { SUN, TerrainRenderer } from './terrain.ts';
 import { CellMap } from './cells.ts';
 import { CURVE_COMMON, CURVE_PROJECT, curveDrop, curveUniform } from './curve.ts';
 import { OceanRenderer, skyTexture } from './ocean.ts';
+import { OutlandRenderer, outlandViewUniform } from './outland.ts';
 import { EntitiesRenderer } from './entities.ts';
 import { OverlayRenderer } from './overlay.ts';
 import type { GameEvent, GameState } from '../../sim/types.ts';
@@ -227,6 +228,7 @@ export class SceneRenderer {
   objects!: MapObjectsRenderer;
   cells!: CellMap;
   private ocean = new OceanRenderer();
+  private outland: OutlandRenderer | null = null;
   entities!: EntitiesRenderer;
   overlay = new OverlayRenderer();
   map!: MapData;
@@ -308,6 +310,14 @@ export class SceneRenderer {
     this.cells = new CellMap(map);
     this.terrain = new TerrainRenderer(map, this.cells.texture, this.cells.paths, this.cells.bends);
     this.scene.add(this.terrain.group);
+    if (this.outland) {
+      this.scene.remove(this.outland.mesh);
+      this.outland.dispose();
+    }
+    let seed = map.w * 73856093;
+    for (let i = 0; i < map.height.length; i += 7) seed = (Math.imul(seed, 31) + map.height[i]) | 0;
+    this.outland = new OutlandRenderer(map, seed, this.terrain.detail, this.terrain.time);
+    this.scene.add(this.outland.mesh);
     this.objects = new MapObjectsRenderer(map, this.modelMaterial);
     this.scene.add(this.objects.group);
     this.entities = new EntitiesRenderer(this.modelMaterial);
@@ -471,6 +481,7 @@ export class SceneRenderer {
     curveUniform.value.x = this.cam.target.x;
     curveUniform.value.y = this.cam.target.z;
     this.ocean.update(this.cam.target.x, this.cam.target.z);
+    outlandViewUniform.value.set(this.cam.camera.position.x - this.cam.target.x, this.cam.camera.position.z - this.cam.target.z).normalize();
     this.terrain.update();
     this.clock += dt;
     this.terrain.setTime(this.clock);

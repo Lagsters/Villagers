@@ -26,7 +26,6 @@ export const SNOW: [number, number, number] = [0.93, 0.95, 0.98];
 /** Woda: plycizna przy brzegu, otwarta woda, glebia (kolor tla przy brzegu mapy). */
 export const SHALLOW_WATER: [number, number, number] = [0.14, 0.44, 0.52];
 export const WATER: [number, number, number] = [0.09, 0.3, 0.52];
-export const DEEP_WATER: [number, number, number] = [0.08, 0.25, 0.5];
 
 /** Kolory towarow (maly szescian na fladze / nad glowa tragarza). */
 export const GOOD_COLORS: readonly [number, number, number][] = [

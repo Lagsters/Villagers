@@ -12,10 +12,10 @@ import * as THREE from 'three';
 import { T } from '../../sim/defs.ts';
 import { stepXY, DIR_E, DIR_SE, DIR_SW } from '../../sim/grid.ts';
 import type { MapData } from '../../sim/mapgen.ts';
-import { BEND_K, H_SCALE, ROW_H, vx, vz } from './coords.ts';
+import { BEND_K, H_SCALE, ROW_H, shownCoast, shownHeight, shownIdx, vx, vz } from './coords.ts';
 import { CURVE_COMMON, CURVE_PROJECT, curveUniform } from './curve.ts';
 import {
-  DEEP_WATER, EARTH, FOREST_FLOOR, GRASS_DARK, GRASS_DRY, GRASS_LIGHT, LITTER, PATH, ROCK_DARK, ROCK_LIGHT, SAND,
+  EARTH, FOREST_FLOOR, GRASS_DARK, GRASS_DRY, GRASS_LIGHT, LITTER, PATH, ROCK_DARK, ROCK_LIGHT, SAND,
   SAND_DARK, SHALLOW_WATER, SNOW, SOIL_DARK, SOIL_LIGHT, WATER,
 } from './palette.ts';
 
@@ -374,9 +374,11 @@ export class TerrainRenderer {
   private chunks: THREE.Mesh[] = [];
   private dirty = new Set<number>();
   private material: THREE.MeshLambertMaterial;
-  private detail: THREE.Texture;
+  /** Tekstura faktur (kanaly: trawa, skala, piasek i fale, szum granic) - korzysta z niej tez kraina wokol mapy. */
+  readonly detail: THREE.Texture;
   private kinds: THREE.DataTexture;
-  private time = { value: 0 };
+  /** Czas animacji wody (s) - wspolny z woda wokol mapy (client/render/outland.ts), zeby fale szly przez krawedz. */
+  readonly time = { value: 0 };
   readonly cw: number;
   readonly ch: number;
 
@@ -438,9 +440,10 @@ export class TerrainRenderer {
     for (let y = 0; y < m.h; y++) {
       for (let x = 0; x < m.w; x++) {
         const i = y * m.w + x;
-        const t = m.terrain[i];
+        const t = this.tAt(x, y);
         if (t === T.WATER) continue;
-        const own = t === T.DESERT ? 1 : t === T.MOUNTAIN ? 2 : t === T.SNOW ? 3 : 0;
+        const rocky = t === T.MOUNTAIN || t === T.SNOW;
+        const own = shownCoast(m, i) ? (rocky ? 2 : 1) : t === T.DESERT ? 1 : t === T.MOUNTAIN ? 2 : t === T.SNOW ? 3 : 0;
         if (own === 0 && this.isShore(x, y)) {
           data[i * 4] = Math.round((1 - BEACH) * 255);
           data[i * 4 + 1] = Math.round(BEACH * 255);
@@ -489,33 +492,35 @@ export class TerrainRenderer {
     return y * m.w + x;
   }
 
+  /** Rodzaj terenu i wysokosc rysowane w miejscu pola (x, y) - z plaza w pierscieniu mapy (shownIdx). */
+  private tAt(x: number, y: number): number {
+    return this.map.terrain[shownIdx(this.map, this.at(x, y))];
+  }
+
+  private hAt(x: number, y: number): number {
+    return shownHeight(this.map, this.at(x, y));
+  }
+
   /** Czy pole ladu sasiaduje z woda (brzeg - plaza). */
   private isShore(x: number, y: number): boolean {
-    const m = this.map;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
-      if (m.terrain[this.at(x + dx, y + dy)] === T.WATER) return true;
+      if (this.tAt(x + dx, y + dy) === T.WATER) return true;
     }
     return false;
   }
 
   /**
    * Wierzcholek (pole): kolor trawy z latami (rgb - takze pod innymi rodzajami: przejscia, polki skalne), kolor
-   * wody (glebia, ku brzegowi mapy kolor tla) i poziom lustra najblizszej wody (wlevel).
+   * wody (przy brzegu plycizna, dalej otwarta woda - ta sama co w morzu za mapa, client/render/outland.ts) i poziom
+   * lustra najblizszej wody (wlevel).
    */
   private node(x: number, y: number, col: Float32Array, wcol: Float32Array, wlevel: Float32Array, k: number): void {
     const m = this.map;
-    const t = m.terrain[y * m.w + x];
+    const t = this.tAt(x, y);
     grassColor(m, x, y, this.rgb);
     col.set(this.rgb, k * 3);
-    // Woda: przy brzegu jasniejsza plycizna, dalej otwarta woda, ku brzegowi mapy glebia w kolorze tla.
     const shallow = t === T.WATER ? this.waterDepth(x, y) : 0;
-    const d = Math.min(x, y, m.w - 1 - x, m.h - 1 - y);
-    const e = Math.min(1, d / 8);
-    const edge = e * e * (3 - 2 * e);
-    for (let c = 0; c < 3; c++) {
-      const open = SHALLOW_WATER[c] + (WATER[c] - SHALLOW_WATER[c]) * shallow;
-      wcol[k * 3 + c] = DEEP_WATER[c] + (open - DEEP_WATER[c]) * edge;
-    }
+    for (let c = 0; c < 3; c++) wcol[k * 3 + c] = SHALLOW_WATER[c] + (WATER[c] - SHALLOW_WATER[c]) * shallow;
     wlevel[k] = this.waterLevel(x, y);
   }
 
@@ -524,26 +529,22 @@ export class TerrainRenderer {
    * (jezioro moze lezec wyzej niz morze; brzeg nalezy do najblizszej wody). Bez wody w poblizu - wysokosc pola.
    */
   private waterLevel(x: number, y: number): number {
-    const m = this.map;
-    const i = this.at(x, y);
-    if (m.terrain[i] === T.WATER) return m.height[i] * H_SCALE;
+    if (this.tAt(x, y) === T.WATER) return this.hAt(x, y) * H_SCALE;
     let h = Infinity;
     for (let dy = -2; dy <= 2; dy++) {
       for (let dx = -2; dx <= 2; dx++) {
-        const j = this.at(x + dx, y + dy);
-        if (m.terrain[j] === T.WATER) h = Math.min(h, m.height[j]);
+        if (this.tAt(x + dx, y + dy) === T.WATER) h = Math.min(h, this.hAt(x + dx, y + dy));
       }
     }
-    return (Number.isFinite(h) ? h : m.height[i]) * H_SCALE;
+    return (Number.isFinite(h) ? h : this.hAt(x, y)) * H_SCALE;
   }
 
   /** Odleglosc pola wody od ladu 0..1 (0 - przy brzegu, 0.5 - dwa pola od ladu, 1 - dalej). */
   private waterDepth(x: number, y: number): number {
-    const m = this.map;
     let near = 3;
     for (let dy = -2; dy <= 2; dy++) {
       for (let dx = -2; dx <= 2; dx++) {
-        if (m.terrain[this.at(x + dx, y + dy)] !== T.WATER) near = Math.min(near, Math.max(Math.abs(dx), Math.abs(dy)));
+        if (this.tAt(x + dx, y + dy) !== T.WATER) near = Math.min(near, Math.max(Math.abs(dx), Math.abs(dy)));
       }
     }
     return (near - 1) / 2;
@@ -566,12 +567,13 @@ export class TerrainRenderer {
     for (let y = y0; y <= y1; y++) {
       for (let x = vxMin; x <= x1; x++) {
         const k = (y - y0) * cols + (x - vxMin);
-        const i = y * m.w + x;
-        const wx = vx(x, y), wz = vz(y);
-        pos[k * 3] = wx; pos[k * 3 + 1] = m.height[i] * H_SCALE; pos[k * 3 + 2] = wz;
+        // Skrajne pola wierszy przesunietych o pol pola siegaja krawedzi prostokata mapy: lewy i prawy brzeg sa
+        // proste, bez zebow heksow, i stykaja sie z kraina wokol mapy (client/render/outland.ts).
+        const wx = x === 0 ? 0 : x === m.w - 1 ? m.w - 0.5 : vx(x, y), wz = vz(y);
+        pos[k * 3] = wx; pos[k * 3 + 1] = this.hAt(x, y) * H_SCALE; pos[k * 3 + 2] = wz;
         // Normalna z roznic centralnych mapy wysokosci (identyczna po obu stronach granicy chunku).
-        const hl = m.height[this.at(x - 1, y)], hr = m.height[this.at(x + 1, y)];
-        const hu = m.height[this.at(x, y - 1)], hd = m.height[this.at(x, y + 1)];
+        const hl = this.hAt(x - 1, y), hr = this.hAt(x + 1, y);
+        const hu = this.hAt(x, y - 1), hd = this.hAt(x, y + 1);
         const nx = -(hr - hl) * H_SCALE / 2;
         const nz = -(hd - hu) * H_SCALE / (2 * ROW_H);
         const len = Math.hypot(nx, 1, nz);
@@ -581,8 +583,10 @@ export class TerrainRenderer {
     }
     const idx: number[] = [];
     const vi = (x: number, y: number) => (y - y0) * cols + (x - vxMin);
+    // Ostatnia kolumna mapy ma tylko trojkat SW - domyka prosta prawa krawedz.
+    const xEnd = x1 === m.w - 1 ? x1 : x1 - 1;
     for (let y = y0; y < y1; y++) {
-      for (let x = x0; x < x1; x++) {
+      for (let x = x0; x <= xEnd; x++) {
         const [ex, ey] = stepXY(x, y, DIR_E);
         const [sex, sey] = stepXY(x, y, DIR_SE);
         const [swx, swy] = stepXY(x, y, DIR_SW);

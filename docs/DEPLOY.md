@@ -15,6 +15,7 @@ Gra z botami działa bez serwera. Serwer jest potrzebny tylko do gry wieloosobow
 Konfiguracja maszyny jest w prywatnym repozytorium `pkwasny/vps01` (ponumerowane kroki, rejestr wykonań na
 serwerze). Serwer lobby obsługują kroki `0016`–`0018`: konto `osada`, Node.js z nodejs.org (przypięta
 wersja i suma SHA-256), usługa systemd `osada-signal` na `127.0.0.1:8787` za nginx (TLS, `/osada/`).
+Krok `0020` stawia przekaźnik TURN (niżej).
 
 1. **Wydanie serwera** — tag `signal-v<n>` w tym repozytorium uruchamia `.github/workflows/signal.yml`:
    testy serwera, `npm run build:server` (jeden plik `osada-signal.cjs`, razem z biblioteką `ws`) i wydanie
@@ -31,7 +32,7 @@ Ustawienia usługi (`/etc/osada/signal.env`, składane z `config.env` w `vps01`)
 | `PORT`, `HOST` | nasłuch, na serwerze `127.0.0.1:8787` |
 | `ALLOWED_ORIGINS` | strony, z których wolno się łączyć (`https://lagsters.github.io`) |
 | `TRUST_PROXY=1` | adres gracza z nagłówka `X-Real-IP` ustawianego przez nginx (limit 16 połączeń na adres) |
-| `TURN_SECRET`, `TURN_URLS` | opcjonalny przekaźnik TURN (coturn, `use-auth-secret`); na serwerze nieużywany |
+| `TURN_SECRET`, `TURN_URLS` | przekaźnik TURN (coturn, `use-auth-secret`); na serwerze w osobnym `/etc/osada/turn.env` (krok `0020`) |
 
 Sprawdzenie: `curl https://api.kwasnypp.ovh/osada/health` → `{"ok":true,"rooms":0,"peers":0}`.
 
@@ -63,14 +64,21 @@ npm run dev
 Klient na `localhost` łączy się z `ws://localhost:8787` bez TLS. Grę wieloosobową sprawdzisz w dwóch
 kartach przeglądarki (w obu „Gra wieloosobowa”: w jednej „Utwórz pokój”, w drugiej kod pokoju).
 
-## Ograniczenie: brak przekaźnika TURN
+## Przekaźnik TURN
 
 Gracze łączą się bezpośrednio (STUN). Za restrykcyjnym NAT-em (część sieci firmowych i komórkowych)
-połączenie się nie zestawi: lobby działa, ale partia nie startuje. Serwer lobby umie wydawać hasła do
-przekaźnika (`TURN_SECRET`, `TURN_URLS`), ale przekaźnik wymaga otwarcia portów UDP w konsoli Oracle.
+połączenie bezpośrednie się nie zestawi - wtedy ruch gry idzie przez przekaźnik coturn na tej samej maszynie
+(`turn:api.kwasnypp.ovh:3478`, UDP i TCP). Serwer lobby daje każdemu graczowi w powitaniu krótkotrwałe hasło
+(HMAC z sekretem wspólnym z coturn, ważne 6 godzin); sekret powstaje na serwerze i nie ma go w żadnym
+repozytorium. Przekaźnik nie przekazuje ruchu do adresów prywatnych, samej maszyny ani metadanych chmury, nie
+przekazuje TCP do celu i ma limity przepustowości i przydziałów. Porty: UDP i TCP 3478, UDP 49160–49359
+(iptables na maszynie i Security List w konsoli Oracle).
+
+Nie przejdą tylko sieci przepuszczające wyłącznie HTTPS na porcie 443 (zajmuje go nginx).
 
 ## Rozwiązywanie problemów
 
 - **„Nie można połączyć się z serwerem sygnalizacyjnym”** — sprawdź `/osada/health` i `/deploy-status`.
-- **Lobby się łączy, ale gra nie startuje u części graczy** — zwykle restrykcyjny NAT (wyżej).
+- **Lobby się łączy, ale gra nie startuje u części graczy** — sieć blokuje też przekaźnik (wyżej); sprawdź,
+  czy powitanie lobby zawiera adresy `turn:` (diagnostyka niżej).
 - Diagnostyka połączeń w przeglądarce: w konsoli `localStorage.debugNet = '1'` i odśwież stronę.

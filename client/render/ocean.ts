@@ -1,20 +1,23 @@
 /**
- * Morze wokol mapy i niebo: przy krzywiznie swiata (client/render/curve.ts) daleka woda opada za horyzont, a nad nia
- * widac niebo. Morze to duza siatka (gesta przy srodku, bo krzywizna liczy sie w wierzcholkach) podazajaca za srodkiem
- * widoku, tuz pod lustrem wody mapy - teren ja zaslania, widac ja dopiero za brzegiem mapy. Material bez oswietlenia
- * w kolorze oswietlonej glebi (DEEP_WATER), ku horyzontowi jasnieje mgielka. Przy kamerze z gory morze zakrywa caly
- * ekran, niebo pojawia sie przy mocno pochylonej.
+ * Morze za kraina wokol mapy (client/render/outland.ts) i niebo: przy krzywiznie swiata (client/render/curve.ts)
+ * daleka woda opada za horyzont, a nad nia widac niebo. Morze to duza siatka (gesta przy srodku, bo krzywizna liczy
+ * sie w wierzcholkach) podazajaca za srodkiem widoku, tuz pod lustrem wody - teren mapy i kraina ja zaslaniaja,
+ * widac ja dopiero za kraina. Material bez oswietlenia w kolorze oswietlonej otwartej wody (jak woda krainy), ku
+ * horyzontowi jasnieje mgielka. Niebo pojawia sie przy mocno pochylonej kamerze.
  */
 import * as THREE from 'three';
 import { SEA_HEIGHT } from '../../sim/mapgen.ts';
 import { H_SCALE } from './coords.ts';
-import { CURVE_COMMON, CURVE_PROJECT, EARTH_R, curveUniform } from './curve.ts';
+import { CURVE_COMMON, CURVE_PROJECT, curveUniform } from './curve.ts';
 
 /** Promien siatki morza (swiat) - daleko za horyzontem przy najnizszej kamerze. */
 const SIZE = 400;
-/** Kolor oswietlonej glebi (brzeg terenu mapy zlewa sie z morzem) i mgielki na horyzoncie (liniowo). */
-const DEEP = new THREE.Color().setRGB(17 / 255, 51 / 255, 95 / 255, THREE.LinearSRGBColorSpace);
+/** Kolor oswietlonej otwartej wody (WATER z palety w swietle sceny) i mgielki na horyzoncie (liniowo). */
+const DEEP = new THREE.Color().setRGB(0.077, 0.26, 0.45, THREE.LinearSRGBColorSpace);
 const HAZE = new THREE.Color().setRGB(0.42, 0.56, 0.68, THREE.LinearSRGBColorSpace);
+/** Mgielka nad woda narasta od HAZE_NEAR do HAZE_FAR od srodka widoku (swiat) - niezaleznie od krzywizny. */
+export const HAZE_NEAR = 27;
+export const HAZE_FAR = 99;
 
 /** Niebo: pionowy gradient (u gory blekit, przy horyzoncie mgielka) jako tlo sceny. */
 export function skyTexture(): THREE.Texture {
@@ -70,16 +73,16 @@ export class OceanRenderer {
         .replace('#include <project_vertex>', CURVE_PROJECT + '\nvDist = length(curveD);');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nuniform vec3 uHaze;\nvarying float vDist;')
-        .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uHaze, smoothstep(${(EARTH_R * 0.3).toFixed(1)}, ${(EARTH_R * 1.1).toFixed(1)}, vDist));`);
+        .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uHaze, smoothstep(${HAZE_NEAR.toFixed(1)}, ${HAZE_FAR.toFixed(1)}, vDist));`);
     };
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
   }
 
-  /** Siatka pod srodkiem widoku, tuz pod lustrem wody mapy. */
+  /** Siatka pod srodkiem widoku, wyraznie pod woda krainy - blisko niej migalaby na przemian z nia. */
   update(cx: number, cz: number): void {
-    this.mesh.matrix.makeTranslation(cx, SEA_HEIGHT * H_SCALE - 0.02, cz);
+    this.mesh.matrix.makeTranslation(cx, SEA_HEIGHT * H_SCALE - 0.3, cz);
     this.mesh.matrixWorld.copy(this.mesh.matrix);
   }
 }

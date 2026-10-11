@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 
 /** Promien "planety" w jednostkach swiata (pole = 1). */
-export const EARTH_R = 90;
+export const EARTH_R = 700;
 
 /** Uniform wspolny dla materialow: x, y - srodek widoku (swiat x, z), z - 1 / (2R). */
 export const curveUniform = { value: new THREE.Vector3(0, 0, 1 / (2 * EARTH_R)) };
