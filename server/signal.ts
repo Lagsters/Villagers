@@ -1,6 +1,6 @@
 /**
- * Serwer sygnalizacyjny WebRTC: pokoje (kody 6 znakow), wymiana SDP/ICE, krotkotrwale dane logowania
- * TURN (coturn: use-auth-secret), limity polaczen, sprzatanie pokoi, healthcheck /health.
+ * Serwer sygnalizacyjny WebRTC: pokoje (kody 6 znakow), lista pokoi publicznych na zywo, wymiana SDP/ICE,
+ * krotkotrwale dane logowania TURN (coturn: use-auth-secret), limity polaczen, sprzatanie pokoi, healthcheck /health.
  * Serwer NIE liczy symulacji gry - po zestawieniu polaczen peery rozmawiaja bezposrednio.
  *
  * Uruchomienie: node server/main.ts   (zmienne srodowiskowe opisane w docs/DEPLOY.md)
@@ -20,6 +20,8 @@ export interface ServerOptions {
   maxRooms?: number;
   maxPeersPerRoom?: number;
   maxConnPerIp?: number;
+  /** pokoi publicznych, ktorych gospodarze lacza sie z jednego adresu */
+  maxPublicPerIp?: number;
   /** pokoj bez aktywnosci dluzej niz tyle ms jest usuwany */
   roomIdleMs?: number;
   /** dozwolone Origin (puste = wszystkie) */
@@ -48,11 +50,43 @@ interface Room {
   peers: Map<string, Peer>;
   locked: boolean;
   lastActive: number;
+  /** widoczny na liscie pokoi; gracze lacza sie wtedy tylko przez przekaznik TURN (SignalClient.relay) */
+  isPublic: boolean;
+  created: number;
+  /** z lobby gospodarza (wiadomosc meta): kod i rozmiar mapy, liczba graczy razem z botami */
+  map: string;
+  size: number;
+  players: number;
+}
+
+/** Pozycja listy pokoi publicznych (wiadomosc rooms). */
+export interface RoomInfo {
+  room: string;
+  name: string;
+  map: string;
+  size: number;
+  players: number;
 }
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_MSG_BYTES = 64 * 1024;
 const MAX_MSG_PER_SEC = 60;
+const LIST_MAX = 30;
+/** Najkrotszy odstep miedzy listami pokoi wysylanymi obserwujacym. */
+const LIST_DELAY_MS = 300;
+const BAD_WORDS = ['kurw', 'chuj', 'huj', 'pierdol', 'jeb', 'pizd', 'dziwk', 'pedal', 'cwel', 'fuck', 'shit', 'cunt', 'nigg', 'hitler'];
+
+/**
+ * Imie gospodarza na liscie pokoi: bez znakow sterujacych i zmieniajacych kierunek tekstu; wulgarne - "Gracz".
+ * Lista jest publiczna, a imiona w lobby ida juz miedzy graczami jednego pokoju.
+ */
+export function listName(raw: string): string {
+  const name = raw.replace(/[\p{C}]/gu, '').trim().slice(0, 20);
+  const plain = name.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/ł/g, 'l')
+    .replace(/0/g, 'o').replace(/[1!|]/g, 'i').replace(/3/g, 'e').replace(/[4@]/g, 'a').replace(/[5$]/g, 's')
+    .replace(/[^a-z]/g, '');
+  return !name || BAD_WORDS.some((w) => plain.includes(w)) ? 'Gracz' : name;
+}
 
 export function turnCredentials(secret: string, peerId: string, ttlSec: number, nowSec = Math.floor(Date.now() / 1000)): { username: string; credential: string } {
   const username = `${nowSec + ttlSec}:${peerId}`;
@@ -73,6 +107,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     maxRooms: 500,
     maxPeersPerRoom: 8,
     maxConnPerIp: 16,
+    maxPublicPerIp: 2,
     roomIdleMs: 3 * 3600 * 1000,
     turnUrls: [] as string[],
     allowedOrigins: [] as string[],
@@ -82,6 +117,8 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const rooms = new Map<string, Room>();
   const peers = new Map<string, Peer>();
   const perIp = new Map<string, number>();
+  const watchers = new Set<Peer>();
+  let listTimer: ReturnType<typeof setTimeout> | null = null;
 
   const server = createServer((req, res) => {
     if (req.url === '/health' || req.url?.startsWith('/health?')) {
@@ -107,6 +144,24 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     return list;
   }
 
+  function publicRooms(): RoomInfo[] {
+    return [...rooms.values()]
+      .filter((r) => r.isPublic && !r.locked)
+      .sort((a, b) => b.created - a.created)
+      .slice(0, LIST_MAX)
+      .map((r) => ({ room: r.code, name: listName(r.host.name), map: r.map, size: r.size, players: Math.max(r.players, r.peers.size) }));
+  }
+
+  /** Lista dla obserwujacych po zmianie pokoju publicznego - zbiorczo, nie przy kazdej zmianie. */
+  function listChanged(r: Room): void {
+    if (!r.isPublic || !watchers.size || listTimer) return;
+    listTimer = setTimeout(() => {
+      listTimer = null;
+      const msg = { t: 'rooms', rooms: publicRooms() };
+      for (const w of watchers) send(w, msg);
+    }, LIST_DELAY_MS);
+  }
+
   function newCode(): string {
     for (let attempt = 0; attempt < 50; attempt++) {
       let c = '';
@@ -127,11 +182,13 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         other.room = null;
       }
       rooms.delete(r.code);
+      listChanged(r);
       o.log(`pokoj ${r.code} zamkniety (host wyszedl)`);
       return;
     }
     for (const other of r.peers.values()) send(other, { t: 'left', peer: p.id });
     if (r.peers.size === 0) rooms.delete(r.code);
+    listChanged(r);
   }
 
   function onMessage(p: Peer, raw: string): void {
@@ -159,13 +216,23 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
           send(p, { t: 'error', code: 'full' });
           return;
         }
+        const isPublic = m.public === true;
+        if (isPublic && [...rooms.values()].filter((x) => x.isPublic && x.host.ip === p.ip).length >= o.maxPublicPerIp) {
+          send(p, { t: 'error', code: 'publimit' });
+          return;
+        }
+        watchers.delete(p);
         p.name = String(m.name ?? '').slice(0, 20);
         const code = newCode();
-        const r: Room = { code, host: p, peers: new Map([[p.id, p]]), locked: false, lastActive: now };
+        const r: Room = {
+          code, host: p, peers: new Map([[p.id, p]]), locked: false, lastActive: now,
+          isPublic, created: now, map: '', size: 0, players: 1,
+        };
         rooms.set(code, r);
         p.room = r;
-        send(p, { t: 'created', room: code });
-        o.log(`pokoj ${code} utworzony`);
+        send(p, { t: 'created', room: code, public: isPublic });
+        listChanged(r);
+        o.log(`pokoj ${code} utworzony${isPublic ? ' (publiczny)' : ''}`);
         return;
       }
       case 'join': {
@@ -184,13 +251,33 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
           return;
         }
         if (p.room) leaveRoom(p);
+        watchers.delete(p);
         p.name = String(m.name ?? '').slice(0, 20);
         r.peers.set(p.id, p);
         p.room = r;
-        send(p, { t: 'joined', room: code, host: r.host.id });
+        send(p, { t: 'joined', room: code, host: r.host.id, public: r.isPublic });
         send(r.host, { t: 'peer', peer: p.id, name: p.name });
+        listChanged(r);
         return;
       }
+      case 'meta': {
+        const r = p.room;
+        if (!r || r.host !== p) return;
+        r.map = String(m.map ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+        r.size = Math.min(256, Math.max(0, Math.floor(Number(m.size) || 0)));
+        r.players = Math.min(o.maxPeersPerRoom, Math.max(1, Math.floor(Number(m.players) || 1)));
+        listChanged(r);
+        return;
+      }
+      case 'watch': {
+        if (p.room) return;
+        watchers.add(p);
+        send(p, { t: 'rooms', rooms: publicRooms() });
+        return;
+      }
+      case 'unwatch':
+        watchers.delete(p);
+        return;
       case 'signal': {
         const r = p.room;
         const to = r?.peers.get(String(m.to ?? ''));
@@ -199,7 +286,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         return;
       }
       case 'lock': {
-        if (p.room && p.room.host === p) p.room.locked = true;
+        if (p.room && p.room.host === p) {
+          p.room.locked = true;
+          listChanged(p.room);
+        }
         return;
       }
       case 'leave':
@@ -231,6 +321,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     ws.on('message', (data) => onMessage(p, data.toString()));
     ws.on('close', () => {
       leaveRoom(p);
+      watchers.delete(p);
       peers.delete(p.id);
       const c = (perIp.get(ip) ?? 1) - 1;
       if (c <= 0) perIp.delete(ip);
@@ -249,6 +340,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
           send(p, { t: 'host-left' });
         }
         rooms.delete(r.code);
+        listChanged(r);
       }
     }
   }, 60_000);
@@ -265,6 +357,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         stats: () => ({ rooms: rooms.size, peers: peers.size }),
         close: () => new Promise<void>((res) => {
           clearInterval(sweep);
+          if (listTimer) clearTimeout(listTimer);
           for (const p of peers.values()) p.ws.terminate();
           wss.close();
           server.close(() => res());

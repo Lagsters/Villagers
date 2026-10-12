@@ -1,4 +1,7 @@
 /** Klient serwera sygnalizacyjnego (WebSocket) po stronie przegladarki. */
+import type { RoomInfo } from '../server/signal.ts';
+
+export type { RoomInfo };
 
 export interface SignalEvents {
   onPeer?(peer: string, name: string): void;
@@ -7,6 +10,7 @@ export interface SignalEvents {
   onHostLeft?(): void;
   onError?(code: string): void;
   onClose?(): void;
+  onRooms?(rooms: RoomInfo[]): void;
 }
 
 type Msg = Record<string, unknown> & { t: string };
@@ -15,6 +19,11 @@ export class SignalClient {
   private ws: WebSocket | null = null;
   peerId = '';
   iceServers: RTCIceServer[] = [];
+  /**
+   * Polaczenia z graczami tylko przez przekaznik TURN: w pokoju publicznym gracze sie nie znaja, wiec nie
+   * poznaja swoich adresow IP. Bez przekaznika na serwerze (lokalnie) - polaczenia bezposrednie.
+   */
+  relay = false;
   events: SignalEvents = {};
   private waiters: { t: string; res: (m: Msg) => void; rej: (e: Error) => void }[] = [];
 
@@ -75,6 +84,7 @@ export class SignalClient {
       case 'left': this.events.onLeft?.(String(m.peer)); break;
       case 'host-left': this.events.onHostLeft?.(); break;
       case 'error': this.events.onError?.(String(m.code)); break;
+      case 'rooms': this.events.onRooms?.(Array.isArray(m.rooms) ? (m.rooms as RoomInfo[]) : []); break;
     }
   }
 
@@ -89,14 +99,34 @@ export class SignalClient {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(m));
   }
 
-  async create(name: string): Promise<string> {
-    const m = await this.request({ t: 'create', name }, 'created');
+  async create(name: string, isPublic = false): Promise<string> {
+    const m = await this.request({ t: 'create', name, public: isPublic }, 'created');
+    this.setRelay(m.public === true);
     return String(m.room);
   }
 
   async join(room: string, name: string): Promise<string> {
     const m = await this.request({ t: 'join', room, name }, 'joined');
+    this.setRelay(m.public === true);
     return String(m.host);
+  }
+
+  private setRelay(isPublic: boolean): void {
+    this.relay = isPublic && this.iceServers.some((s) => [s.urls].flat().some((u) => /^turns?:/.test(u)));
+  }
+
+  /** Lista pokoi publicznych: od razu i po kazdej zmianie, do unwatch, create albo join. */
+  watch(): void {
+    this.send({ t: 'watch' });
+  }
+
+  unwatch(): void {
+    this.send({ t: 'unwatch' });
+  }
+
+  /** Gospodarz podaje serwerowi dane pokoju do listy pokoi publicznych. */
+  meta(map: string, size: number, players: number): void {
+    this.send({ t: 'meta', map, size, players });
   }
 
   signal(to: string, data: unknown): void {
@@ -121,6 +151,7 @@ export function signalErrorText(code: string): string {
     case 'roomfull': return 'Pokój jest pełny (8 graczy).';
     case 'full': return 'Serwer jest przeciążony, spróbuj później.';
     case 'rate': return 'Za dużo wiadomości.';
+    case 'publimit': return 'Z tego adresu są już otwarte 2 pokoje publiczne.';
     default: return code;
   }
 }

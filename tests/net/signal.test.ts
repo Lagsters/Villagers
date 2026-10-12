@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { startServer, turnCredentials, type RunningServer } from '../../server/signal.ts';
+import { listName, startServer, turnCredentials, type RoomInfo, type RunningServer } from '../../server/signal.ts';
 
 let srv: RunningServer;
 
@@ -88,6 +88,51 @@ describe('M7: serwer sygnalizacyjny', () => {
     c.close();
     await new Promise((r) => setTimeout(r, 100));
     expect(srv.stats().rooms).toBe(0);
+  });
+
+  it('lista pokoi publicznych: na zywo, bez prywatnych i rozpoczetych, limit na adres', async () => {
+    const [w, a, b, c, d, e] = Array.from({ length: 6 }, () => new Client());
+    await Promise.all([w, a, b, c, d, e].map((x) => x.wait('hello')));
+    const rooms = async (ok: (r: RoomInfo[]) => boolean): Promise<RoomInfo[]> => {
+      for (;;) {
+        const r = (await w.wait('rooms')).rooms as RoomInfo[];
+        if (ok(r)) return r;
+      }
+    };
+    w.send({ t: 'watch' });
+    expect(await rooms(() => true)).toEqual([]);
+    a.send({ t: 'create', name: 'Ala‮', public: true });
+    const created = await a.wait('created');
+    expect(created.public).toBe(true);
+    a.send({ t: 'meta', map: 'dolina!', size: 96, players: 3 });
+    b.send({ t: 'create', name: 'Prywatny' });
+    expect((await b.wait('created')).public).toBe(false);
+    expect(await rooms((r) => r[0]?.players === 3)).toEqual([{ room: created.room, name: 'Ala', map: 'DOLINA', size: 96, players: 3 }]);
+    // Dolaczajacy do pokoju publicznego wie, ze laczy sie przez przekaznik.
+    c.send({ t: 'join', room: created.room, name: 'Cyryl' });
+    expect((await c.wait('joined')).public).toBe(true);
+    // Drugi pokoj publiczny z tego samego adresu jest dozwolony, trzeci nie.
+    d.send({ t: 'create', name: 'Kurwa', public: true });
+    await d.wait('created');
+    e.send({ t: 'create', name: 'E', public: true });
+    expect((await e.wait('error')).code).toBe('publimit');
+    expect((await rooms((r) => r.length === 2)).map((r) => r.name)).toEqual(['Gracz', 'Ala']);
+    // Rozpoczeta gra znika z listy.
+    a.send({ t: 'lock' });
+    d.send({ t: 'lock' });
+    expect(await rooms((r) => r.length === 0)).toEqual([]);
+    for (const x of [w, a, b, c, d, e]) x.close();
+    await new Promise((r) => setTimeout(r, 100));
+  });
+
+  it('imie na liscie pokoi: wulgaryzmy i znaki sterujace', () => {
+    expect(listName('Ala')).toBe('Ala');
+    expect(listName('Łucja Żak')).toBe('Łucja Żak');
+    expect(listName('  K.u.r.w.a ')).toBe('Gracz');
+    expect(listName('PIERD0L')).toBe('Gracz');
+    expect(listName('chuj')).toBe('Gracz');
+    expect(listName('‮Ala\u0007')).toBe('Ala');
+    expect(listName('')).toBe('Gracz');
   });
 
   it('nieistniejacy pokoj i limit polaczen', async () => {

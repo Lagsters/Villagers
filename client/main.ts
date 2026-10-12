@@ -9,7 +9,7 @@ import type { GameConfig, GameState } from '../sim/types.ts';
 import { SIM_VERSION } from '../sim/version.ts';
 import type { LockstepClient, LockstepHost } from '../net/lockstep.ts';
 import { NetClient, NetHost } from '../net/netgame.ts';
-import { SignalClient, signalErrorText } from '../net/signaling.ts';
+import { SignalClient, signalErrorText, type RoomInfo } from '../net/signaling.ts';
 import { SIGNAL_URL } from './config.ts';
 import { GameView } from './game/gameView.ts';
 import { createDemoGame, demoBuildingPos, demoDirector } from './game/demo.ts';
@@ -200,11 +200,25 @@ async function connectSignal(): Promise<SignalClient> {
   return s;
 }
 
-async function createRoom(name: string): Promise<void> {
+function watchRooms(onRooms: (rooms: RoomInfo[] | null) => void): () => void {
+  const sig = new SignalClient();
+  let stopped = false;
+  sig.events = {
+    onRooms: (r) => { if (!stopped) onRooms(r); },
+    onClose: () => { if (!stopped) onRooms(null); },
+  };
+  sig.connect(SIGNAL_URL).then(() => sig.watch(), () => { if (!stopped) onRooms(null); });
+  return () => {
+    stopped = true;
+    sig.close();
+  };
+}
+
+async function createRoom(name: string, isPublic: boolean): Promise<void> {
   showConnecting(ui(), 'Łączenie z serwerem…', () => { room?.close(); room = null; showMultiplayer(ui(), prefs, actions); });
   try {
     const sig = await connectSignal();
-    const code = await sig.create(name);
+    const code = await sig.create(name, isPublic);
     const host = new NetHost(sig, code, name);
     room = host;
     const redraw = () => {
@@ -233,7 +247,7 @@ async function createRoom(name: string): Promise<void> {
     // Odswiezanie przycisku startu, gdy kanaly sie otwieraja.
     const iv = setInterval(() => { if (room !== host || game) clearInterval(iv); else redraw(); }, 1000);
   } catch (e) {
-    showMultiplayer(ui(), prefs, actions, (e as Error).message);
+    showMultiplayer(ui(), prefs, actions, signalErrorText((e as Error).message));
   }
 }
 
@@ -278,8 +292,9 @@ async function joinRoom(code: string, name: string): Promise<void> {
 
 const actions: MenuActions = {
   startLocal: (cfg) => startLocalState(createGame(cfg)),
-  createRoom: (n) => void createRoom(n),
+  createRoom: (n, p) => void createRoom(n, p),
   joinRoom: (c, n) => void joinRoom(c, n),
+  watchRooms,
   loadSaved,
   hasSave,
   options: () => showOptions(ui(), prefs, () => { savePrefs(prefs); showMainMenu(ui(), prefs, actions); }),

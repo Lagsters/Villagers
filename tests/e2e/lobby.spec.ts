@@ -23,7 +23,7 @@ test('lobby: dwie karty lacza sie przez serwer sygnalizacyjny i graja razem', as
   await b.getByRole('button', { name: 'Gra wieloosobowa' }).click();
   await b.locator('.menu-field input[type=text]').first().fill('Gosc');
   await b.locator('.room-code-input').fill(code);
-  await b.getByRole('button', { name: 'Dołącz' }).click();
+  await b.getByTestId('join-code').click();
   // Klient widzi lobby z dwoma graczami (polaczenie WebRTC ustanowione).
   await expect(b.locator('.lobby-player')).toHaveCount(2, { timeout: 20_000 });
   await expect(a.locator('.lobby-player')).toHaveCount(2);
@@ -58,6 +58,39 @@ test('lobby: dwie karty lacza sie przez serwer sygnalizacyjny i graja razem', as
   const desync = await Promise.all([a, b].map((p) => p.evaluate(() => !!(window as any).__game.session.driver.desync)));
   expect(desync).toEqual([false, false]);
   await b.screenshot({ path: `test-results/m7-game-${info.project.name}.png` });
+  expect(errors).toEqual([]);
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test('lobby: pokoj publiczny widac na liscie otwartych gier i mozna do niego dolaczyc', async ({ browser }, info) => {
+  test.skip(info.project.name === 'firefox', 'WebRTC w Playwright-Firefox na http://localhost nie zbiera kandydatow ICE');
+  const ctxA = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctxB = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+  const errors: string[] = [];
+  for (const p of [a, b]) p.on('pageerror', (e) => errors.push(String(e)));
+
+  await b.goto('/');
+  await b.getByRole('button', { name: 'Gra wieloosobowa' }).click();
+  await b.locator('.menu-field input[type=text]').first().fill('Gosc');
+  await expect(b.getByTestId('room-list')).toContainText('Nikt teraz nie czeka', { timeout: 10_000 });
+
+  await a.goto('/');
+  await a.getByRole('button', { name: 'Gra wieloosobowa' }).click();
+  await a.locator('.menu-field input[type=text]').first().fill('Publiczny');
+  await a.getByLabel('Pokój publiczny').check();
+  await a.getByRole('button', { name: 'Utwórz pokój' }).click();
+  await expect(a.locator('[data-testid=room-code]')).toHaveText(/^[A-Z2-9]{6}$/, { timeout: 15_000 });
+
+  // Lista u goscia odswieza sie sama.
+  const row = b.locator('.room-row', { hasText: 'Publiczny' });
+  await expect(row).toContainText('/8', { timeout: 10_000 });
+  await b.screenshot({ path: `test-results/lobby-list-${info.project.name}.png` });
+  await row.getByRole('button', { name: 'Dołącz' }).click();
+  await expect(b.locator('.lobby-player')).toHaveCount(2, { timeout: 20_000 });
+  await expect(a.locator('.lobby-player')).toHaveCount(2);
   expect(errors).toEqual([]);
   await ctxA.close();
   await ctxB.close();

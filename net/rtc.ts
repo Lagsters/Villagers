@@ -28,10 +28,10 @@ export class PeerLink {
   onClose: (() => void) | null = null;
   private closed = false;
 
-  constructor(peerId: string, iceServers: RTCIceServer[], sendSignal: (data: unknown) => void, initiator: boolean) {
+  constructor(peerId: string, iceServers: RTCIceServer[], sendSignal: (data: unknown) => void, initiator: boolean, relay = false) {
     this.peerId = peerId;
     this.sendSignal = sendSignal;
-    this.pc = new RTCPeerConnection({ iceServers });
+    this.pc = new RTCPeerConnection({ iceServers, iceTransportPolicy: relay ? 'relay' : 'all' });
     this.pc.onicecandidate = (e) => {
       dbg(peerId, 'local cand', e.candidate ? e.candidate.candidate : '(koniec)');
       if (e.candidate) this.sendSignal({ ice: e.candidate.toJSON() });

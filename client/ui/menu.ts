@@ -4,6 +4,7 @@
 import { MAP_SIZES, PLAYER_COLORS, PLAYER_COLOR_NAMES_PL } from '../../sim/defs.ts';
 import type { GameConfig } from '../../sim/types.ts';
 import type { LobbyState } from '../../net/protocol.ts';
+import type { RoomInfo } from '../../net/signaling.ts';
 import { button, clear, el } from './dom.ts';
 
 export interface GraphicsPrefs {
@@ -107,8 +108,10 @@ export function randomMapCode(): string {
 
 export interface MenuActions {
   startLocal(cfg: GameConfig): void;
-  createRoom(name: string): void;
+  createRoom(name: string, isPublic: boolean): void;
   joinRoom(code: string, name: string): void;
+  /** Lista pokoi publicznych na zywo (null - serwer niedostepny); zwraca funkcje konczaca obserwacje. */
+  watchRooms(onRooms: (rooms: RoomInfo[] | null) => void): () => void;
   loadSaved(): void;
   hasSave(): boolean;
   options(): void;
@@ -177,27 +180,72 @@ export function showMultiplayer(parent: HTMLElement, prefs: Prefs, a: MenuAction
   if (error) c.appendChild(el('p', 'menu-error', error));
   const name = textInput(prefs.name, 20);
   c.appendChild(field('Twoje imię', name));
-  const create = button('Utwórz pokój', () => {
+  const myName = (): string => {
     prefs.name = name.value.trim() || 'Gracz';
     savePrefs(prefs);
-    a.createRoom(prefs.name);
+    return prefs.name;
+  };
+  let stop = (): void => {};
+  const pub = el('input');
+  pub.type = 'checkbox';
+  const pubRow = el('label', 'menu-check');
+  pubRow.append(pub, el('span', '', 'Pokój publiczny'));
+  c.appendChild(pubRow);
+  c.appendChild(el('p', 'hint', 'Widoczny dla wszystkich na liście otwartych gier. Gracze łączą się wtedy przez serwer, więc nie poznają swoich adresów IP.'));
+  const create = button('Utwórz pokój', () => {
+    stop();
+    a.createRoom(myName(), pub.checked);
   });
   create.classList.add('primary');
   c.appendChild(create);
-  c.appendChild(el('p', 'menu-or', 'albo dołącz do pokoju znajomego'));
+
+  c.appendChild(el('h3', 'menu-section', 'Otwarte gry'));
+  const list = el('div', 'room-list');
+  list.dataset.testid = 'room-list';
+  list.appendChild(el('p', 'hint', 'Wczytywanie…'));
+  c.appendChild(list);
+  stop = a.watchRooms((rooms) => {
+    if (!list.isConnected) {
+      stop();
+      return;
+    }
+    clear(list);
+    if (!rooms) {
+      list.appendChild(el('p', 'hint', 'Lista niedostępna - serwer gry wieloosobowej nie odpowiada.'));
+      return;
+    }
+    if (!rooms.length) list.appendChild(el('p', 'hint', 'Nikt teraz nie czeka. Utwórz pokój publiczny - pojawi się tutaj.'));
+    for (const r of rooms) {
+      const row = el('div', 'room-row');
+      row.appendChild(el('span', 'rr-name', r.name));
+      row.appendChild(el('span', 'rr-map', r.map ? `${r.map}, ${r.size}` : ''));
+      row.appendChild(el('span', 'rr-count', `${r.players}/8`));
+      row.appendChild(button('Dołącz', () => {
+        stop();
+        a.joinRoom(r.room, myName());
+      }, `Dołącz do pokoju ${r.name}`));
+      list.appendChild(row);
+    }
+  });
+
+  c.appendChild(el('p', 'menu-or', 'albo dołącz do pokoju znajomego kodem'));
   const code = textInput('', 6, 'KOD');
   code.classList.add('room-code-input');
   code.addEventListener('input', () => { code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
   const joinRow = field('Kod pokoju', code);
   const join = button('Dołącz', () => {
-    prefs.name = name.value.trim() || 'Gracz';
-    savePrefs(prefs);
-    if (code.value.length === 6) a.joinRoom(code.value, prefs.name);
+    if (code.value.length !== 6) return;
+    stop();
+    a.joinRoom(code.value, myName());
   });
+  join.dataset.testid = 'join-code';
   joinRow.appendChild(join);
   c.appendChild(joinRow);
   const row = el('div', 'menu-buttons row');
-  row.appendChild(button('Wstecz', () => showMainMenu(parent, prefs, a)));
+  row.appendChild(button('Wstecz', () => {
+    stop();
+    showMainMenu(parent, prefs, a);
+  }));
   c.appendChild(row);
 }
 

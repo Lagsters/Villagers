@@ -20,7 +20,7 @@ przez budynki wojskowe i pojedynki rycerzy. Gra z botami albo **multiplayer P2P 
 - **Wojsko:** rycerze z 5 poziomami (szkolenie monetami), morale, atak i obrona, przejmowanie budynków,
   płonące budynki na utraconym terenie, katapulty. Wygrywa ten, kto zdobędzie zamki przeciwników.
 - **Boty** na dwóch poziomach trudności — grają przez te same komendy co człowiek.
-- **Multiplayer P2P** przez WebRTC z deterministycznym lockstepem, lobby z kodem pokoju, wykrywanie
+- **Multiplayer P2P** przez WebRTC z deterministycznym lockstepem, lobby z kodem pokoju albo z listy otwartych gier, wykrywanie
   desynchronizacji, przejęcie osady przez bota po rozłączeniu gracza.
 - **Stylizowana grafika low-poly** (wszystkie modele generowane skryptami Blendera), animacje,
   dźwięki syntetyzowane w przeglądarce, minimapa, statystyki z wykresami, samouczek, zapis gry z botami.
@@ -135,10 +135,16 @@ npm run server
 
 Na `https://lagsters.github.io/Villagers/` lobby działa przez serwer `wss://api.kwasnypp.ovh/osada/`:
 
-1. Gospodarz: **Gra wieloosobowa** → imię → **Utwórz pokój** — pojawia się 6-znakowy kod pokoju.
-2. Pozostali (do 8 graczy, także na innych komputerach i telefonach): **Gra wieloosobowa** → imię → kod →
-   **Dołącz** → **Jestem gotowy**.
+1. Gospodarz: **Gra wieloosobowa** → imię → (opcjonalnie **Pokój publiczny**) → **Utwórz pokój** — pojawia się
+   6-znakowy kod pokoju.
+2. Pozostali (do 8 graczy, także na innych komputerach i telefonach): **Gra wieloosobowa** → imię → **Dołącz** przy
+   pokoju na liście **Otwarte gry** albo kod pokoju → **Dołącz** → **Jestem gotowy**.
 3. Gospodarz: **Rozpocznij grę**.
+
+Lista **Otwarte gry** odświeża się sama i pokazuje pokoje publiczne, w których gra się jeszcze nie zaczęła: imię
+gospodarza (wulgarne zastępuje „Gracz”), mapę i liczbę graczy. Pokój bez zaznaczenia **Pokój publiczny** jest
+prywatny - dołącza tylko ten, kto zna kod. W pokoju publicznym gracze łączą się wyłącznie przez przekaźnik TURN,
+więc obcy nie poznają swoich adresów IP; z jednego adresu mogą być otwarte najwyżej 2 pokoje publiczne.
 
 Na jednym komputerze drugi gracz to okno incognito. Wszyscy muszą mieć tę samą wersję strony (po aktualizacji gry
 odświeżyć). Gracze łączą się bezpośrednio, a gdy sieć na to nie pozwala (część sieci firmowych i komórkowych) -
@@ -161,7 +167,7 @@ npm run test:perf
 - `npm test` — symulacja (mechaniki, determinizm, zapis/odczyt), 20 pełnych partii bot kontra bot,
   8 peerów lockstepu na symulowanej sieci z opóźnieniami i utratą pakietów, serwer sygnalizacyjny,
   modele (budżety trójkątów, wczytywanie `.glb`).
-- `npm run test:e2e` — Playwright (Chromium, Firefox): start gry, budowa przez UI, lobby z dwiema kartami.
+- `npm run test:e2e` — Playwright (Chromium, Firefox): start gry, budowa przez UI, lobby z dwiema kartami (kod i lista otwartych gier).
 - `npm run test:perf` — 8 graczy po 30 minutach gry, CPU ×4, 1280×720.
 - `npm run bots` — 20 partii botów z logiem statystyk.
 - `bash scripts/check.sh` — bramka przed commitem: ESLint, TypeScript, wszystkie testy Vitest (w tym 20 partii
@@ -183,7 +189,7 @@ bez udziału człowieka:
    arkusz klatek `python scripts/sheet.py <katalog>`, animacja `python scripts/anim.py <katalog> plik.webp`.
    Porównania przed/po robi się z dwóch serwerów (stan sprzed zmiany i po) z tych samych ujęć.
 4. **Interfejs** sprawdzają testy Playwright (`npx playwright test tests/e2e --project=chromium`): start gry,
-   budowa budynku i drogi prawdziwymi kliknięciami, lobby dwóch kart.
+   budowa budynku i drogi prawdziwymi kliknięciami, lobby dwóch kart (dołączenie kodem i z listy otwartych gier).
 5. **Dźwięki**: agent wstępnie odsiewa warianty pomiarami i spektrogramami, a o tym, co gra, decyduje odsłuch
    właściciela - procedura w punkcie „Odsłuch dźwięków” niżej.
 6. Decyzje projektowe i ich powody trafiają do `docs/DECISIONS.md`, postęp - do `docs/PROGRESS.md`, a opis

@@ -97,6 +97,8 @@ Vite + TS strict + ESLint + Vitest + Playwright (Chromium, Firefox), CI w GitHub
 - Świat wokół mapy: morze w kolorze wody mapy i dalekie kontynenty z wysokimi górami, granica mapy niewidoczna
   (prosta krawędź terenu, plaża za krawędzią, mgiełka od brzegu mapy) (docs/DECISIONS.md).
 - Przekaźnik TURN dla gry wieloosobowej za restrykcyjnymi sieciami (krok `0020` w `vps01`, docs/DEPLOY.md).
+- Lista otwartych gier w menu gry wieloosobowej: pokoje publiczne z połączeniami tylko przez przekaźnik
+  (docs/DECISIONS.md).
 
 ## Dalej
 - Wzmocnienie trudnego bota (wygrywa z łatwym około połowy partii, docs/DECISIONS.md).

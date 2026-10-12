@@ -50,11 +50,12 @@ export class NetHost {
       onLeft: (peer) => this.onLeft(peer),
       onClose: () => { if (!this.started) this.events.onError?.('Utracono połączenie z serwerem sygnalizacyjnym.'); },
     };
+    signal.meta(this.state.mapCode, this.state.mapSize, this.state.players.length);
   }
 
   private onPeer(peer: string): void {
     if (this.started) return;
-    const link = new PeerLink(peer, this.signal.iceServers, (d) => this.signal.signal(peer, d), true);
+    const link = new PeerLink(peer, this.signal.iceServers, (d) => this.signal.signal(peer, d), true, this.signal.relay);
     this.links.set(peer, link);
     link.onMessage = (m) => this.onMessage(peer, m);
     link.onClose = () => this.onLeft(peer);
@@ -115,6 +116,7 @@ export class NetHost {
   broadcastLobby(): void {
     const msg: NetMsg = { t: 'lobby', state: this.state };
     for (const l of this.links.values()) l.send(msg);
+    this.signal.meta(this.state.mapCode, this.state.mapSize, this.state.players.length);
     this.events.onLobby?.(this.state);
   }
 
@@ -201,7 +203,7 @@ export class NetClient {
   constructor(signal: SignalClient, hostId: string, name: string) {
     this.signal = signal;
     this.name = name;
-    const link = new PeerLink(hostId, signal.iceServers, (d) => signal.signal(hostId, d), false);
+    const link = new PeerLink(hostId, signal.iceServers, (d) => signal.signal(hostId, d), false, signal.relay);
     this.link = link;
     link.onOpen = () => link.send({ t: 'hello', name: this.name, ver: NET_VERSION });
     link.onMessage = (m) => this.onMessage(m);

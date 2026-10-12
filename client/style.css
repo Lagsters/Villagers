@@ -111,6 +111,14 @@ button.primary:hover { background: #efc86a; }
 .menu-field input[type=range] { accent-color: var(--accent); }
 .menu-or { text-align: center; color: var(--muted); margin: 16px 0 6px; }
 .menu-error { background: rgba(208, 80, 60, 0.18); border: 1px solid rgba(208, 80, 60, 0.6); padding: 8px 10px; border-radius: 8px; }
+.menu-card .hint { color: var(--muted); font-size: 13px; margin: 4px 0 8px; line-height: 1.4; }
+.menu-check { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; cursor: pointer; }
+.menu-check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.menu-section { margin: 18px 0 6px; font-size: 15px; font-weight: 600; }
+.room-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.room-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255, 245, 220, 0.04); border-radius: 8px; }
+.rr-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-map, .rr-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .room-code-input { text-transform: uppercase; letter-spacing: 0.25em; font-weight: 600; }
 .room-code { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px; margin: 6px 0 12px; border: 1px dashed var(--panel-border); border-radius: 10px; }
 .room-code-value { font-size: 32px; letter-spacing: 0.3em; color: var(--accent); font-variant-numeric: tabular-nums; }

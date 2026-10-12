@@ -677,3 +677,22 @@ kamienną podmurówką (na stoku przy plaży - jak pół ściany).
   przekaz klient-klient przez przekaźnik, złe hasło odrzucone; po wdrożeniu z przeglądarki na stronie gry dwa
   połączenia tylko przez przekaźnik (`iceTransportPolicy: relay`) wymieniły wiadomość po UDP i po TCP.
   Security List w konsoli Oracle przepuszcza porty przekaźnika bez zmian.
+
+## 2026-10-12 — Lista otwartych gier (prośba właściciela)
+- **Pokój publiczny tylko z wyboru** (pole „Pokój publiczny” przy tworzeniu, domyślnie wyłączone): pokój prywatny
+  działa jak dotąd, przez kod. Lista pokazuje imię gospodarza, mapę, rozmiar i liczbę graczy - bez identyfikatorów
+  i adresów; imiona pozostałych graczy widać dopiero w lobby.
+- **W pokoju publicznym połączenia tylko przez przekaźnik** (`iceTransportPolicy: relay`): przy połączeniu
+  bezpośrednim każdy gracz widzi adres IP pozostałych, co przy obcych jest wyciekiem. Serwer podaje w `created`
+  i `joined`, że pokój jest publiczny; klient włącza przekaźnik tylko wtedy, gdy serwer wydał hasła TURN (lokalnie
+  bez przekaźnika - połączenia bezpośrednie). Koszt: sieć, która blokuje też port przekaźnika, nie zagra w pokoju
+  publicznym, a w prywatnym może.
+- **Lista na żywo, wysyłana zbiorczo**: menu obserwuje listę (`watch`), serwer rozsyła ją po zmianie pokoju
+  publicznego najwyżej raz na 300 ms, najwyżej 30 najnowszych pokoi; pokój znika po starcie gry. Dane mapy i liczbę
+  graczy (z botami) podaje gospodarz wiadomością `meta` przy każdej zmianie lobby.
+- **Nadużycia**: najwyżej 2 pokoje publiczne na adres (do tego istniejące limity połączeń, wiadomości i pokoi);
+  imię na liście bez znaków sterujących i zmieniających kierunek tekstu, wulgarne (krótka lista rdzeni po
+  sprowadzeniu do liter, z zamianą cyfr na litery) zastępuje „Gracz”. Trolla w lobby gospodarz usuwa jak dotąd,
+  a gra startuje dopiero na jego polecenie.
+- **Nowe wydanie serwera** (`signal-v2`): stary serwer ignoruje `watch` i pole `public`, więc nowa strona przy
+  starym serwerze pokazuje „Wczytywanie…” na liście, a pokoje są prywatne - nic się nie psuje.
